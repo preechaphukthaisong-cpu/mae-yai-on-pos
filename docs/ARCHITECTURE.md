@@ -185,14 +185,14 @@ User action
 
 ## 10. การทดสอบที่ผูกกับสถาปัตยกรรม
 
-- Unit tests: Satang/fee calculation, cumulative return-fee allocation, milli-unit arithmetic, content hash SHA-256 canonicalization, Asia/Bangkok date grouping, barcode allocation ที่ต้องข้ามเลข MANUFACTURER/SYSTEM ที่ถูกลงทะเบียนแล้ว
+- Unit tests: Satang/fee calculation, cumulative return-fee allocation (รวมกรณี subtotal=0), milli-unit arithmetic, customer identity normalization, content hash SHA-256 canonicalization, Asia/Bangkok date grouping, barcode allocation ที่ต้องข้ามเลข MANUFACTURER/SYSTEM ที่ถูกลงทะเบียนแล้ว
 - Unit tests: FeeRoundingHalfUpTest ครอบคลุมเศษต่ำกว่า/เท่ากับ/มากกว่า 0.5 สตางค์ โดยไม่ใช้ float/double
 - Unit tests: BillLevelFeeTest ยืนยัน fee 5% จาก subtotal ทั้งบิลและปัด Half Up ครั้งเดียว; ReturnFeeAllocationTest ทดสอบคืนหลายครั้งแล้วไม่เกิน fee เดิมและคืนครบได้เต็ม
 - Room in-memory tests: UNIQUE/FK/CHECK, triggers, DAO, transaction rollback
 - Migration tests: fresh install และ upgrade จาก schema version ก่อนหน้า
 - Architecture tests: ไม่มี feature-to-feature dependency และ core ไม่พึ่ง feature
 - MenuLockTest: เมนูจริงตรงกับรายการที่ผู้ใช้อนุมัติ
-- Integration tests: sale atomicity, idempotency, stock underflow, cash tender/change, batch debt payment atomicity, return/cancel after partial return, refund recipient, no-restock reason, report reconciliation, retention proof, backup/restore/replay
+- Integration tests: sale atomicity, idempotency, stock underflow, cash tender/change, batch debt payment atomicity, return/cancel after partial return, refund recipient/operator evidence, no-restock reason, report reconciliation, retention proof, backup/restore/replay, 24-hour backup warning
 - Device tests: CameraX/ML Kit, TTS, lifecycle, WAL backup/restore และ power-loss recovery
 
 CI ผ่านไม่เท่ากับ device acceptance; ต้องทดสอบบนมือถือจริงตามเกณฑ์ใน SPEC
