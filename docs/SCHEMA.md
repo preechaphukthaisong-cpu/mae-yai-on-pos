@@ -165,7 +165,7 @@ sale_return_line:
 | evidence_local_ref | TEXT | NULL ได้; ตำแหน่งไฟล์ใน app-private storage |
 | evidence_content_hash | TEXT | NULL ได้; SHA-256 ของรูปถ่ายหลักฐานเสริม |
 
-ห้ามคืนเกินจำนวนขายลบจำนวนคืนก่อนหน้า; ตรวจใน transaction และมี DB guard/trigger เพิ่มเติมเมื่อ finalize schema. มูลค่าสินค้าต่อ sale_line ใช้เป้าหมายสะสมแบบ Half Up จาก line_total × qty_returned_cumulative ÷ qty_sold; fee ใช้เป้าหมายสะสมแบบ Half Up จาก fee_total × returned_goods_value_cumulative ÷ subtotal. ค่าของครั้งปัจจุบันเป็นส่วนต่างจากยอดสะสมเดิม เพื่อไม่ให้เกิดเศษซ้ำหรือคืนเกินต้นฉบับ (D-036). หากบิลยังค้างให้ลดหนี้; หากชำระแล้วให้คืนเงินสดหน้าร้านและบันทึกผู้รับตาม D-048.
+ห้ามคืนเกินจำนวนขายลบจำนวนคืนก่อนหน้า; ตรวจใน transaction และมี DB guard/trigger เพิ่มเติมเมื่อ finalize schema. มูลค่าสินค้าต่อ sale_line ใช้เป้าหมายสะสมแบบ Half Up จาก line_total × qty_returned_cumulative ÷ qty_sold; fee ใช้เป้าหมายสะสมแบบ Half Up จาก fee_total × returned_goods_value_cumulative ÷ subtotal; หาก subtotal=0 fee_total ต้องเป็น 0 และข้ามการหาร. ค่าของครั้งปัจจุบันเป็นส่วนต่างจากยอดสะสมเดิม เพื่อไม่ให้เกิดเศษซ้ำหรือคืนเกินต้นฉบับ (D-036). หากบิลยังค้างให้ลดหนี้; หากชำระแล้วให้คืนเงินสดหน้าร้านและบันทึกผู้รับตาม D-048.
 
 ### 2.8.1 sale_cancel และ sale_cancel_line
 
