@@ -7,7 +7,8 @@ One SQLite database is the single source of truth for every POS screen and featu
 - `schema.sql`: baseline schema (version 1).
 - `migrations/002_pos_operations.sql`: purchasing, expenses, cash sessions, cash movements, returns, and inventory-ledger safeguards.
 - `migrations/003_platform_foundation.sql`: staff/RBAC, attendance, barcodes, variants, promotions, loyalty, payment gateway metadata, devices, printing, receipt delivery and offline sync.
-- `seeds/`: optional reference data only. Do not put real customer, sales, or financial data here.
+- `seeds/001_default_roles.sql`: idempotent owner/manager/cashier roles and permission catalogue.
+- Other seed data must be stable reference data only; never put real customer, sales, or financial data here.
 
 ## Core domains
 - Catalog: `product_categories`, `products`
@@ -36,6 +37,7 @@ Do not assume connection-local PRAGMAs persist across connections. Enable foreig
 
 ## Money, IDs, and time
 - Store money as integer satang. Never use floating point for financial calculations.
+- Split tenders use multiple `payments` rows. PromptPay QR is represented by `payment_method='transfer'` and `payment_channel='promptpay_qr'`, with provider state/reference in `payment_gateway_transactions`.
 - Use application-generated UUIDs for primary keys.
 - Store timestamps in ISO-8601 UTC. Convert to local time only for display.
 - Snapshot product names and prices in transaction lines so later catalog edits do not rewrite historical receipts.
@@ -67,7 +69,7 @@ Receiving a purchase follows the same atomic pattern: validate draft, insert pur
 - Insert the migration version/name/applied timestamp only after all migration statements succeed.
 - If any statement fails, roll back the entire migration.
 - Never edit a migration already released to users; add a new numbered migration.
-- Baseline install: execute `schema.sql`, then record version 1 in `schema_migrations`, then apply migrations 2 and 3 in order.
+- Baseline install: execute `schema.sql`, then record version 1 in `schema_migrations`, then apply migrations 2 and 3 in order. Apply `seeds/001_default_roles.sql` only after migration 3.
 - Test migrations against both a fresh database and a copy of the previous released database.
 
 ## Important scope boundary
