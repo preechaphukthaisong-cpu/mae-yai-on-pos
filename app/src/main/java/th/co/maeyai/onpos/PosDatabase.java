@@ -47,7 +47,11 @@ public final class PosDatabase extends SQLiteOpenHelper {
 
     @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         if (oldVersion < 1) throw new IllegalStateException("Unsupported database version: " + oldVersion);
-        if (oldVersion < 2) migrateTo2(db);
+        if (oldVersion < 2) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)");
+            db.execSQL("INSERT OR IGNORE INTO schema_migrations(version,name,applied_at) VALUES(1,'legacy_v1_baseline','" + now() + "')");
+            migrateTo2(db);
+        }
         if (newVersion > 2) throw new IllegalStateException("Missing migration for database version " + newVersion);
     }
 
