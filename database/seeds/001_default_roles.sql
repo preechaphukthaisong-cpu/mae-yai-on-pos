@@ -3,9 +3,9 @@
 
 INSERT OR IGNORE INTO roles(id, role_key, role_name, description, is_system, created_at, updated_at)
 VALUES
-('role_owner','owner','เจ้าของร้าน','สิทธิ์เต็มของระบบ',1,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z'),
-('role_manager','manager','ผู้จัดการ','จัดการร้านและรายงาน',1,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z'),
-('role_cashier','cashier','พนักงานขาย','ขายสินค้าและรับชำระเงิน',1,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z');
+('role_owner','owner','เจ้าของร้าน','สิทธิ์เต็มของระบบ',1,strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+('role_manager','manager','ผู้จัดการ','จัดการร้านและรายงาน',1,strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+('role_cashier','cashier','พนักงานขาย','ขายสินค้าและรับชำระเงิน',1,strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now'));
 
 INSERT OR IGNORE INTO permissions(id, permission_key, description) VALUES
 ('perm_sales_read','sales.read','ดูรายการขาย'),
