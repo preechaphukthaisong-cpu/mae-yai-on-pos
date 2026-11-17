@@ -165,7 +165,7 @@ v1 อนุญาตให้สร้างภาพบาร์โค้ด�
 | ตาราง | เนื้อหาหลัก/ข้อกำหนด |
 |---|---|
 | product | sku, barcode UNIQUE, name, price, cost, unit, stock_limit, stock_qty |
-| barcode_registry | barcode, name, price, created_at; เก็บถาวร |
+| barcode_registry | barcode, name, price, source_type (SYSTEM/MANUFACTURER), created_at; เก็บถาวร |
 | barcode_counter | next_value; ค่าเริ่มต้น 2000001 และอัปเดตใน transaction เดียวกับการสร้างบาร์โค้ด |
 | customer | id, name; ห้ามชื่อลูกค้าซ้ำโดยไม่สนตัวพิมพ์เล็ก/ใหญ่ |
 | sale | id, idem_key UNIQUE, type CASH/CREDIT, status PAID/UNPAID/CANCELLED/RETURNED_PARTIAL, customer_id, subtotal, fee_total, total, cash_received, change, content_hash, created_at, paid_at |
