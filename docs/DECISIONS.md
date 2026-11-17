@@ -452,7 +452,7 @@
 - backup_journal เป็น append-only ตาม seq; payload เป็น canonical JSON UTF-8 มี operation_id, op, schema version, timestamp และข้อมูล delta ที่จำเป็น; แต่ละ record มี SHA-256
 - กู้คืนโดยตรวจ manifest/checksum/integrity ก่อน, restore snapshot, แล้ว replay journal ตาม seq ต่อเนื่องจาก checkpoint; ปฏิเสธเมื่อ checksum ผิดหรือ sequence ขาด/ซ้ำ และทำ replay แบบ idempotent
 - เก็บ snapshot ที่ผ่านการตรวจสอบหลายชุด; ห้ามลบ snapshot ล่าสุดที่ยืนยันว่ากู้คืนได้ก่อน snapshot ใหม่ผ่านการตรวจ
-- การเข้ารหัสไฟล์/ฐานข้อมูลยังคงรอ O-025 ในเฟส 10; ห้ามถือว่า ZIP มี encryption โดยปริยาย
+- ณ เวลาบันทึก D-052 ยังไม่มีข้อกำหนด encryption; ข้อกำหนดฉบับยืนยันภายหลังอยู่ใน D-060 และ ZIP เพียงอย่างเดียวไม่ถือว่าเข้ารหัส
 
 ### D-053 — เวลาเตือน backup ค้างส่ง (ปิด O-022)
 
@@ -521,6 +521,7 @@
 - เข้ารหัสฐานข้อมูลภายในด้วย SQLCipher; สร้าง database key แบบสุ่มและเก็บ/ป้องกัน key ด้วย Android Keystore ไม่ฝัง key ไว้ใน source code หรือ preference แบบ plaintext
 - ไฟล์สำรองที่ส่งออก/เก็บบน Drive ต้องเข้ารหัสด้วยรหัสผ่านสำรองที่เจ้าของร้านกำหนด เพื่อให้กู้คืนได้บนเครื่องใหม่โดยไม่ต้องพึ่ง Keystore ของเครื่องเดิม
 - ใช้ authenticated encryption (AES-256-GCM) กับ salt และ nonce ที่สุ่มใหม่ต่อไฟล์; derive backup key ด้วย PBKDF2-HMAC-SHA-256 และค่ารอบที่ผ่านการทบทวนด้านความปลอดภัยก่อน implementation; บันทึก algorithm/version/KDF parameters ใน header ที่ตรวจสอบได้
+- ต้องห่อ database key ที่ใช้เปิด SQLCipher ด้วย backup-derived key ภายใน backup envelope เพื่อให้ restore ข้ามเครื่องได้; หลัง restore ให้สร้าง/ติดตั้ง database key ใหม่ใน Android Keystore ของเครื่องปลายทาง; ห้ามเก็บ database key แบบ plaintext ใน archive
 - ห้ามเก็บรหัสผ่านสำรองหรือ key แบบ plaintext; ห้าม log key/token/รหัสผ่าน
 - การลืมรหัสผ่านสำรองทำให้ไม่สามารถถอดรหัส backup นั้นได้ ต้องแจ้งข้อจำกัดและให้ผู้ใช้ยืนยันก่อนเปิดใช้ระบบสำรองแบบเข้ารหัส
 - การล็อกแอปเป็นชั้นควบคุมการเข้าถึง UI; ต้องไม่ใช้แทน database encryption
@@ -567,7 +568,7 @@ O-001 ถึง O-030 ได้รับการตัดสินใจคร�
 | O-018 | RESOLVED — normalize NFC/ช่องว่าง/case-fold; ชื่อซ้ำต่างคนต้องมี identity discriminator | D-049 | ปิดแล้ว |
 | O-019 | RESOLVED — รองรับทศนิยมสูงสุด 3 ตำแหน่ง; จัดเก็บ integer milli-unit | D-050 | ปิดแล้ว |
 | O-020 | RESOLVED — NULL คือปิดแจ้งเตือน; 0 ใช้ได้; แจ้งเมื่อ stock <= limit | D-051 | ปิดแล้ว |
-| O-021 | RESOLVED — ZIP snapshot พร้อม manifest, SHA-256, sequenced JSON journal และ replay ตามลำดับ; encryption รอ O-025 | D-052 | ปิดแล้ว; encryption แยก O-025 |
+| O-021 | RESOLVED — ZIP snapshot พร้อม manifest, SHA-256, sequenced JSON journal และ replay ตามลำดับ; encryption เพิ่มเติมตาม D-060 | D-052, D-060 | ปิดแล้ว |
 | O-022 | RESOLVED — แจ้งเตือนเมื่อ backup ค้างส่งเกิน 24 ชั่วโมง | D-053 | ปิดแล้ว |
 | O-023 | RESOLVED — ใช้บัญชี Google ที่ผู้ใช้เลือกและ scope drive.appdata; เปลี่ยนบัญชี/หมดสิทธิ์ต้องยืนยันใหม่โดยไม่กระทบการขาย | D-058 | ปิดแล้ว; implementation ตามเฟส 3 |
 | O-024 | RESOLVED — เลือกเสียงผู้หญิงไทยเมื่อมี; fallback เสียงไทยเริ่มต้น; หากไม่มีเสียงไทยให้แสดงข้อความ | D-059 | ปิดแล้ว; implementation ตามเฟส 3 |
