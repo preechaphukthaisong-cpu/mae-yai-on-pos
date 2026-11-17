@@ -28,10 +28,10 @@ The approved SPEC.md Phase 3 foundation work is tracked in `docs/phase-3-progres
 
 ## Current implementation status
 - Android Gradle project: Java application scaffold on `phase-3-foundation`.
-- Room: version 2 with explicit 1→2 migration; foundational barcode registry/counter, product, customer, stock_log and op_log entities/DAOs.
+- Room: version 3 with explicit 1→2→3 migrations; foundational barcode registry/counter, product, customer, stock_log, op_log and backup_journal entities/DAOs.
 - Database guards: stock changes only through stock_log insert trigger; stock and operation logs are append-only; barcode registry is immutable.
 - Barcode: transactional allocator preserves manufacturer barcode strings and skips all registered generated-number collisions.
 - Core money: integer-satang value object and bill-level 5% Half Up calculator with unit tests.
-- CI: GitHub Actions test/build workflow; latest changes await validation.
+- CI: GitHub Actions unit tests, Android emulator instrumentation tests, and debug APK build; current workflow changes await validation.
 - Backup/Drive, scanner, TTS, sales/debt entities, feature screens and full device acceptance: not complete.
 - No feature should be described as implemented until its code and tests exist in the new baseline.
