@@ -1,0 +1,107 @@
+openapi: 3.1.0
+info:
+  title: Mae Yai On POS API
+  version: 1.0.0
+  description: Initial framework-neutral API contract. Provider-specific payment routes require a separate integration specification.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+paths:
+  /auth/login:
+    post:
+      security: []
+      summary: Authenticate a staff member
+      responses:
+        '200':
+          description: Authenticated session
+        '401':
+          description: Invalid credentials
+        '429':
+          description: Login rate limit exceeded
+  /auth/logout:
+    post:
+      summary: Revoke current session
+      responses:
+        '204':
+          description: Session revoked
+  /products:
+    get:
+      summary: Search active products and barcodes
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+        - in: query
+          name: cursor
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Product page
+  /sales:
+    post:
+      summary: Create and confirm a sale atomically
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: Sale committed
+        '409':
+          description: Idempotency conflict or business-rule conflict
+  /sales/{saleId}:
+    get:
+      summary: Read a sale and its payment breakdown
+      parameters:
+        - in: path
+          name: saleId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Sale detail
+        '404':
+          description: Sale not found
+  /payments:
+    post:
+      summary: Initiate a payment attempt
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Payment attempt accepted; settlement is verified asynchronously
+        '409':
+          description: Duplicate or conflicting request
+  /sync/push:
+    post:
+      summary: Upload locally committed outbox events
+      responses:
+        '200':
+          description: Per-event durable acknowledgements
+  /sync/pull:
+    get:
+      summary: Fetch remote events after a cursor
+      parameters:
+        - in: query
+          name: cursor
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Event page and next cursor
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
