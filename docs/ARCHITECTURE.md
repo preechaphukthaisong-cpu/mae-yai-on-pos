@@ -2,7 +2,7 @@
 
 - รุ่นเอกสาร: 1.0.5-draft
 - เฟส: 2 — ออกแบบโครงสร้าง
-- สถานะ: ออกแบบตาม D-001 ถึง D-057; กฎธุรกิจ 22 ข้อของเฟส 2 ได้รับการยืนยันแล้ว; O-023 ถึง O-026 รอตามเฟสที่เกี่ยวข้อง
+- สถานะ: ออกแบบตาม D-001 ถึง D-061; การตัดสินใจ O-001 ถึง O-030 ได้รับการยืนยันครบแล้ว
 - อ้างอิงหลัก: docs/SPEC.md, docs/DECISIONS.md
 - Package หลัก: com.maeyaion.pos
 
@@ -152,7 +152,7 @@ User action
 - ห้าม block main thread
 - UI สังเกตข้อมูลจาก repository และยกเลิก observer/resource ตาม lifecycle
 - CameraX ต้อง bind/unbind ตาม lifecycle; ปล่อยกล้องเมื่อหน้าจอหยุดหรือแอปไป background
-- TextToSpeech ต้อง initialize/release ตาม lifecycle และมี fallback เมื่อเครื่องไม่มีเสียงไทย/เสียงผู้หญิงตาม O-024
+- TextToSpeech ต้อง initialize/release ตาม lifecycle; ใช้เสียงผู้หญิงไทยเมื่อมี, fallback เสียงไทยเริ่มต้น, หากไม่มีเสียงไทยให้แสดงข้อความแทน (D-059)
 - การไม่มีอินเทอร์เน็ตต้องไม่ทำให้ขาย รับสินค้า ค้นสินค้า หรืออ่านข้อมูลในเครื่องหยุดทำงาน
 
 ## 8. Backup, restore และ retention
@@ -170,7 +170,9 @@ User action
 - retention: paid sale 30 วันจาก created_at (cash) หรือ paid_at (credit); ยอดค้างจริงห้าม purge; settled by reversal เริ่มนับจากเวลา reversal; sale_return, sale_cancel, debt_payment, stock_log, price_history, op_log เก็บ 90 วัน; summary/product_daily/proof 15 เดือน; product/barcode registry ถาวร
 - หาก child evidence ที่ยังอยู่ในช่วง 90 วันอ้างถึง sale/sale_line ให้เลื่อน purge parent จน child พ้น retention
 - backup_journal prune ได้เมื่อส่งสำเร็จและถูกครอบคลุมด้วย snapshot ที่ตรวจแล้ว โดย recovery chain ยังสมบูรณ์
-- Encryption ของฐานข้อมูล/ไฟล์สำรองยังรอ O-025; ตำแหน่ง UI สำหรับ restore ยังรอ O-026
+- Database ใช้ SQLCipher โดย database key ถูกป้องกันด้วย Android Keystore; backup ใช้ password-based AES-256-GCM envelope ที่ versioned ตาม D-060
+- Google Drive auth ใช้ account ที่ผู้ใช้เลือกและ drive.appdata scope เท่านั้น; token/account failure ไม่ขวางการขาย (D-058)
+- Restore entry point เป็น action ภายในหน้าจอจัดการร้านค้า; staging validation + safety snapshot ก่อนสลับ DB (D-061)
 - ห้ามทำ sync ข้อมูลธุรกิจหรือ replication ระหว่างอุปกรณ์
 
 ## 9. ความปลอดภัยและความถูกต้อง
@@ -179,7 +181,7 @@ User action
 - ใช้ parameterized queries; ห้ามต่อ SQL จาก input
 - ตรวจสิทธิ์/กฎธุรกิจใน use case ไม่ใช่ซ่อนปุ่มอย่างเดียว
 - ไม่บันทึกรหัสผ่าน, token หรือข้อมูลส่วนบุคคลเกินจำเป็นลง log
-- ห้ามเพิ่ม password lock หรือ DB encryption เองก่อนเฟส 10 (O-025)
+- ห้ามเริ่ม implementation ของ app lock/SQLCipher/backup encryption ก่อนเฟส 10; เมื่อถึงเฟส 10 ต้องทำตาม D-060 และห้ามเก็บ key/password แบบ plaintext
 - ห้าม hard-delete ข้อมูลการเงิน/สต๊อกเพื่อแก้รายการผิด; ใช้ reversal/audit records
 - ข้อผิดพลาด DB ต้องไม่ถูกกลืนเงียบ; rollback และแจ้งข้อความที่ผู้ใช้แก้ไขได้
 
@@ -197,9 +199,9 @@ User action
 
 CI ผ่านไม่เท่ากับ device acceptance; ต้องทดสอบบนมือถือจริงตามเกณฑ์ใน SPEC
 
-## 11. ประเด็นที่ยังรอการตัดสินใจในเฟสถัดไป
+## 11. สถานะการตัดสินใจและการจัดเฟส
 
-O-023 Google Drive authentication (เฟส 3), O-024 เสียงผู้หญิง/Thai TTS fallback (เฟส 3), O-025 password และ database/backup encryption (เฟส 10), O-026 ตำแหน่ง UI สำหรับ restore (เฟส 3/4). ห้าม implementation เดาแทนผู้ใช้ใน 4 ประเด็นนี้. กฎธุรกิจที่มีผลต่อ schema ในเฟส 2 ทั้ง 22 ข้อปิดแล้วตาม D-036 ถึง D-057.
+O-001 ถึง O-030 ปิดครบแล้วตาม docs/DECISIONS.md (D-033 ถึง D-061). O-023 Google Drive authentication และ O-024 Thai TTS fallback ทำในเฟส 3; O-026 restore entry point/flow ทำในเฟส 3/4; O-025 app lock, SQLCipher และ backup encryption ทำในเฟส 10. การปิดประเด็นหมายถึงข้อกำหนดได้รับการอนุมัติ ไม่ได้หมายความว่า implementation เสร็จแล้ว.
 
 ## 12. เกณฑ์ผ่านเฟส 2
 
@@ -208,6 +210,6 @@ O-023 Google Drive authentication (เฟส 3), O-024 เสียงผู้�
 - dependency rules ชัดเจนและไม่มี feature import feature อื่น
 - เมนูหลัก 6 รายการไม่เปลี่ยน; เมนูย่อยทั้ง 20 รายการได้รับการยืนยันและล็อกไว้ใน MENU_LOCK.json แล้ว
 - schema ระบุ keys, indexes, constraints, transactions, quantity scale, return/cancel ledger, reconciliation proof และ delete behavior
-- O-005 ถึง O-022 และ O-027 ถึง O-030 แสดง RESOLVED ตาม DECISIONS; O-023 ถึง O-026 คงเป็นประเด็นเฟสถัดไป
+- O-001 ถึง O-030 แสดง RESOLVED ตาม DECISIONS; implementation ทำตามเฟสที่กำหนดใน D-058 ถึง D-061
 - SPEC, DECISIONS, SCHEMA, ARCHITECTURE และ MENU_LOCK ต้องผ่าน cross-document consistency check
 - ผู้ใช้ตรวจและยืนยันเอกสารก่อนเริ่มเฟส 3
