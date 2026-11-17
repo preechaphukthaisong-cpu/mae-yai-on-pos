@@ -388,7 +388,7 @@ Room ต้อง export schema JSON ทุก version และใช้ explic
 
 ## 8. สถานะประเด็นที่มีผลต่อ schema
 
-O-001 ถึง O-030 ได้รับการตัดสินใจและบันทึกใน docs/DECISIONS.md แล้ว (D-033 ถึง D-061). O-023, O-024 và O-026 เป็นข้อกำหนด integration/UI ในเฟส 3/4; O-025 เป็นข้อกำหนด encryption ในเฟส 10. ไม่มีประเด็นเปิดค้างใน decision log. Database key อยู่ภายนอก schema ธุรกิจและต้องจัดการผ่าน Android Keystore; backup envelope/manifest ต้อง versioned เพื่อรองรับ restore ข้ามเครื่อง.
+O-001 ถึง O-030 ได้รับการตัดสินใจและบันทึกใน docs/DECISIONS.md แล้ว (D-033 ถึง D-061). O-023, O-024 และ O-026 เป็นข้อกำหนด integration/UI ในเฟส 3/4; O-025 เป็นข้อกำหนด encryption ในเฟส 10. ไม่มีประเด็นเปิดค้างใน decision log. Database key อยู่ภายนอก schema ธุรกิจและต้องจัดการผ่าน Android Keystore; backup envelope/manifest ต้อง versioned เพื่อรองรับ restore ข้ามเครื่อง และต้องห่อ SQLCipher database key ด้วย backup-derived key; ห้ามมี database key แบบ plaintext ใน archive.
 
 ## 9. เกณฑ์ตรวจ schema ก่อนเฟส 3
 
