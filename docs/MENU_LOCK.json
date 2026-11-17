@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "application": {
+    "name": "ร้านแม่ใหญ่อ่อน POS",
+    "packageName": "com.maeyaion.pos",
+    "platform": "Android",
+    "language": "Java",
+    "minSdk": 26
+  },
+  "status": "PARTIAL_LOCK_PENDING_USER_CONFIRMATION",
+  "lock": {
+    "mainMenu": true,
+    "mainMenuOrder": true,
+    "submenuNames": false,
+    "submenuOrder": false,
+    "homeScreenLayout": false
+  },
+  "rules": [
+    "ห้ามเพิ่ม ลบ ย้าย หรือเปลี่ยนชื่อเมนูหลักที่ล็อกไว้",
+    "ห้ามสร้างเมนูย่อยจากรายการ proposedSubmenus จนกว่าผู้ใช้จะยืนยัน",
+    "ห้ามเปลี่ยนหน้าจอหลักโดยไม่ได้รับอนุมัติจากผู้ใช้",
+    "การนำทางจาก home ต้องใช้ route contract; home ห้าม import implementation ของ feature",
+    "แต่ละเมนูเป็น feature package แยก และห้าม feature import feature อื่นโดยตรง"
+  ],
+  "mainMenu": [
+    {
+      "id": "sales",
+      "label": "การขาย",
+      "order": 1,
+      "featurePackage": "feature.sales"
+    },
+    {
+      "id": "inventory",
+      "label": "คลังสินค้า",
+      "order": 2,
+      "featurePackage": "feature.inventory"
+    },
+    {
+      "id": "barcode",
+      "label": "สร้างบาร์โค้ด",
+      "order": 3,
+      "featurePackage": "feature.barcode"
+    },
+    {
+      "id": "history",
+      "label": "ประวัติการขาย",
+      "order": 4,
+      "featurePackage": "feature.history"
+    },
+    {
+      "id": "store",
+      "label": "จัดการร้านค้า",
+      "order": 5,
+      "featurePackage": "feature.store"
+    },
+    {
+      "id": "reports",
+      "label": "รายงานยอดขาย",
+      "order": 6,
+      "featurePackage": "feature.reports"
+    }
+  ],
+  "proposedSubmenus": [
+    {
+      "parentId": "sales",
+      "status": "PROPOSED_NOT_LOCKED",
+      "items": [
+        "ขายเงินสด",
+        "ขายเชื่อ",
+        "บัญชีลูกค้าเชื่อ"
+      ]
+    },
+    {
+      "parentId": "inventory",
+      "status": "PROPOSED_NOT_LOCKED",
+      "items": [
+        "เพิ่มสินค้าเข้าคลัง/รับสินค้า",
+        "สินค้าทั้งหมด",
+        "ตรวจนับสต๊อก",
+        "ลิมิตสต๊อก"
+      ]
+    },
+    {
+      "parentId": "barcode",
+      "status": "PROPOSED_NOT_LOCKED",
+      "items": [
+        "สร้างบาร์โค้ด",
+        "คลังบาร์โค้ด"
+      ]
+    },
+    {
+      "parentId": "history",
+      "status": "PROPOSED_NOT_LOCKED",
+      "items": [
+        "บิลจ่ายแล้ว",
+        "บิลค้างชำระ",
+        "บัญชีลูกค้าเชื่อทั้งหมด",
+        "รายละเอียดบิลและการคืนสินค้า"
+      ]
+    },
+    {
+      "parentId": "store",
+      "status": "PROPOSED_NOT_LOCKED",
+      "items": [
+        "แก้ไขราคาขาย",
+        "ประวัติราคา"
+      ]
+    },
+    {
+      "parentId": "reports",
+      "status": "PROPOSED_NOT_LOCKED",
+      "items": [
+        "รายวัน",
+        "รายสัปดาห์",
+        "รายเดือน/เลือกวัน",
+        "ขายดี 20 อันดับ",
+        "ขายน้อยสุด 20 อันดับ"
+      ]
+    }
+  ],
+  "pendingConfirmation": [
+    "O-002"
+  ],
+  "note": "เมนูหลัก 6 รายการและลำดับมาจากข้อกำหนดที่ยืนยันแล้ว ส่วนเมนูย่อยเป็นเพียงรายการความสามารถจาก SPEC และยังไม่ถือว่าล็อก เพราะ SPEC กำหนดให้ผู้ใช้ยืนยันชื่อ/ลำดับในเฟส 2"
+}
