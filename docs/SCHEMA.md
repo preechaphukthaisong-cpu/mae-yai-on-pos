@@ -10,7 +10,7 @@
 ## 1. กติกากลาง
 
 1. ชื่อตาราง snake_case; primary key ของเอกสารใช้ UUID เก็บเป็น TEXT เว้นแต่ระบุเป็นอย่างอื่น
-2. เงินทุกคอลัมน์ลงท้าย _satang, SQLite INTEGER, CHECK >= 0; ห้าม REAL/FLOAT/DOUBLE
+2. เงินทุกคอลัมน์เป็น SQLite INTEGER หน่วยสตางค์; จำนวนเงินของธุรกรรมต้องไม่ติดลบ แต่คอลัมน์ยอดสุทธิ/ผลต่างในตารางสรุปอาจติดลบได้; ห้าม REAL/FLOAT/DOUBLE
 3. เวลาเก็บเป็น ISO-8601 UTC; business_date คำนวณตาม Asia/Bangkok และเปลี่ยนวันเวลา 00:00 น. ตามเวลาไทย (D-041)
 4. Foreign key เปิดทุก connection; ใช้ ON DELETE RESTRICT เป็นค่าเริ่มต้น ห้าม CASCADE ลบประวัติ
 5. ตาราง ledger/audit เป็น append-only; แก้ข้อผิดพลาดด้วย reversal record
