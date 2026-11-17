@@ -176,6 +176,7 @@ User action
 
 - Unit tests: Satang/fee calculation, content hash, date grouping, barcode allocation ที่ต้องข้ามเลข MANUFACTURER/SYSTEM ที่ถูกลงทะเบียนแล้ว
 - Unit tests: FeeRoundingHalfUpTest ครอบคลุมเศษต่ำกว่า/เท่ากับ/มากกว่า 0.5 สตางค์ โดยไม่ใช้ float/double
+- Unit tests: BillLevelFeeTest ยืนยันว่ารวม subtotal ทั้งบิลแล้วคิด 5% และปัด Half Up ครั้งเดียว โดยไม่คำนวณแยก sale_line
 - Room in-memory tests: UNIQUE/FK/CHECK, triggers, DAO, transaction rollback
 - Migration tests: fresh install และ upgrade จาก schema version ก่อนหน้า
 - Architecture tests: ไม่มี feature-to-feature dependency และ core ไม่พึ่ง feature
@@ -187,7 +188,7 @@ CI ผ่านไม่เท่ากับ device acceptance; ต้องท
 
 ## 11. ข้อกำหนดที่ยังไม่ล็อก
 
-ห้ามเดาเพื่อเริ่ม implementation: ประเด็นที่ยังเปิดตาม DECISIONS โดยเฉพาะ fee calculation base (O-004), quantity precision, stock underflow, business date, report formula, retention/archive, backup format และ cash validation; barcode source และ collision handling ถูกกำหนดแล้วใน D-033
+ห้ามเดาเพื่อเริ่ม implementation: ประเด็นที่ยังเปิดตาม DECISIONS โดยเฉพาะ quantity precision, stock underflow, business date, report formula, retention/archive, backup format และ cash validation; barcode source และ collision handling ถูกกำหนดแล้วใน D-033
 
 ## 12. เกณฑ์ผ่านเฟส 2
 
