@@ -1,3 +1,5 @@
+> **LEGACY / NON-NORMATIVE REFERENCE** — This document predates the approved POS v1 specification. Do not implement requirements from this file when they conflict with `docs/SPEC.md` or `docs/DECISIONS.md`. The phase-2 design documents `docs/ARCHITECTURE.md`, `docs/SCHEMA.md`, and `docs/MENU_LOCK.json` supersede this reference after user approval.
+
 # Offline and synchronization scope
 
 ## Version 1: one Android device only
