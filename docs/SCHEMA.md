@@ -2,7 +2,7 @@
 
 - รุ่นเอกสาร: 1.0.5-draft
 - เฟส: 2 — ออกแบบโครงสร้าง
-- สถานะ: ออกแบบตามคำตัดสินใจ D-001 ถึง D-057 แล้ว; ยังไม่ใช่ Room entities หรือ migration ที่รันได้
+- สถานะ: ออกแบบตามคำตัดสินใจ D-001 ถึง D-061 แล้ว; ยังไม่ใช่ Room entities หรือ migration ที่รันได้
 - Database: SQLite ไฟล์เดียวผ่าน Room
 - เงิน: INTEGER หน่วยสตางค์; Java ใช้ long
 - อ้างอิง: docs/SPEC.md, docs/DECISIONS.md, docs/ARCHITECTURE.md
@@ -293,7 +293,7 @@ Append-only; index (sku, changed_at_utc); update/delete ไม่อนุญา
 - created_at_utc TEXT NOT NULL
 - uploaded INTEGER NOT NULL DEFAULT 0 CHECK IN (0,1)
 
-insert ภายใน transaction เดียวกับ business write; index (uploaded, seq) เพื่อส่งตามลำดับ. แต่ละ record มี operation_id และ SHA-256; snapshot เป็น SQLite consistent snapshot รองรับ WAL บรรจุ ZIP พร้อม manifest/checkpoint. Restore ตรวจ checksum/integrity แล้ว replay journal ตาม seq ต่อเนื่องแบบ idempotent. เก็บ snapshot ที่ตรวจผ่านหลายชุดและห้ามลบชุดล่าสุดที่กู้คืนได้ก่อนชุดใหม่ผ่าน. Encryption รอ O-025 (D-052); แจ้งเตือนคิวค้างเกิน 24 ชั่วโมง (D-053).
+insert ภายใน transaction เดียวกับ business write; index (uploaded, seq) เพื่อส่งตามลำดับ. แต่ละ record มี operation_id และ SHA-256; snapshot เป็น SQLite consistent snapshot รองรับ WAL บรรจุ ZIP พร้อม manifest/checkpoint. Restore ตรวจ checksum/integrity แล้ว replay journal ตาม seq ต่อเนื่องแบบ idempotent. เก็บ snapshot ที่ตรวจผ่านหลายชุดและห้ามลบชุดล่าสุดที่กู้คืนได้ก่อนชุดใหม่ผ่าน. payload ของ journal และ snapshot ต้องถูกห่อด้วย authenticated encryption ตาม D-060 ก่อนส่ง/เก็บ; manifest ต้องระบุ encryption format/version และ KDF parameters โดยไม่เก็บ password/key. แจ้งเตือนคิวค้างเกิน 24 ชั่วโมง (D-053).
 
 ### 2.16 sale_reconciliation
 
@@ -388,7 +388,7 @@ Room ต้อง export schema JSON ทุก version และใช้ explic
 
 ## 8. สถานะประเด็นที่มีผลต่อ schema
 
-O-005 ถึง O-022 และ O-027 ถึง O-030 ได้รับการตัดสินใจและบันทึกใน docs/DECISIONS.md แล้ว. ประเด็น O-023 (Google Drive authentication), O-024 (TTS fallback), O-025 (password/database encryption) และ O-026 (ตำแหน่ง UI สำหรับ restore) ยังเป็นงานของเฟส 3/4/10 ตามลำดับ; ไม่ใช่ blocker ที่ยังเปิดของ schema ธุรกิจในเฟส 2.
+O-001 ถึง O-030 ได้รับการตัดสินใจและบันทึกใน docs/DECISIONS.md แล้ว (D-033 ถึง D-061). O-023, O-024 và O-026 เป็นข้อกำหนด integration/UI ในเฟส 3/4; O-025 เป็นข้อกำหนด encryption ในเฟส 10. ไม่มีประเด็นเปิดค้างใน decision log. Database key อยู่ภายนอก schema ธุรกิจและต้องจัดการผ่าน Android Keystore; backup envelope/manifest ต้อง versioned เพื่อรองรับ restore ข้ามเครื่อง.
 
 ## 9. เกณฑ์ตรวจ schema ก่อนเฟส 3
 
