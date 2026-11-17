@@ -173,7 +173,7 @@
 
 ### D-021 — การแจ้งเตือนหนี้ค้าง
 
-- ตรวจบิลค้างชำระเกิน 1 เดือน
+- ตรวจบิลที่ยังมียอดค้างจริงเกิน 30 × 24 ชั่วโมงตาม D-040
 - แสดงในการเปิดแอปครั้งแรกของวันจันทร์
 - หากไม่ได้เปิดวันจันทร์ ให้แสดงในการเปิดแอปครั้งแรกหลังจากนั้น
 - แสดงที่หน้าจอหลักและ Android Notification
@@ -188,9 +188,9 @@
 
 ### D-023 — กฎก่อนลบข้อมูล
 
-- มี SQL-level guard ป้องกันการลบ UNPAID
-- ก่อนลบต้องสำรองข้อมูล
-- ก่อนลบต้องตรวจว่าตารางสรุปครบ
+- มี SQL-level guard ป้องกันการลบบิลที่ยังมียอดค้างจริงมากกว่า 0 ไม่ตรวจเพียง payment_status
+- ก่อนลบต้องสร้าง snapshot และ reconciliation proof ตาม D-054
+- ก่อนลบต้องตรวจว่าตารางสรุปครบและ foreign-key/retention guards ผ่าน
 - ห้ามลบข้อมูลเพราะพื้นที่เก็บข้อมูลเต็ม
 - หากพื้นที่ไม่พอให้เตือนผู้ใช้
 
@@ -263,16 +263,21 @@
 ต้องมีและผ่าน:
 - AtomicSaleTest
 - IdempotencyTest
-- DuplicateBillTest
+- DuplicateBillTest และ CanonicalDuplicateHashTest
 - PriceSnapshotTest
-- StockZeroBlockTest
+- StockZeroBlockTest และ StockUnderflowBlockTest
+- CashTenderValidationTest
 - BarcodeCounterConcurrencyTest
 - BarcodeSourceAndCollisionTest
-- DebtPaymentNotSaleTest
-- ReturnMathTest
-- RetentionGuardTest
-- SummaryAfterPurgeTest
-- BackupRestoreTest
+- DebtPaymentNotSaleTest และ BatchDebtPaymentAtomicTest
+- FeeRoundingHalfUpTest และ BillLevelFeeTest
+- ReturnMathTest, ReturnFeeAllocationTest และ PartialReturnThenCancelTest
+- CashRefundRecipientTest และ CustomerIdentityNormalizationTest
+- MilliUnitQuantityTest และ StockLimitBoundaryTest
+- ReportAfterReturnCancelTest
+- RetentionGuardTest, ReconciliationProofAfterPurgeTest และ SummaryAfterPurgeTest
+- BackupRestoreTest, BackupJournalReplayTest และ BackupDeadlineAlertTest
+- MenuLockTest
 - MenuLockTest
 
 ต้องทดสอบบนเครื่องจริงและใช้งานคู่ขนานกับวิธีเดิม 1–2 สัปดาห์ เทียบยอดทุกวัน ก่อนประกาศ v1.0
@@ -329,6 +334,7 @@
 - เพื่อป้องกันเศษสะสม ให้คำนวณเป้าหมายค่าบริการที่ต้องกลับรายการสะสมด้วย Half Up จาก `fee_total_satang × มูลค่าสินค้าที่กลับรายการสะสม ÷ subtotal_satang`; ค่าบริการของการคืนครั้งปัจจุบันคือเป้าหมายสะสมลบค่าบริการที่เคยกลับรายการแล้ว
 - มูลค่าสินค้าที่คืนต่อ sale_line ใช้เป้าหมายสะสมแบบสัดส่วนของ `line_total_satang × จำนวนที่คืนสะสม ÷ จำนวนที่ขาย`; มูลค่าครั้งปัจจุบันคือส่วนต่างจากยอดที่เคยคืนแล้ว
 - ใช้ integer arithmetic และ Half Up เท่านั้น; ห้ามคืนจำนวนหรือค่าบริการสะสมเกินต้นฉบับ
+- หาก subtotal_satang เป็น 0 ค่าบริการต้องเป็น 0 และไม่ทำการหารเพื่อจัดสรร fee
 - เมื่อคืนสินค้าครบทุกจำนวน ค่าบริการที่กลับรายการต้องเท่ากับ fee_total_satang พอดี
 - การคืนและการยกเลิกใช้ pool ค่าบริการเดียวกัน; การยกเลิกส่วนที่เหลือคืนค่าบริการส่วนที่ยังไม่เคยกลับรายการทั้งหมด
 - การตรวจจำนวนคืนสะสมและบันทึกมูลค่า/fee reversal ต้องอยู่ใน transaction เดียว
