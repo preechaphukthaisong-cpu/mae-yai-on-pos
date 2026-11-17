@@ -17,13 +17,15 @@ public final class DatabaseBackup {
 
     public static void exportTo(Context context, Uri destination) throws Exception {
         File snapshot = new File(context.getCacheDir(), "pos-backup-" + UUID.randomUUID() + ".db");
+        File liveDb = context.getDatabasePath("mae_yai_on_pos.db");
         try {
             SQLiteDatabase db = PosDatabase.get(context).getWritableDatabase();
             try (Cursor c = db.rawQuery("PRAGMA wal_checkpoint(FULL)", null)) {
                 if (c.moveToFirst() && c.getInt(0) != 0) throw new IllegalStateException("WAL checkpoint busy");
             }
-            String path = snapshot.getAbsolutePath().replace("'", "''");
-            db.execSQL("VACUUM INTO '" + path + "'");
+            // Closing the helper checkpoints and closes WAL before copying the main file.
+            PosDatabase.closeForRestore();
+            copy(liveDb, snapshot);
             verify(snapshot, true);
             try (InputStream in = new FileInputStream(snapshot);
                  OutputStream out = context.getContentResolver().openOutputStream(destination, "w")) {
@@ -34,7 +36,7 @@ public final class DatabaseBackup {
                 out.flush();
             }
         } finally {
-            //noinspection ResultOfMethodCallIgnored
+            PosDatabase.get(context).getReadableDatabase();
             snapshot.delete();
         }
     }
