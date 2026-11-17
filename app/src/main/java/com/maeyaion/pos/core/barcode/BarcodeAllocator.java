@@ -30,9 +30,6 @@ public final class BarcodeAllocator {
     public BarcodeRegistryEntity registerManufacturer(@NonNull String barcode,
             @NonNull String displayName, long priceSatang, @NonNull String createdAtUtc) {
         validate(barcode, displayName, priceSatang, createdAtUtc);
-        if (barcodeDaoContains(barcode)) {
-            throw new IllegalStateException("Barcode is already registered");
-        }
         BarcodeRegistryEntity entity = new BarcodeRegistryEntity(
                 barcode, displayName, priceSatang, "MANUFACTURER", createdAtUtc);
         return transactions.runInTransaction(() -> {
@@ -74,9 +71,6 @@ public final class BarcodeAllocator {
         });
     }
 
-    private boolean barcodeDaoContains(String barcode) {
-        return registryDao.findByBarcode(barcode) != null;
-    }
 
     private static void validate(String barcode, String displayName, long priceSatang,
             String createdAtUtc) {
