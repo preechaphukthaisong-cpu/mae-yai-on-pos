@@ -51,6 +51,14 @@ jobs:
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
       - name: Run unit tests
         run: gradle --no-daemon :app:testDebugUnitTest
+      - name: Run database instrumentation tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: gradle --no-daemon :app:connectedDebugAndroidTest
       - name: Assemble debug APK
         run: gradle --no-daemon :app:assembleDebug
       - name: Upload debug APK
