@@ -1,5 +1,5 @@
 package th.co.maeyai.onpos;
-import android.content.*; import android.database.sqlite.*; import java.util.UUID;
+import android.content.*; import android.database.sqlite.*; import java.util.UUID; import java.util.Date; import java.util.Locale; import java.text.SimpleDateFormat; import java.util.TimeZone;
 public final class PosDatabase extends SQLiteOpenHelper {
  private static volatile PosDatabase I;
  public static PosDatabase get(Context c){if(I==null)synchronized(PosDatabase.class){if(I==null)I=new PosDatabase(c.getApplicationContext());}return I;}
@@ -24,5 +24,5 @@ public final class PosDatabase extends SQLiteOpenHelper {
  }
  @Override public void onUpgrade(SQLiteDatabase d,int oldV,int newV){throw new IllegalStateException("No migration path defined");}
  public static String id(){return UUID.randomUUID().toString();}
- public static String now(){return java.time.Instant.now().toString();}
+ public static String now(){SimpleDateFormat f=new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",Locale.US);f.setTimeZone(TimeZone.getTimeZone("UTC"));return f.format(new Date());}
 }
