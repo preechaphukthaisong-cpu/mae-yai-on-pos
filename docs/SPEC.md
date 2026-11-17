@@ -546,18 +546,23 @@ v1 อนุญาตให้สร้างภาพบาร์โค้ด�
 
 1. AtomicSaleTest
 2. IdempotencyTest
-3. DuplicateBillTest
+3. DuplicateBillTest และ CanonicalDuplicateHashTest
 4. PriceSnapshotTest
-5. StockZeroBlockTest
-6. BarcodeCounterConcurrencyTest
-7. DebtPaymentNotSaleTest
-8. ReturnMathTest
-9. RetentionGuardTest
-10. SummaryAfterPurgeTest
-11. BackupRestoreTest
-12. MenuLockTest
+5. StockZeroBlockTest และ StockUnderflowBlockTest
+6. CashTenderValidationTest
+7. BarcodeCounterConcurrencyTest
+8. BarcodeSourceAndCollisionTest
+9. DebtPaymentNotSaleTest และ BatchDebtPaymentAtomicTest
+10. FeeRoundingHalfUpTest และ BillLevelFeeTest
+11. ReturnMathTest, ReturnFeeAllocationTest และ PartialReturnThenCancelTest
+12. CashRefundRecipientTest และ CustomerIdentityNormalizationTest
+13. MilliUnitQuantityTest และ StockLimitBoundaryTest
+14. ReportAfterReturnCancelTest
+15. RetentionGuardTest, ReconciliationProofAfterPurgeTest และ SummaryAfterPurgeTest
+16. BackupRestoreTest, BackupJournalReplayTest และ BackupDeadlineAlertTest
+17. MenuLockTest
 
-นอกเหนือจากนี้ ต้องมี migration tests, transaction tests สำหรับการรับสินค้า/ตรวจนับ/แก้ราคา/ชำระหนี้, และ device acceptance ตามความสามารถที่ต้องใช้ hardware จริง
+นอกเหนือจากนี้ ต้องมี migration tests, transaction tests สำหรับการรับสินค้า/ตรวจนับ/แก้ราคา/ชำระหนี้/คืน/ยกเลิก, และ device acceptance ตามความสามารถที่ต้องใช้ hardware จริง
 
 ---
 
