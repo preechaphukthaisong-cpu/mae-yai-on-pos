@@ -1,8 +1,8 @@
 # แบบฐานข้อมูล POS ร้านแม่ใหญ่อ่อน (SCHEMA)
 
-- รุ่นเอกสาร: 1.0-draft
+- รุ่นเอกสาร: 1.0.5-draft
 - เฟส: 2 — ออกแบบโครงสร้าง
-- สถานะ: Draft; schema นี้ยังไม่ใช่ Room entities หรือ migration ที่รันได้
+- สถานะ: ออกแบบตามคำตัดสินใจ D-001 ถึง D-057 แล้ว; ยังไม่ใช่ Room entities หรือ migration ที่รันได้
 - Database: SQLite ไฟล์เดียวผ่าน Room
 - เงิน: INTEGER หน่วยสตางค์; Java ใช้ long
 - อ้างอิง: docs/SPEC.md, docs/DECISIONS.md, docs/ARCHITECTURE.md
@@ -11,11 +11,11 @@
 
 1. ชื่อตาราง snake_case; primary key ของเอกสารใช้ UUID เก็บเป็น TEXT เว้นแต่ระบุเป็นอย่างอื่น
 2. เงินทุกคอลัมน์ลงท้าย _satang, SQLite INTEGER, CHECK >= 0; ห้าม REAL/FLOAT/DOUBLE
-3. เวลาเก็บเป็น ISO-8601 UTC; การแปลงเป็นวันท้องถิ่นและเวลาตัดวันรายงานรอ O-010
+3. เวลาเก็บเป็น ISO-8601 UTC; business_date คำนวณตาม Asia/Bangkok และเปลี่ยนวันเวลา 00:00 น. ตามเวลาไทย (D-041)
 4. Foreign key เปิดทุก connection; ใช้ ON DELETE RESTRICT เป็นค่าเริ่มต้น ห้าม CASCADE ลบประวัติ
 5. ตาราง ledger/audit เป็น append-only; แก้ข้อผิดพลาดด้วย reversal record
 6. UI ส่ง identifier และ input เท่านั้น; service ต้องอ่านข้อมูลจริงจาก DB และคำนวณยอดใหม่
-7. รายละเอียด precision ของ quantity รอ O-019; คอลัมน์ qty ที่แสดงในเอกสารนี้เป็น INTEGER ชั่วคราวและห้ามสร้าง migration จริงก่อนยืนยัน
+7. quantity เก็บเป็น INTEGER หน่วย milli-unit โดย 1 หน่วย = 1,000; ห้ามใช้ REAL/FLOAT/DOUBLE (D-050)
 8. สถานะการชำระเงินแยกจากสถานะการยกเลิก/คืนสินค้า
 
 ## 2. ตารางและคีย์
@@ -30,8 +30,8 @@
 | price_satang | INTEGER | NOT NULL, CHECK >= 0 |
 | cost_satang | INTEGER | NOT NULL, CHECK >= 0 |
 | unit | TEXT | NOT NULL |
-| stock_limit_qty | INTEGER | NULL ได้; ค่าเริ่มต้น/ความหมาย 0 หรือ NULL รอ O-020 |
-| stock_qty | INTEGER | NOT NULL DEFAULT 0; cache ที่ stock_log trigger ดูแล |
+| stock_limit_qty_milli | INTEGER | NULL ได้; NULL = ปิดแจ้งเตือน, 0 เป็นค่าที่ตั้งได้; แจ้งเมื่อ stock_qty_milli <= limit |
+| stock_qty_milli | INTEGER | NOT NULL DEFAULT 0; cache ที่ stock_log trigger ดูแล; 1 หน่วย = 1,000 |
 | is_active | INTEGER | NOT NULL DEFAULT 1, CHECK IN (0,1) |
 | created_at_utc | TEXT | NOT NULL |
 | updated_at_utc | TEXT | NOT NULL |
@@ -72,11 +72,12 @@
 |---|---|---|
 | id | TEXT | PK UUID |
 | name | TEXT | NOT NULL |
-| name_key | TEXT | NOT NULL, UNIQUE |
+| name_key | TEXT | NOT NULL; Unicode NFC + trim + collapse whitespace + case-fold |
+| identity_key | TEXT | NOT NULL DEFAULT ''; ตัวระบุเพิ่มเมื่อต้องแยกคนชื่อซ้ำ |
 | created_at_utc | TEXT | NOT NULL |
 | updated_at_utc | TEXT | NOT NULL |
 
-name_key ใช้ตรวจชื่อซ้ำ แต่กฎ normalize ช่องว่าง/Unicode/ตัวพิมพ์และกรณีบุคคลชื่อซ้ำยังรอ O-018 ต้องยืนยันก่อนสร้าง unique index ใน migration จริง
+UNIQUE(name_key, identity_key); คนชื่อซ้ำคนละคนต้องมี identity_key ต่างกัน เช่น เบอร์โทรหรือข้อมูลแยกบุคคลอื่น หากไม่มีตัวระบุที่แตกต่างให้ปฏิเสธการสร้างซ้ำ (D-049)
 
 ### 2.5 sale
 
@@ -91,15 +92,16 @@ name_key ใช้ตรวจชื่อซ้ำ แต่กฎ normalize �
 | subtotal_satang | INTEGER | NOT NULL, CHECK >= 0 |
 | fee_total_satang | INTEGER | NOT NULL, CHECK >= 0 |
 | total_satang | INTEGER | NOT NULL, CHECK total = subtotal + fee_total |
-| cash_received_satang | INTEGER | NULL ได้; CHECK >= 0 เมื่อมีค่า |
-| change_satang | INTEGER | NULL ได้; CHECK >= 0 เมื่อมีค่า |
+| cash_received_satang | INTEGER | CASH ต้อง NOT NULL และ >= total_satang; CREDIT ต้อง NULL |
+| change_satang | INTEGER | CASH = cash_received_satang - total_satang; CREDIT ต้อง NULL |
 | content_hash | TEXT | NOT NULL; index ไม่ unique |
 | created_at_utc | TEXT | NOT NULL |
-| paid_at_utc | TEXT | NULL จนกว่าจะชำระ; CASH กำหนดใน transaction ขาย |
+| paid_at_utc | TEXT | NULL จนกว่าจะชำระ; CASH กำหนดเท่ากับ created_at_utc |
+| settled_by_reversal_at_utc | TEXT | NULL; เวลาที่ credit balance เป็นศูนย์จาก return/cancel โดยไม่ได้รับเงิน |
 
-กฎ: CASH เริ่ม PAID และไม่มี fee; CREDIT ต้องมี customer และเริ่ม UNPAID; การชำระหนี้เต็มบิลเปลี่ยน payment_status เป็น PAID พร้อม paid_at_utc และ debt_payment ใน transaction เดียวกัน การยกเลิกเปลี่ยน lifecycle_status เป็น CANCELLED โดยไม่เขียนทับ payment_status
+กฎ: CASH เริ่ม PAID ไม่มี fee และ paid_at_utc = created_at_utc; CREDIT ต้องมี customer และเริ่ม UNPAID; ชำระเต็มยอดค้างแล้วเปลี่ยนเป็น PAID พร้อม paid_at_utc และ debt_payment ใน transaction เดียวกัน การยกเลิกเปลี่ยน lifecycle_status เป็น CANCELLED โดยไม่เขียนทับ payment_status; ถ้ายอดค้างเป็นศูนย์จาก reversal ให้บันทึก settled_by_reversal_at_utc แยกจาก paid_at_utc
 
-สถานะคืนสินค้าไม่ใช้แทน payment_status/lifecycle_status; คำนวณจากยอด/จำนวนใน sale_return_line หรือ view แยก การกำหนดสถานะคืนครบทั้งบิลรอ O-007
+return_status เป็นค่าคำนวณ NONE/PARTIAL/FULL จากจำนวนที่คืนจริงเท่านั้น; การยกเลิกไม่ถือเป็นการคืน (D-038)
 
 ค่าบริการ 5% ของบิล CREDIT คำนวณจาก subtotal_satang (ยอดรวมค่าสินค้าทั้งบิลก่อน fee) และปัดเศษครั้งเดียวแบบ Half Up ตาม D-034/D-035; เก็บผลไว้ใน sale.fee_total_satang เท่านั้น ไม่เก็บ fee ใน sale_line ใช้ integer arithmetic เท่านั้น โดย 5% เท่ากับหาร 20: quotient = subtotal_satang / 20, remainder = subtotal_satang % 20, แล้วบวก 1 สตางค์เมื่อ remainder >= 10; CASH มี fee_total_satang = 0
 
@@ -114,10 +116,10 @@ name_key ใช้ตรวจชื่อซ้ำ แต่กฎ normalize �
 | name_snap | TEXT | NOT NULL |
 | price_snap_satang | INTEGER | NOT NULL, CHECK >= 0 |
 | cost_snap_satang | INTEGER | NOT NULL, CHECK >= 0 |
-| qty | INTEGER | NOT NULL, CHECK > 0; precision รอ O-019 |
+| qty_milli | INTEGER | NOT NULL, CHECK > 0; 1 หน่วย = 1,000; scale สูงสุด 3 ตำแหน่ง |
 | line_total_satang | INTEGER | NOT NULL, CHECK >= 0 |
 
-UNIQUE(sale_id, line_no) เก็บ snapshot ชื่อ/ราคา/ต้นทุน ณ เวลาขาย ห้ามแก้ snapshot หลัง commit
+UNIQUE(sale_id, line_no) เก็บ snapshot ชื่อ/ราคา/ต้นทุน ณ เวลาขาย ห้ามแก้ snapshot หลัง commit; line_total_satang = Half Up(price_snap_satang × qty_milli ÷ 1,000) ด้วย integer arithmetic ต่อ sale_line (D-050)
 
 
 
@@ -140,8 +142,11 @@ sale_return:
 |---|---|---|
 | id | TEXT | PK UUID |
 | sale_id | TEXT | NOT NULL, FK sale.id RESTRICT |
-| reason | TEXT | NOT NULL; เงื่อนไขบังคับเมื่อไม่ restock รอ O-029 |
-| refund_satang | INTEGER | NOT NULL, CHECK >= 0 |
+| reason | TEXT | NOT NULL |
+| cash_refund_satang | INTEGER | NOT NULL DEFAULT 0; > 0 เฉพาะบิลที่ชำระแล้ว |
+| debt_reduction_satang | INTEGER | NOT NULL DEFAULT 0; ใช้กับ CREDIT ที่ยังมียอดค้าง |
+| fee_reversal_satang | INTEGER | NOT NULL DEFAULT 0; ส่วนของ fee ที่กลับรายการในครั้งนี้ |
+| recipient_name | TEXT | ต้องมีเมื่อ cash_refund_satang > 0 |
 | created_at_utc | TEXT | NOT NULL |
 
 sale_return_line:
@@ -151,21 +156,54 @@ sale_return_line:
 | id | TEXT | PK UUID |
 | return_id | TEXT | NOT NULL, FK sale_return.id RESTRICT |
 | sale_line_id | TEXT | NOT NULL, FK sale_line.id RESTRICT |
-| qty | INTEGER | NOT NULL, CHECK > 0; precision รอ O-019 |
-| value_satang | INTEGER | NOT NULL, CHECK >= 0 |
-| fee_satang | INTEGER | NOT NULL, CHECK >= 0 |
+| qty_milli | INTEGER | NOT NULL, CHECK > 0 |
+| value_satang | INTEGER | NOT NULL, CHECK >= 0; มูลค่าสินค้าที่กลับรายการครั้งนี้ |
+| fee_satang | INTEGER | NOT NULL, CHECK >= 0; ค่าบริการที่จัดสรรให้การคืนครั้งนี้ |
 | restock | INTEGER | NOT NULL, CHECK IN (0,1) |
+| non_restock_reason | TEXT | NOT NULL เมื่อ restock=0; NULL เมื่อ restock=1 |
+| evidence_content_hash | TEXT | NULL ได้; hash ของรูปถ่ายหลักฐานเสริม |
 
-ห้ามคืนเกินจำนวนที่ขายลบจำนวนที่คืนก่อนหน้า ต้องตรวจใน transaction และมี trigger/guard ระดับ DB เพิ่มเติมเมื่อ finalize schema การคืนจากบิลเชื่อค้างลดหนี้ด้วยมูลค่าสินค้าบวก fee; บิลที่ชำระแล้วคืนเงินสดตามกฎที่ยืนยัน ค่าบริการระดับบิลคำนวณจาก subtotal_satang และปัดครั้งเดียวแบบ Half Up ตาม D-034/D-035; วิธีจัดสรร/คืน fee เมื่อคืนหลายครั้ง, ยกเลิกหลังคืนบางส่วน และวิธีคืนเงินรอ O-005/O-006/O-017/O-030
+ห้ามคืนเกินจำนวนขายลบจำนวนคืนก่อนหน้า; ตรวจใน transaction และมี DB guard/trigger เพิ่มเติมเมื่อ finalize schema. มูลค่าสินค้าต่อ sale_line ใช้เป้าหมายสะสมแบบ Half Up จาก line_total × qty_returned_cumulative ÷ qty_sold; fee ใช้เป้าหมายสะสมแบบ Half Up จาก fee_total × returned_goods_value_cumulative ÷ subtotal. ค่าของครั้งปัจจุบันเป็นส่วนต่างจากยอดสะสมเดิม เพื่อไม่ให้เกิดเศษซ้ำหรือคืนเกินต้นฉบับ (D-036). หากบิลยังค้างให้ลดหนี้; หากชำระแล้วให้คืนเงินสดหน้าร้านและบันทึกผู้รับตาม D-048.
+
+### 2.8.1 sale_cancel และ sale_cancel_line
+
+sale_cancel:
+
+| คอลัมน์ | ชนิด | ข้อกำหนด |
+|---|---|---|
+| id | TEXT | PK UUID |
+| sale_id | TEXT | NOT NULL, UNIQUE, FK sale.id RESTRICT |
+| reason | TEXT | NOT NULL |
+| cash_refund_satang | INTEGER | NOT NULL DEFAULT 0 |
+| debt_reduction_satang | INTEGER | NOT NULL DEFAULT 0 |
+| fee_reversal_satang | INTEGER | NOT NULL DEFAULT 0 |
+| recipient_name | TEXT | ต้องมีเมื่อ cash_refund_satang > 0 |
+| created_at_utc | TEXT | NOT NULL |
+
+sale_cancel_line:
+
+| คอลัมน์ | ชนิด | ข้อกำหนด |
+|---|---|---|
+| id | TEXT | PK UUID |
+| cancel_id | TEXT | NOT NULL, FK sale_cancel.id RESTRICT |
+| sale_line_id | TEXT | NOT NULL, FK sale_line.id RESTRICT |
+| qty_milli | INTEGER | NOT NULL, CHECK > 0; ต้องเท่ากับจำนวนคงเหลือที่ยังไม่คืน |
+| value_satang | INTEGER | NOT NULL, CHECK >= 0 |
+| fee_satang | INTEGER | NOT NULL, CHECK >= 0; fee ที่ยังไม่เคยกลับรายการ |
+| restock | INTEGER | NOT NULL, CHECK IN (0,1) |
+| non_restock_reason | TEXT | NOT NULL เมื่อ restock=0 |
+| evidence_content_hash | TEXT | NULL ได้ |
+
+การยกเลิกหลังคืนบางส่วนบันทึกเฉพาะจำนวนคงเหลือ; ห้ามกลับรายการคืนเดิมซ้ำ. fee reversal ของการยกเลิกเท่ากับ fee ต้นฉบับลบ fee ที่คืน/ยกเลิกก่อนหน้า (D-057). การคืนเงิน/ลดหนี้, stock movement, summary, audit และ backup journal ต้อง atomic.
 
 ### 2.9 stock_count และ stock_count_line
 
 เพิ่มเป็นเอกสารประกอบการตรวจนับ เพื่อค้นย้อนหลังและเชื่อมกับ stock_log
 
 - stock_count: id TEXT PK, created_at_utc TEXT NOT NULL, note TEXT NULL
-- stock_count_line: id TEXT PK, stock_count_id TEXT FK RESTRICT, sku TEXT FK RESTRICT, system_qty INTEGER NOT NULL, counted_qty INTEGER NOT NULL, diff_qty INTEGER NOT NULL, UNIQUE(stock_count_id, sku)
+- stock_count_line: id TEXT PK, stock_count_id TEXT FK RESTRICT, sku TEXT FK RESTRICT, system_qty_milli INTEGER NOT NULL, counted_qty_milli INTEGER NOT NULL, diff_qty_milli INTEGER NOT NULL, UNIQUE(stock_count_id, sku)
 
-การแทนที่ยอดคงเหลือต้องสร้าง stock_log ต่อ SKU ใน transaction เดียวกับบันทึกเอกสารตรวจนับ กติกา quantity precision รอ O-019
+การแทนที่ยอดคงเหลือต้องสร้าง stock_log ต่อ SKU ใน transaction เดียวกับบันทึกเอกสารตรวจนับ โดยใช้ milli-unit ตาม D-050
 
 ### 2.10 stock_log
 
@@ -173,16 +211,16 @@ sale_return_line:
 |---|---|---|
 | id | TEXT | PK UUID |
 | sku | TEXT | NOT NULL, FK product.sku RESTRICT |
-| before_qty | INTEGER | NOT NULL |
-| after_qty | INTEGER | NOT NULL |
-| diff_qty | INTEGER | NOT NULL, CHECK after_qty - before_qty = diff_qty |
+| before_qty_milli | INTEGER | NOT NULL |
+| after_qty_milli | INTEGER | NOT NULL |
+| diff_qty_milli | INTEGER | NOT NULL, CHECK after_qty_milli - before_qty_milli = diff_qty_milli |
 | reason | TEXT | NOT NULL, CHECK IN ('RECEIVE','SALE','RETURN','CANCEL','COUNT_REPLACE') |
 | ref_id | TEXT | NULL ได้; อ้างอิง sale/return/count operation |
 | created_at_utc | TEXT | NOT NULL |
 
-Append-only; index (sku, created_at_utc) และ (ref_id) ทุกการเปลี่ยน stock ต้องมีหนึ่งแถวใน stock_log Trigger เมื่อ insert ต้องตรวจ before_qty เท่ากับ product.stock_qty แล้วปรับ cache stock_qty เป็น after_qty ห้าม update/delete stock_log
+Append-only; index (sku, created_at_utc) และ (ref_id) ทุกการเปลี่ยน stock ต้องมีหนึ่งแถวใน stock_log Trigger เมื่อ insert ต้องตรวจ before_qty_milli เท่ากับ product.stock_qty_milli แล้วปรับ cache stock_qty_milli เป็น after_qty_milli ห้าม update/delete stock_log
 
-การบล็อกจำนวนขายมากกว่าสต๊อกคงเหลือเมื่อ stock ยังมากกว่า 0 รอ O-008; ห้าม finalize CHECK/trigger ที่เลือกนโยบายแทนผู้ใช้
+ก่อนขายต้องตรวจ qty_milli ที่ขอ <= stock_qty_milli คงเหลือภายใน transaction; หากไม่พอให้บล็อกและห้าม stock ติดลบ (D-039)
 
 ### 2.11 price_history
 
@@ -196,26 +234,36 @@ Append-only; index (sku, changed_at_utc); update/delete ไม่อนุญา
 
 ### 2.12 daily_summary
 
-- business_date TEXT PRIMARY KEY (รูปแบบ YYYY-MM-DD)
-- cash_sales_satang INTEGER NOT NULL DEFAULT 0 CHECK >= 0
-- credit_sales_satang INTEGER NOT NULL DEFAULT 0 CHECK >= 0
-- returns_satang INTEGER NOT NULL DEFAULT 0 CHECK >= 0
-- fees_satang INTEGER NOT NULL DEFAULT 0 CHECK >= 0
+- business_date TEXT PRIMARY KEY (YYYY-MM-DD ตาม Asia/Bangkok)
+- cash_sales_satang INTEGER NOT NULL DEFAULT 0 CHECK >= 0 (ยอดสินค้า ไม่รวม fee)
+- credit_sales_satang INTEGER NOT NULL DEFAULT 0 CHECK >= 0 (ยอดสินค้า ไม่รวม fee)
+- fees_satang INTEGER NOT NULL DEFAULT 0 CHECK >= 0 (fee ที่เรียกเก็บ)
+- returned_goods_satang INTEGER NOT NULL DEFAULT 0 CHECK >= 0
+- returned_fee_satang INTEGER NOT NULL DEFAULT 0 CHECK >= 0
+- cancelled_goods_satang INTEGER NOT NULL DEFAULT 0 CHECK >= 0
+- cancelled_fee_satang INTEGER NOT NULL DEFAULT 0 CHECK >= 0
+- net_sales_satang INTEGER NOT NULL (อาจติดลบในวันที่มีรายการกลับด้านมากกว่ายอดขายใหม่)
 - updated_at_utc TEXT NOT NULL
 
-เก็บ 15 เดือนตาม SPEC; สูตรยอดสุทธิและผลของการคืน/ยกเลิก/fee ต่อแต่ละตัวเลขรอ O-015 และ timezone/เวลาตัดวันรอ O-010
+สูตร: net_sales = cash_sales + credit_sales + fees - returned_goods - returned_fee - cancelled_goods - cancelled_fee. การคืน/ยกเลิกลง business_date ที่เกิดเหตุการณ์ และแยกประเภทตามบิลต้นทาง (D-046). เก็บ 15 เดือน.
 
 ### 2.13 product_daily
 
-- business_date TEXT NOT NULL
+- business_date TEXT NOT NULL (Asia/Bangkok)
 - sku TEXT NOT NULL FK product.sku RESTRICT
-- qty INTEGER NOT NULL
-- revenue_satang INTEGER NOT NULL CHECK >= 0
+- sold_qty_milli INTEGER NOT NULL DEFAULT 0
+- returned_qty_milli INTEGER NOT NULL DEFAULT 0
+- cancelled_qty_milli INTEGER NOT NULL DEFAULT 0
+- net_qty_milli INTEGER NOT NULL (อาจติดลบในวันที่มีรายการกลับด้านมากกว่ายอดขายใหม่)
+- sold_goods_satang INTEGER NOT NULL DEFAULT 0
+- returned_goods_satang INTEGER NOT NULL DEFAULT 0
+- cancelled_goods_satang INTEGER NOT NULL DEFAULT 0
+- net_goods_satang INTEGER NOT NULL
 - PRIMARY KEY (business_date, sku)
 
-เก็บ 15 เดือน; นิยามสินค้าขายน้อยสุด 20 อันดับรอ O-016
+เก็บ 15 เดือน; ขายดี/ขายน้อยคำนวณจากยอดจำนวนขายสุทธิรวมช่วงที่เลือก. สินค้าขายน้อยสุด 20 อันดับดูย้อนหลัง 30 วัน เฉพาะ net_qty_milli รวมมากกว่า 0 (D-047).
 
-### 2.14 op_log
+### 2.15 op_log
 
 - id TEXT PK UUID
 - action TEXT NOT NULL
@@ -224,28 +272,49 @@ Append-only; index (sku, changed_at_utc); update/delete ไม่อนุญา
 - detail_json TEXT NULL
 - created_at_utc TEXT NOT NULL
 
-เก็บ 3 เดือนตาม SPEC; append-only; index created_at_utc และ (entity_type, entity_id)
+เก็บ 90 วันตาม D-042; append-only; index created_at_utc และ (entity_type, entity_id)
 
-### 2.15 backup_journal
+### 2.16 backup_journal
 
 - seq INTEGER PRIMARY KEY AUTOINCREMENT
 - operation_id TEXT NOT NULL UNIQUE
 - op TEXT NOT NULL
-- payload TEXT NOT NULL
+- payload TEXT NOT NULL (canonical JSON UTF-8)
+- payload_sha256 TEXT NOT NULL
+- schema_version INTEGER NOT NULL
 - created_at_utc TEXT NOT NULL
 - uploaded INTEGER NOT NULL DEFAULT 0 CHECK IN (0,1)
 
-insert ภายใน transaction เดียวกับ business write; index (uploaded, seq) เพื่อส่งตามลำดับ ห้าม backup failure rollback ธุรกรรมที่ commit แล้ว รูปแบบ payload, checksum, encryption, retention, recovery ordering และ checkpoint รอ O-021; backup deadline รอ O-022
+insert ภายใน transaction เดียวกับ business write; index (uploaded, seq) เพื่อส่งตามลำดับ. แต่ละ record มี operation_id และ SHA-256; snapshot เป็น SQLite consistent snapshot รองรับ WAL บรรจุ ZIP พร้อม manifest/checkpoint. Restore ตรวจ checksum/integrity แล้ว replay journal ตาม seq ต่อเนื่องแบบ idempotent. เก็บ snapshot ที่ตรวจผ่านหลายชุดและห้ามลบชุดล่าสุดที่กู้คืนได้ก่อนชุดใหม่ผ่าน. Encryption รอ O-025 (D-052); แจ้งเตือนคิวค้างเกิน 24 ชั่วโมง (D-053).
+
+## 2.17 sale_reconciliation
+
+- sale_ref_hash TEXT PRIMARY KEY; SHA-256 reference derived from sale ID with version prefix
+- business_date TEXT NOT NULL
+- sale_type TEXT NOT NULL CHECK IN ('CASH','CREDIT')
+- subtotal_satang INTEGER NOT NULL
+- fee_charged_satang INTEGER NOT NULL
+- returned_goods_satang INTEGER NOT NULL
+- returned_fee_satang INTEGER NOT NULL
+- cancelled_goods_satang INTEGER NOT NULL
+- cancelled_fee_satang INTEGER NOT NULL
+- net_sales_satang INTEGER NOT NULL
+- proof_sha256 TEXT NOT NULL
+- created_at_utc TEXT NOT NULL
+
+Immutable reconciliation evidence with no customer name, phone, customer_id or other PII. Retain 15 months after source sale purge (D-054).
 
 ## 3. Index ที่ต้องมี
 
-- product(barcode) UNIQUE, product(name), product(is_active, stock_qty)
+- product(barcode) UNIQUE, product(name), product(is_active, stock_qty_milli)
 - barcode_registry(barcode) PRIMARY KEY
-- customer(name_key) UNIQUE
+- customer(name_key, identity_key) UNIQUE
 - sale(idem_key) UNIQUE, sale(created_at_utc), sale(payment_status, created_at_utc), sale(customer_id, payment_status), sale(content_hash, created_at_utc)
 - sale_line(sale_id, line_no) UNIQUE, sale_line(sku)
 - debt_payment(sale_id) UNIQUE, debt_payment(paid_at_utc)
 - sale_return(sale_id, created_at_utc), sale_return_line(sale_line_id)
+- sale_cancel(sale_id) UNIQUE, sale_cancel_line(sale_line_id)
+- sale_reconciliation(business_date), sale_reconciliation(sale_type)
 - stock_log(sku, created_at_utc), stock_log(ref_id)
 - price_history(sku, changed_at_utc)
 - product_daily(business_date, sku), op_log(created_at_utc)
@@ -255,25 +324,26 @@ insert ภายใน transaction เดียวกับ business write; inde
 
 ### บังคับในฐานข้อมูล
 
-- UNIQUE: barcode, name_key, idem_key, debt_payment.sale_id, barcode_counter.id singleton, line numbers
-- CHECK: เงินไม่ติดลบ, boolean เป็น 0/1, enum อยู่ในค่าที่กำหนด, line number และ qty เป็นบวก (qty precision ยังรอ O-019)
+- UNIQUE: barcode, (name_key, identity_key), idem_key, debt_payment.sale_id, sale_cancel.sale_id, barcode_counter.id singleton, line numbers
+- CHECK: เงินไม่ติดลบ, boolean เป็น 0/1, enum อยู่ในค่าที่กำหนด, line number และ qty_milli เป็นบวก; CASH ต้องรับเงิน >= total และเงินทอนเท่ากับส่วนต่าง
 - FK: เปิด foreign_keys ทุก connection; ความสัมพันธ์ประวัติใช้ RESTRICT
-- Trigger: ห้าม DELETE sale ที่ payment_status='UNPAID'; ห้าม UPDATE/DELETE ledger/audit/registry; stock_log insert เป็นทางเดียวที่เปลี่ยน cached stock_qty
+- Trigger: ห้าม DELETE บิลที่ยังมียอดค้างจริง; ห้าม UPDATE/DELETE ledger/audit/registry; stock_log insert เป็นทางเดียวที่เปลี่ยน cached stock_qty_milli
 - ห้ามใช้ ON DELETE CASCADE กับ sale, sale_line, debt_payment, sale_return, stock_log, price_history หรือ audit evidence
 
 ### นโยบายลบ
 
 | ข้อมูล | นโยบาย |
 |---|---|
-| sale ที่ UNPAID | ห้ามลบทุกกรณี |
-| sale ที่ PAID | retention 30 วันหลัง paid_at ตาม SPEC; purge ได้เมื่อ snapshot/summary/audit guard ผ่านเท่านั้น |
-| daily_summary, product_daily | เก็บ 15 เดือน |
-| op_log | เก็บ 3 เดือน |
+| sale ที่มี outstanding balance > 0 | ห้ามลบทุกกรณี ไม่ขึ้นกับ lifecycle_status |
+| sale เงินสด PAID | เริ่มนับ 30 วันจาก created_at_utc (= paid_at_utc); purge เมื่อครบและ guard ผ่าน |
+| sale เงินเชื่อ PAID | เริ่มนับ 30 วันจาก paid_at_utc เมื่อชำระเต็มยอด |
+| sale เชื่อที่ยอดเป็นศูนย์จาก reversal โดยไม่รับเงิน | เริ่มนับ 30 วันจาก settled_by_reversal_at_utc; payment_status ยังคงแยกจากการชำระ |
+| sale_return, sale_cancel, debt_payment, stock_log, price_history, op_log | เก็บ 90 วันจาก created_at_utc; FK child ที่ยังอยู่ทำให้เลื่อน purge parent ได้ |
+| daily_summary, product_daily, sale_reconciliation | เก็บ 15 เดือน |
 | product, barcode_registry | เก็บถาวร |
-| sale_return, debt_payment, stock_log, price_history และหลักฐานอื่น | เก็บไว้ก่อนจนกว่าผู้ใช้ยืนยัน retention scope (O-011) |
-| sale archive หลัง purge | ต้องกำหนดหลักฐาน/ข้อมูลขั้นต่ำก่อนลบ (O-027); ห้ามเปิด purge จริงจนกว่าจะยืนยัน |
+| backup_journal | เก็บจน journal ถูกส่งและถูกครอบคลุมด้วย snapshot ที่ตรวจสอบแล้ว; prune ได้เมื่อ recovery chain ยังสมบูรณ์ |
 
-การ purge ต้องอยู่ใน transaction ควบคุม, มี snapshot ก่อนลบ, ตรวจ summary completeness, ไม่ลบบิลค้าง และต้องมี RetentionGuardTest/SummaryAfterPurgeTest
+ก่อน purge ต้องสร้าง reconciliation proof แบบไม่มี PII เก็บ 15 เดือน โดยมี hash reference, business date, sale type, subtotal, fee, returns, cancellations และ net sales. purge ต้องมี snapshot ก่อนลบ, proof commit, summary กระทบยอดตรง, foreign-key/retention guard ผ่าน และต้องมี RetentionGuardTest/SummaryAfterPurgeTest (D-054)
 
 ## 5. สถานะการขาย การชำระ และการคืน
 
@@ -281,7 +351,7 @@ insert ภายใน transaction เดียวกับ business write; inde
 
 - payment_status: PAID / UNPAID
 - lifecycle_status: COMPLETED / CANCELLED
-- สถานะคืนสินค้า: derive จากผลรวม sale_return_line เทียบ sale_line; สถานะคืนครบทั้งบิลยังรอ O-007
+- return_status: derive NONE/PARTIAL/FULL จากจำนวนที่คืนจริงเทียบ sale_line; cancellation ไม่ถูกนับเป็น return
 
 การชำระหนี้เปลี่ยน payment_status เท่านั้น; การยกเลิกเปลี่ยน lifecycle_status เท่านั้น; การคืนเพิ่ม reversal records โดยไม่แก้ยอดต้นฉบับ
 
@@ -292,10 +362,11 @@ insert ภายใน transaction เดียวกับ business write; inde
 | สร้าง barcode | barcode_counter + barcode_registry |
 | รับสินค้า/ปรับสต๊อก | stock_count/เอกสารรับถ้ามี + stock_log + product cache + op_log + backup_journal |
 | ขาย | sale + sale_line + stock_log + product cache + daily_summary + product_daily + op_log + backup_journal |
-| ชำระหนี้ | sale.payment_status/paid_at + debt_payment + op_log + backup_journal |
+| ชำระหนี้หลายบิล | ตรวจและเปลี่ยนทุก sale.payment_status/paid_at + debt_payment แยกต่อบิล + op_log + backup_journal; all-or-nothing transaction |
 | แก้ราคาขาย | product.price + price_history + op_log + backup_journal |
-| คืน/ยกเลิก | sale_return + sale_return_line + stock_log เมื่อ restock + summary + op_log + backup_journal |
-| purge | snapshot proof + summary verification + archive proof + controlled delete; รายละเอียด archive รอ O-027 |
+| คืนสินค้า | sale_return + sale_return_line + stock_log เมื่อ restock + summary + op_log + backup_journal |
+| ยกเลิก | sale_cancel + sale_cancel_line + lifecycle_status + stock_log ตาม restock + summary + op_log + backup_journal |
+| purge | snapshot + reconciliation proof + summary verification + controlled delete; purge เฉพาะเมื่อยอดค้างเป็นศูนย์และ retention/FK guards ผ่าน |
 
 ## 7. PRAGMA และ Room
 
@@ -307,23 +378,9 @@ insert ภายใน transaction เดียวกับ business write; inde
 
 Room ต้อง export schema JSON ทุก version และใช้ explicit migrations เท่านั้น ห้าม fallback เป็น destructive migration
 
-## 8. ประเด็นที่บล็อกการ finalize schema
+## 8. สถานะประเด็นที่มีผลต่อ schema
 
-| Decision | สิ่งที่ต้องยืนยันก่อน finalize |
-|---|---|
-| O-005 | การจัดสรร/คืน fee ระดับบิลเมื่อคืนสินค้า |
-| O-005/O-006/O-017/O-029/O-030 | สูตรคืน/ยกเลิก/คืนเงิน/เหตุผลไม่ restock/ยกเลิกหลังคืนบางส่วน |
-| O-007 | วิธีระบุคืนเต็มบิล |
-| O-008 | บล็อกขายเมื่อจำนวนเกิน stock ที่เหลือหรือไม่ |
-| O-009/O-010/O-012 | เกินหนึ่งเดือน, timezone/เวลาตัดวัน, จุดเริ่ม retention |
-| O-011/O-027 | retention ของประวัติอื่นและหลักฐานหลัง purge |
-| O-013 | ชำระหลายบิล atomic แบบใด |
-| O-014 | normalization และ canonical fields ของ content_hash |
-| O-015/O-016 | สูตรรายงานและนิยามขายน้อยสุด |
-| O-018 | normalize ชื่อลูกค้าและกฎชื่อซ้ำ |
-| O-019/O-020 | precision หน่วยสินค้าและค่า/ความหมาย stock limit |
-| O-021/O-022 | backup journal/snapshot format และ deadline |
-| O-028 | validation เงินสดรับไม่พอ/เกินยอด |
+O-005 ถึง O-022 และ O-027 ถึง O-030 ได้รับการตัดสินใจและบันทึกใน docs/DECISIONS.md แล้ว. ประเด็น O-023 (Google Drive authentication), O-024 (TTS fallback), O-025 (password/database encryption) และ O-026 (ตำแหน่ง UI สำหรับ restore) ยังเป็นงานของเฟส 3/4/10 ตามลำดับ; ไม่ใช่ blocker ที่ยังเปิดของ schema ธุรกิจในเฟส 2.
 
 ## 9. เกณฑ์ตรวจ schema ก่อนเฟส 3
 
