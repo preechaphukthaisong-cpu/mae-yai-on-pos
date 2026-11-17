@@ -1,15 +1,11 @@
-# Offline sync contract
+# Offline and synchronization scope
 
-Every syncable local write and its outbox event must commit in the same SQLite transaction.
+## Version 1: one Android device only
 
-Outbox states: pending -> processing -> synced. Transient errors return to pending with a retry time. Permanent validation failures remain visible as failed for operator/admin resolution. Keep event IDs and idempotency keys unchanged across retries.
+The approved first release is an offline-first Android application on one shop device. SQLite on that device is the only source of truth. No server, cloud database, account login, device identity, sync outbox/inbox, cursor, remote conflict resolution, Wi-Fi/LAN replication, or background upload is part of version 1.
 
-Server processing: authenticate device/staff; validate event version and payload size; deduplicate by idempotency key; revalidate business rules; apply atomically; persist acknowledgement; return cursor.
+The existing sync tables and this document are retained as historical/future design material only. They must not be called by the Android runtime and must not block sales when there is no network.
 
-Conflict rules:
-- Sales, payments, refunds and stock movements are immutable events; never last-write-wins.
-- Concurrent stock adjustments are separate ledger entries followed by reconciliation.
-- Catalog data may use server revision numbers and an explicit publishing policy.
-- Conflicts are visible and never silently discarded.
+## Future multi-device phase
 
-Security: TLS; revocable per-device identity; secure token storage; no payment secrets or raw card data in sync payloads.
+A future, separately approved multi-device release may define event delivery, server-side idempotency, durable acknowledgements, conflict resolution and device revocation. Financial events must remain immutable and be corrected through reversal entries. This future design must not be implemented in the single-device phases 0–8.
