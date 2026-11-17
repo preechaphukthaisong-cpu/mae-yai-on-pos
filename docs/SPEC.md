@@ -361,7 +361,7 @@ v1 อนุญาตให้สร้างภาพบาร์โค้ด�
 - ก่อน restore แสดง source, เวลา, schema version, checksum/integrity และขอการยืนยัน; สร้าง safety snapshot ก่อนแทนที่ข้อมูล
 - ตรวจและ replay ใน staging ก่อนสลับฐานข้อมูล; หากตรวจไม่ผ่านต้องคงฐานข้อมูลปัจจุบันไว้ และห้ามลบ backup ต้นทาง
 - Drive auth ใช้บัญชีที่ผู้ใช้เลือกและ scope drive.appdata เท่านั้น; หมดสิทธิ์/เปลี่ยนบัญชีให้ยืนยันใหม่ โดยไม่ขวางการขาย (D-058)
-- Backup ต้องเข้ารหัสด้วยรหัสผ่านสำรองที่ผู้ใช้กำหนด; ใช้ authenticated encryption AES-256-GCM, salt/nonce แบบสุ่ม และ KDF ที่ระบุพารามิเตอร์ใน header (D-060)
+- Backup ต้องเข้ารหัสด้วยรหัสผ่านสำรองที่ผู้ใช้กำหนด; ใช้ authenticated encryption AES-256-GCM, salt/nonce แบบสุ่ม และ KDF ที่ระบุพารามิเตอร์ใน header. ต้องห่อ SQLCipher database key ภายใน envelope ด้วย backup-derived key เพื่อ restore ข้ามเครื่องได้; หลัง restore สร้าง database key ใหม่ใน Keystore เครื่องปลายทาง (D-060)
 - ฐานข้อมูลภายในใช้ SQLCipher; database key ป้องกันด้วย Android Keystore; ห้ามเก็บ key/password แบบ plaintext (D-060)
 
 
