@@ -7,17 +7,17 @@
     "language": "Java",
     "minSdk": 26
   },
-  "status": "PARTIAL_LOCK_PENDING_USER_CONFIRMATION",
+  "status": "LOCKED",
   "lock": {
     "mainMenu": true,
     "mainMenuOrder": true,
-    "submenuNames": false,
-    "submenuOrder": false,
+    "submenuNames": true,
+    "submenuOrder": true,
     "homeScreenLayout": false
   },
   "rules": [
     "ห้ามเพิ่ม ลบ ย้าย หรือเปลี่ยนชื่อเมนูหลักที่ล็อกไว้",
-    "ห้ามสร้างเมนูย่อยจากรายการ proposedSubmenus จนกว่าผู้ใช้จะยืนยัน",
+    "ห้ามเพิ่ม ลบ ย้าย หรือเปลี่ยนชื่อเมนูย่อยที่ล็อกไว้ เว้นแต่ผู้ใช้อนุมัติเป็นลายลักษณ์อักษร",
     "ห้ามเปลี่ยนหน้าจอหลักโดยไม่ได้รับอนุมัติจากผู้ใช้",
     "การนำทางจาก home ต้องใช้ route contract; home ห้าม import implementation ของ feature",
     "แต่ละเมนูเป็น feature package แยก และห้าม feature import feature อื่นโดยตรง"
@@ -60,10 +60,11 @@
       "featurePackage": "feature.reports"
     }
   ],
-  "proposedSubmenus": [
+  "pendingConfirmation": [],
+  "note": "เมนูหลัก 6 รายการและเมนูย่อยทั้ง 6 หมวดได้รับการยืนยันแล้ว ห้ามเปลี่ยนโดยไม่ได้รับอนุมัติใหม่",
+  "submenus": [
     {
       "parentId": "sales",
-      "status": "PROPOSED_NOT_LOCKED",
       "items": [
         "ขายเงินสด",
         "ขายเชื่อ",
@@ -72,7 +73,6 @@
     },
     {
       "parentId": "inventory",
-      "status": "PROPOSED_NOT_LOCKED",
       "items": [
         "เพิ่มสินค้าเข้าคลัง/รับสินค้า",
         "สินค้าทั้งหมด",
@@ -82,7 +82,6 @@
     },
     {
       "parentId": "barcode",
-      "status": "PROPOSED_NOT_LOCKED",
       "items": [
         "สร้างบาร์โค้ด",
         "คลังบาร์โค้ด"
@@ -90,7 +89,6 @@
     },
     {
       "parentId": "history",
-      "status": "PROPOSED_NOT_LOCKED",
       "items": [
         "บิลจ่ายแล้ว",
         "บิลค้างชำระ",
@@ -100,7 +98,6 @@
     },
     {
       "parentId": "store",
-      "status": "PROPOSED_NOT_LOCKED",
       "items": [
         "แก้ไขราคาขาย",
         "ประวัติราคา"
@@ -108,7 +105,6 @@
     },
     {
       "parentId": "reports",
-      "status": "PROPOSED_NOT_LOCKED",
       "items": [
         "รายวัน",
         "รายสัปดาห์",
@@ -118,8 +114,10 @@
       ]
     }
   ],
-  "pendingConfirmation": [
-    "O-002"
-  ],
-  "note": "เมนูหลัก 6 รายการและลำดับมาจากข้อกำหนดที่ยืนยันแล้ว ส่วนเมนูย่อยเป็นเพียงรายการความสามารถจาก SPEC และยังไม่ถือว่าล็อก เพราะ SPEC กำหนดให้ผู้ใช้ยืนยันชื่อ/ลำดับในเฟส 2"
+  "approval": {
+    "approvedBy": "ผู้ใช้",
+    "approvedOn": "2026-11-17",
+    "evidence": "ยืนยันรายการและลำดับเมนูย่อยตามที่เสนอ ด้วยข้อความ “เอาตามนั้นเลย”",
+    "scope": "ชื่อและลำดับเมนูย่อยทั้ง 6 หมวดเท่านั้น; ไม่ใช่การอนุมัติประเด็นธุรกิจ O-001 ถึง O-030"
+  }
 }
