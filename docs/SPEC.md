@@ -1,12 +1,12 @@
 # ข้อกำหนดระบบ POS ร้านแม่ใหญ่อ่อน (SPEC)
 
 - เอกสาร: SPEC.md
-- รุ่นข้อกำหนด: v1.0.5
-- สถานะ: เฟส 1 ยืนยันแล้ว และผู้ใช้ยืนยันกฎธุรกิจเฟส 2 เพิ่มเติม 22 ข้อเมื่อ 17 พฤศจิกายน 2026; รายละเอียดใน docs/DECISIONS.md
+- รุ่นข้อกำหนด: v1.0.6
+- สถานะ: ข้อกำหนดและประเด็น O-001 ถึง O-030 ได้รับการยืนยันแล้ว; รายละเอียดใน docs/DECISIONS.md
 - แพลตฟอร์ม: Android (Java)
 - ขอบเขต: มือถือเครื่องเดียว, Offline-first, ยังไม่มีระบบพิมพ์
 
-เอกสารนี้รวบรวมข้อกำหนดจาก Master Prompt และแผน 10 เฟสที่ผู้ใช้ส่งเมื่อ 17 พฤศจิกายน 2026 ข้อกำหนดที่ได้รับการยืนยันแล้วต้องยึดตาม docs/DECISIONS.md; ประเด็น O-023 ถึง O-026 ยังคงรอการตัดสินใจในเฟสที่เกี่ยวข้อง ห้ามคาดเดาแทนผู้ใช้
+เอกสารนี้รวบรวมข้อกำหนดจาก Master Prompt และแผน 10 เฟสที่ผู้ใช้ส่งเมื่อ 17 พฤศจิกายน 2026 ข้อกำหนดที่ได้รับการยืนยันแล้วต้องยึดตาม docs/DECISIONS.md; ประเด็น O-023 ถึง O-026 ได้รับการยืนยันแล้วตาม D-058 ถึง D-061; implementation ต้องยึดเฟสที่กำหนด
 
 เอกสารการตัดสินใจที่ยืนยันแล้ว: docs/DECISIONS.md
 
@@ -356,8 +356,13 @@ v1 อนุญาตให้สร้างภาพบาร์โค้ด�
 - หาก backup ค้างส่งเกิน 24 ชั่วโมง ให้เตือนบนหน้าจอหลัก; backup failure ต้องไม่ขวางการขาย
 - ต้องกู้คืนได้จากไฟล์ในเครื่องและ Google Drive และทดสอบบนเครื่องจริง รวมถึงกรณีฐานข้อมูลเสีย
 - เมื่อตรวจพบฐานข้อมูลเสีย ให้แจ้งผู้ใช้และถามว่าจะกู้คืนหรือไม่
-- ตำแหน่ง UI สำหรับเรียก restore ตามปกติยังรอ O-026; ห้ามเพิ่มเมนูหลัก/เมนูย่อยเอง
-- การเข้ารหัสไฟล์สำรอง/ฐานข้อมูลยังรอ O-025 ในเฟส 10; ZIP ไม่ได้หมายความว่ามี encryption
+- ทางเข้าหน้าสำรองและกู้คืนเป็น action ภายในหน้าจอ "จัดการร้านค้า" เท่านั้น; ห้ามเพิ่ม/เปลี่ยนเมนูหลักหรือเมนูย่อยที่ล็อกไว้ (D-061)
+- หน้าจอต้องมีสำรองทันที, ประวัติ/สถานะสำรองล่าสุด, restore จาก Drive และ restore จากไฟล์ในเครื่อง
+- ก่อน restore แสดง source, เวลา, schema version, checksum/integrity และขอการยืนยัน; สร้าง safety snapshot ก่อนแทนที่ข้อมูล
+- ตรวจและ replay ใน staging ก่อนสลับฐานข้อมูล; หากตรวจไม่ผ่านต้องคงฐานข้อมูลปัจจุบันไว้ และห้ามลบ backup ต้นทาง
+- Drive auth ใช้บัญชีที่ผู้ใช้เลือกและ scope drive.appdata เท่านั้น; หมดสิทธิ์/เปลี่ยนบัญชีให้ยืนยันใหม่ โดยไม่ขวางการขาย (D-058)
+- Backup ต้องเข้ารหัสด้วยรหัสผ่านสำรองที่ผู้ใช้กำหนด; ใช้ authenticated encryption AES-256-GCM, salt/nonce แบบสุ่ม และ KDF ที่ระบุพารามิเตอร์ใน header (D-060)
+- ฐานข้อมูลภายในใช้ SQLCipher; database key ป้องกันด้วย Android Keystore; ห้ามเก็บ key/password แบบ plaintext (D-060)
 
 
 
@@ -369,7 +374,7 @@ v1 อนุญาตให้สร้างภาพบาร์โค้ด�
 - ConfirmDialog, SearchBar, NotificationService และ AlertBanner อยู่ใน core
 - การสแกนต่อเนื่องและเสียงต้องทดสอบบนโทรศัพท์จริง
 - ต้องทดสอบการทำงานเมื่อหน้าจอดับและกลับมา รวมถึง lifecycle ของกล้อง/เสียง
-- หากเครื่องไม่มีเสียงภาษาไทยหรือเสียงผู้หญิงตามที่ต้องการ ต้องแจ้ง fallback ให้ผู้ใช้ทราบก่อนถือว่าผ่าน acceptance
+- หากไม่มีเสียงผู้หญิงภาษาไทย ให้ใช้เสียงไทยเริ่มต้น; หากไม่มีเสียงไทยเลยให้แสดงข้อความแทนโดยไม่เรียก cloud service (D-059)
 
 ---
 
@@ -387,9 +392,18 @@ v1 อนุญาตให้สร้างภาพบาร์โค้ด�
 - ห้ามลบบิลที่ยังมียอดค้างจริงด้วยทั้ง application logic และ SQL-level guard
 - ต้องมี automated tests สำหรับ fee allocation, partial return/cancel, money/refund, milli-unit quantities, stock underflow, customer normalization, duplicate hash, batch debt payment, reporting, retention proof และ backup replay
 
-การตั้งรหัสผ่าน/ล็อกแอปและการเข้ารหัสฐานข้อมูลเป็นประเด็นที่ต้องถามผู้ใช้ในเฟส 10 ตามแผน ห้ามเพิ่มวิธีล็อกหรือเปลี่ยนวิธีเข้ารหัสเองก่อนยืนยัน
+การล็อกแอปใช้ PIN/รหัสผ่านโดยไม่เก็บ plaintext; ฐานข้อมูลใช้ SQLCipher + Android Keystore และไฟล์สำรองใช้รหัสผ่านผู้ใช้ตาม D-060. ลืมรหัสผ่านสำรองแล้วไม่สามารถถอดรหัสไฟล์นั้นได้
 
 ---
+
+### การทดสอบเพิ่มเติมจากการตัดสินใจ O-023 ถึง O-026
+
+- DriveAccountAuthorizationTest: scope ต้องเป็น drive.appdata; token expiry/revocation/account switch ไม่กระทบการขายและไม่ลบ backup เดิม
+- ThaiTtsFallbackTest: female Thai -> default Thai -> text-only; TTS failure ไม่กระทบธุรกรรม
+- DatabaseEncryptionTest: SQLCipher database open/close, Keystore key protection และ no plaintext key
+- BackupEncryptionTest: password-protected AES-256-GCM archive, random salt/nonce, wrong password/tamper rejection และ restore ข้ามเครื่อง
+- RestoreSafetyTest: safety snapshot, staging validation, failed restore leaves current DB unchanged
+- RestoreEntryPointTest: action อยู่ในหน้าจอจัดการร้านค้าโดยไม่เปลี่ยน MENU_LOCK
 
 ## 19. แผนการพัฒนา 10 เฟสและเกณฑ์ผ่าน
 
