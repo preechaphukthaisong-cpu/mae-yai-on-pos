@@ -18,8 +18,8 @@
 - [x] Fresh-install barcode counter seed.
 
 ## Remaining
-- [ ] CI validation of the current database and barcode changes.
-- [ ] Instrumentation tests for fresh creation, Migration 1→2, foreign keys, triggers and rollback behavior.
+- [x] CI validation of the current database and barcode changes (unit-test/build run 44193436872 passed; emulator instrumentation is being added now).
+- [ ] Instrumentation tests for fresh creation, Migration 1→2, foreign keys, triggers and rollback behavior (test suite added; awaiting emulator CI result).
 - [ ] Remaining business entities/DAOs from `docs/SCHEMA.md` (sales, returns, debt, summaries, backup journal and reconciliation).
 - [ ] Backup journal, consistent SQLite snapshots, manifest/checksum validation, staged restore and safety snapshots.
 - [ ] Google account authorization using only `drive.appdata`; remote transfer remains blocked by the encryption gate below.
