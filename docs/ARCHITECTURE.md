@@ -1,8 +1,8 @@
 # สถาปัตยกรรมระบบ POS ร้านแม่ใหญ่อ่อน (ARCHITECTURE)
 
-- รุ่นเอกสาร: 1.0-draft
+- รุ่นเอกสาร: 1.0.5-draft
 - เฟส: 2 — ออกแบบโครงสร้าง
-- สถานะ: Draft; เมนูหลักและเมนูย่อยได้รับการยืนยันและล็อกแล้ว แต่ยังมีประเด็นเปิดด้าน schema/ธุรกิจที่ต้องปิดก่อน finalize และเริ่มเฟส 3
+- สถานะ: ออกแบบตาม D-001 ถึง D-057; กฎธุรกิจ 22 ข้อของเฟส 2 ได้รับการยืนยันแล้ว; O-023 ถึง O-026 รอตามเฟสที่เกี่ยวข้อง
 - อ้างอิงหลัก: docs/SPEC.md, docs/DECISIONS.md
 - Package หลัก: com.maeyaion.pos
 
@@ -15,6 +15,8 @@
 - v1 ไม่มีระบบพิมพ์จริง; มีเพียง PrinterService interface ว่าง
 - ไม่มี payment gateway, backend/API runtime, multi-device sync หรือ LAN replication
 - เงินเก็บเป็นจำนวนเต็มหน่วยสตางค์ชนิด long; ห้ามใช้ float/double
+- จำนวนสินค้าเก็บเป็น integer milli-unit (1 หน่วย = 1,000); ห้ามใช้ floating point
+- วันธุรกิจใช้ Asia/Bangkok ตัดวัน 00:00 น.; timestamp เก็บ UTC
 
 เอกสารนี้เป็นแบบออกแบบ ไม่ใช่หลักฐานว่ามี Android source, Gradle project หรือ feature runtime อยู่แล้ว
 
@@ -127,9 +129,11 @@ User action
 - รับสินค้าที่มีบาร์โค้ดโรงงาน: ลงทะเบียนเลขเดิมเป็น MANUFACTURER และผูก product ใน transaction เดียว; ห้ามสร้างเลขใหม่ทับบาร์โค้ดโรงงาน
 - รับสินค้า/ปรับสต๊อก/ตรวจนับ: บันทึก stock_log และปรับยอดคงเหลือใน transaction เดียว
 - ขายเงินสด/ขายเชื่อ: sale, sale_line, stock movement, stock_log, summary, audit และ backup_journal
-- ชำระหนี้: เปลี่ยนสถานะบิลและ insert debt_payment; การชำระหลายบิลให้รอคำตอบ O-013
+- ชำระหนี้หลายบิล: validate ยอดค้างเต็มทุกบิลและบันทึก debt_payment แยกต่อบิลใน transaction เดียว; หากรายการใดผิดพลาดให้ rollback ทั้งชุด (D-044)
 - แก้ราคาขาย: update product price และ insert price_history
-- คืนสินค้า/ยกเลิก: insert reversal records, stock movements, report adjustments และ audit ตามกฎที่ยืนยัน
+- คืนสินค้า: sale_return + sale_return_line, fee allocation แบบสะสม Half Up, stock movement ตาม restock, debt reduction หรือ cash refund, summary, audit และ backup journal ใน transaction เดียว
+- ยกเลิก: sale_cancel + sale_cancel_line เฉพาะจำนวนคงเหลือหลังหัก return; refund/debt reduction, fee reversal ที่เหลือ, stock movement, summary, audit และ backup journal ใน transaction เดียว
+- เงินคืนบิลที่ชำระแล้วจ่ายเงินสดหน้าร้านและบันทึกผู้รับ; restock=false ต้องมีเหตุผล
 - Retention purge: backup/snapshot และตรวจ summary ก่อนลบ; ห้ามลบบิล UNPAID
 
 ห้ามเปิด transaction ค้างระหว่างรอ input, กล้อง, TTS หรือ network call ห้ามเรียก Google Drive ภายใน transaction
@@ -140,7 +144,7 @@ User action
 - sale.idem_key มี UNIQUE constraint
 - ปิด/ล็อกปุ่มยืนยันตั้งแต่เริ่มส่งคำสั่งจนได้ผล
 - การ retry ทางเทคนิคต้องคืนผลของ operation เดิม ไม่สร้างบิลใหม่
-- duplicate-bill check ใช้ content hash แยกจาก idempotency; normalization ของ hash รอ O-014
+- duplicate-bill check ใช้ SHA-256 จาก canonical UTF-8 JSON versioned: sale type, customer_id, SKU ที่รวมซ้ำแล้ว, qty_milli และ price_snap_satang; เรียงตาม SKU และไม่รวมเวลา/เลขบิล/เงินรับ/เงินทอน. พบ hash เดิมใน 60 นาทีให้ถามยืนยัน (D-045)
 
 ## 7. Threading และ lifecycle
 
@@ -154,12 +158,19 @@ User action
 ## 8. Backup, restore และ retention
 
 - ทุก transaction ที่เปลี่ยนข้อมูลเขียน backup_journal ใน transaction เดียวกัน
-- WorkManager ส่ง journal/snapshot ไป Google Drive ด้วย scope drive.appdata เมื่อมี network; backup failure ไม่ขวางการขาย
+- Journal เป็น append-only canonical JSON UTF-8 มี sequence, operation_id, operation, schema version, timestamp และ delta ที่จำเป็น; แต่ละ record มี SHA-256
+- Snapshot เป็น SQLite consistent snapshot ที่รองรับ WAL; ห้าม copy เฉพาะไฟล์ .db ขณะ WAL ยังมีข้อมูลที่ไม่ checkpoint
+- บรรจุ snapshot เป็น ZIP พร้อม manifest ระบุ snapshot ID, schema version, เวลา UTC, journal sequence/checkpoint และ SHA-256
+- Restore ตรวจ manifest/checksum/SQLite integrity/foreign keys ก่อน แล้ว restore snapshot และ replay journal ตาม seq ต่อเนื่องแบบ idempotent; ปฏิเสธ checksum ผิดหรือ sequence ขาด/ซ้ำ
+- เก็บ snapshot ที่ตรวจผ่านหลายชุด; ห้ามลบ snapshot ล่าสุดที่กู้คืนได้ก่อน snapshot ใหม่ผ่านการตรวจ
+- WorkManager ส่ง journal/snapshot ไป Google Drive ด้วย drive.appdata เมื่อมี network; backup failure ไม่ขวางการขาย
+- หากรายการ backup ค้างส่งเกิน 24 ชั่วโมง ให้เตือนหน้าหลัก; offline ให้คงคิวไว้
 - สร้าง daily snapshot และ snapshot ก่อน purge
-- ห้าม copy เฉพาะไฟล์ SQLite หลักขณะ WAL ทำงาน; ใช้วิธี snapshot ที่ consistent และทดสอบ restore
-- ตรวจ checksum และ integrity/foreign-key checks ก่อนยอมรับไฟล์ backup
-- ห้าม purge ก่อน snapshot สำเร็จและ summary ผ่านการตรวจ
-- รายละเอียด payload, sequence, checksum, encryption, recovery ordering และ backup deadline ยังเป็น blocker ตาม O-021/O-022
+- ก่อน purge ต้องสร้าง reconciliation proof แบบไม่มี PII เก็บ 15 เดือน และตรวจ summary/foreign-key/retention guards
+- retention: paid sale 30 วันจาก created_at (cash) หรือ paid_at (credit); ยอดค้างจริงห้าม purge; settled by reversal เริ่มนับจากเวลา reversal; sale_return, sale_cancel, debt_payment, stock_log, price_history, op_log เก็บ 90 วัน; summary/product_daily/proof 15 เดือน; product/barcode registry ถาวร
+- หาก child evidence ที่ยังอยู่ในช่วง 90 วันอ้างถึง sale/sale_line ให้เลื่อน purge parent จน child พ้น retention
+- backup_journal prune ได้เมื่อส่งสำเร็จและถูกครอบคลุมด้วย snapshot ที่ตรวจแล้ว โดย recovery chain ยังสมบูรณ์
+- Encryption ของฐานข้อมูล/ไฟล์สำรองยังรอ O-025; ตำแหน่ง UI สำหรับ restore ยังรอ O-026
 - ห้ามทำ sync ข้อมูลธุรกิจหรือ replication ระหว่างอุปกรณ์
 
 ## 9. ความปลอดภัยและความถูกต้อง
@@ -174,21 +185,21 @@ User action
 
 ## 10. การทดสอบที่ผูกกับสถาปัตยกรรม
 
-- Unit tests: Satang/fee calculation, content hash, date grouping, barcode allocation ที่ต้องข้ามเลข MANUFACTURER/SYSTEM ที่ถูกลงทะเบียนแล้ว
+- Unit tests: Satang/fee calculation, cumulative return-fee allocation, milli-unit arithmetic, content hash SHA-256 canonicalization, Asia/Bangkok date grouping, barcode allocation ที่ต้องข้ามเลข MANUFACTURER/SYSTEM ที่ถูกลงทะเบียนแล้ว
 - Unit tests: FeeRoundingHalfUpTest ครอบคลุมเศษต่ำกว่า/เท่ากับ/มากกว่า 0.5 สตางค์ โดยไม่ใช้ float/double
-- Unit tests: BillLevelFeeTest ยืนยันว่ารวม subtotal ทั้งบิลแล้วคิด 5% และปัด Half Up ครั้งเดียว โดยไม่คำนวณแยก sale_line
+- Unit tests: BillLevelFeeTest ยืนยัน fee 5% จาก subtotal ทั้งบิลและปัด Half Up ครั้งเดียว; ReturnFeeAllocationTest ทดสอบคืนหลายครั้งแล้วไม่เกิน fee เดิมและคืนครบได้เต็ม
 - Room in-memory tests: UNIQUE/FK/CHECK, triggers, DAO, transaction rollback
 - Migration tests: fresh install และ upgrade จาก schema version ก่อนหน้า
 - Architecture tests: ไม่มี feature-to-feature dependency และ core ไม่พึ่ง feature
 - MenuLockTest: เมนูจริงตรงกับรายการที่ผู้ใช้อนุมัติ
-- Integration tests: sale atomicity, idempotency, stock log, debt payment, return, retention, backup/restore
+- Integration tests: sale atomicity, idempotency, stock underflow, cash tender/change, batch debt payment atomicity, return/cancel after partial return, refund recipient, no-restock reason, report reconciliation, retention proof, backup/restore/replay
 - Device tests: CameraX/ML Kit, TTS, lifecycle, WAL backup/restore และ power-loss recovery
 
 CI ผ่านไม่เท่ากับ device acceptance; ต้องทดสอบบนมือถือจริงตามเกณฑ์ใน SPEC
 
-## 11. ข้อกำหนดที่ยังไม่ล็อก
+## 11. ประเด็นที่ยังรอการตัดสินใจในเฟสถัดไป
 
-ห้ามเดาเพื่อเริ่ม implementation: ประเด็นที่ยังเปิดตาม DECISIONS โดยเฉพาะ quantity precision, stock underflow, business date, report formula, retention/archive, backup format และ cash validation; barcode source และ collision handling ถูกกำหนดแล้วใน D-033
+O-023 Google Drive authentication (เฟส 3), O-024 เสียงผู้หญิง/Thai TTS fallback (เฟส 3), O-025 password และ database/backup encryption (เฟส 10), O-026 ตำแหน่ง UI สำหรับ restore (เฟส 3/4). ห้าม implementation เดาแทนผู้ใช้ใน 4 ประเด็นนี้. กฎธุรกิจที่มีผลต่อ schema ในเฟส 2 ทั้ง 22 ข้อปิดแล้วตาม D-036 ถึง D-057.
 
 ## 12. เกณฑ์ผ่านเฟส 2
 
@@ -196,6 +207,7 @@ CI ผ่านไม่เท่ากับ device acceptance; ต้องท
 - ยืนยันได้ว่า Room/SQLite มีเพียงไฟล์เดียวและทุก feature ใช้ provider เดียว
 - dependency rules ชัดเจนและไม่มี feature import feature อื่น
 - เมนูหลัก 6 รายการไม่เปลี่ยน; เมนูย่อยทั้ง 20 รายการได้รับการยืนยันและล็อกไว้ใน MENU_LOCK.json แล้ว
-- schema ระบุ keys, indexes, constraints, transactions และ delete behavior
-- ไม่มีการตัดสินใจแทนผู้ใช้ในประเด็นเปิด; O-001 และ O-002 ต้องแสดงเป็น RESOLVED ตาม DECISIONS
+- schema ระบุ keys, indexes, constraints, transactions, quantity scale, return/cancel ledger, reconciliation proof และ delete behavior
+- O-005 ถึง O-022 และ O-027 ถึง O-030 แสดง RESOLVED ตาม DECISIONS; O-023 ถึง O-026 คงเป็นประเด็นเฟสถัดไป
+- SPEC, DECISIONS, SCHEMA, ARCHITECTURE และ MENU_LOCK ต้องผ่าน cross-document consistency check
 - ผู้ใช้ตรวจและยืนยันเอกสารก่อนเริ่มเฟส 3
