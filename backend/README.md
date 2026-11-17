@@ -1,16 +1,7 @@
-# Backend foundation
+# Backend scope
 
-Framework-specific runtime code will be added after app framework and hosting target are confirmed.
+No remote backend is part of the approved version 1. The application runs on one Android device and uses its app-private SQLite database as the sole source of truth.
 
-## Services
-Auth/RBAC; catalog; sales; payments; inventory; purchasing; cash control; CRM/loyalty; promotions; workforce; reports; sync; notifications; printing.
+This folder is retained as a future integration boundary only. Do not add a server, API runtime, cloud persistence, payment-provider credentials or synchronization behavior to phases 0–8.
 
-## API and security rules
-- Version endpoints under /api/v1.
-- Authenticate private endpoints and authorize every mutation at the service boundary.
-- Use TLS, parameterized SQL, strict validation and bounded payload sizes.
-- Require idempotency keys for sale confirmation, payment initiation, refunds and sync writes.
-- Never store raw card numbers, CVV, bank passwords, raw PINs or raw refresh tokens.
-- Payment success comes only from verified provider status/callbacks, never a client UI claim.
-- Keep provider secrets server-side; verify webhook signatures and deduplicate provider event IDs.
-- Return stable error codes; never expose stack traces or secrets.
+All current business rules must be enforced in Android domain services and SQLite transactions, not in an absent remote backend.
