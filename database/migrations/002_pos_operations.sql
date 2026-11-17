@@ -47,6 +47,25 @@ CREATE TABLE IF NOT EXISTS purchase_items (
     CHECK (discount_satang <= quantity * unit_cost_satang)
 );
 
+-- Reversals preserve the original received purchase as an immutable record.
+CREATE TABLE IF NOT EXISTS purchase_reversals (
+    id                TEXT PRIMARY KEY,
+    reversal_number   TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    purchase_id       TEXT NOT NULL REFERENCES purchases(id) ON DELETE RESTRICT,
+    reason            TEXT NOT NULL,
+    reversed_at       TEXT NOT NULL,
+    created_at        TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS purchase_reversal_items (
+    id                    TEXT PRIMARY KEY,
+    purchase_reversal_id  TEXT NOT NULL REFERENCES purchase_reversals(id) ON DELETE RESTRICT,
+    purchase_item_id      TEXT NOT NULL REFERENCES purchase_items(id) ON DELETE RESTRICT,
+    product_id            TEXT NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
+    quantity              INTEGER NOT NULL CHECK (quantity > 0),
+    created_at            TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS expenses (
     id                TEXT PRIMARY KEY,
     expense_number    TEXT NOT NULL COLLATE NOCASE UNIQUE,
@@ -131,6 +150,10 @@ CREATE INDEX IF NOT EXISTS idx_purchases_supplier
     ON purchases(supplier_id, purchased_at DESC);
 CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase
     ON purchase_items(purchase_id);
+CREATE INDEX IF NOT EXISTS idx_purchase_reversals_purchase
+    ON purchase_reversals(purchase_id, reversed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_purchase_reversal_items_reversal
+    ON purchase_reversal_items(purchase_reversal_id);
 CREATE INDEX IF NOT EXISTS idx_expenses_date
     ON expenses(incurred_at DESC);
 CREATE INDEX IF NOT EXISTS idx_cash_movements_session
