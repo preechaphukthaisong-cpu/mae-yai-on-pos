@@ -42,12 +42,13 @@
 
 | คอลัมน์ | ชนิด | ข้อกำหนด |
 |---|---|---|
-| barcode | TEXT | PK, NOT NULL |
+| barcode | TEXT | PK, NOT NULL; เก็บค่าเป็น TEXT ตามที่สแกน/สร้าง รวมเลขศูนย์นำหน้า |
 | display_name | TEXT | NOT NULL |
 | price_satang | INTEGER | NOT NULL, CHECK >= 0 |
+| source_type | TEXT | NOT NULL, CHECK IN ('SYSTEM','MANUFACTURER') |
 | created_at_utc | TEXT | NOT NULL |
 
-เก็บถาวรและห้ามนำเลขเดิมกลับมาใช้ สินค้าทุกชิ้นอ้างอิง barcode ที่ลงทะเบียนแล้ว แหล่งที่มาของ barcode (ระบบสร้าง/ผู้ผลิต) ยังไม่ล็อกตาม O-001 จึงยังไม่กำหนด enum หรือ validation flow ใน migration
+เก็บถาวรและห้ามนำเลขเดิมกลับมาใช้ สินค้าทุกชิ้นอ้างอิง barcode ที่ลงทะเบียนแล้ว หากรับสินค้าที่มีบาร์โค้ดโรงงาน ให้ลงทะเบียนเลขเดิมพร้อม source_type='MANUFACTURER'; หากไม่มีบาร์โค้ดโรงงาน ให้ใช้ตัวสร้างเลขภายในพร้อม source_type='SYSTEM' ตาม D-033 ห้ามแปลง barcode เป็นตัวเลขหรือทิ้งเลขศูนย์นำหน้า
 
 ### 2.3 barcode_counter
 
@@ -56,7 +57,14 @@
 | id | INTEGER | PK, CHECK id=1 |
 | next_value | INTEGER | NOT NULL, CHECK >= 2000001 |
 
-ต้องมี singleton row id=1, next_value=2000001 การสร้างเลขต้องอ่านค่าเดิม, insert registry และเพิ่ม counter ภายใน transaction เดียว ห้ามให้ UI กำหนดเลขเอง
+ต้องมี singleton row id=1, next_value=2000001 โดย next_value คือเลขผู้สมัครถัดไปของระบบ ห้ามให้ UI กำหนดเลขเอง การจองเลขต้องทำภายใน transaction เดียวตามลำดับ:
+1. อ่าน next_value แล้วแปลงเป็นข้อความ barcode
+2. ตรวจว่ามี barcode ตรงกันใน barcode_registry หรือไม่
+3. ถ้ามีอยู่แล้ว ให้ข้ามเลขนั้น เลื่อน next_value แล้วตรวจเลขถัดไป ทำซ้ำจนพบเลขว่าง
+4. insert barcode_registry ด้วย source_type='SYSTEM' และเลื่อน next_value ไปเลขถัดไป
+5. หาก insert หรือการปรับ counter ล้มเหลว ให้ rollback ทั้ง transaction
+
+การตรวจและ insert ต้องอยู่ใน transaction เดียวเพื่อให้การเรียกพร้อมกันไม่สามารถจองเลขเดียวกันได้ เลขโรงงานที่ตรงกับเลขผู้สมัครจะถูกข้ามเช่นเดียวกับเลขที่ระบบเคยสร้างแล้ว
 
 ### 2.4 customer
 
