@@ -12,7 +12,7 @@ One SQLite database is the single source of truth for every POS screen and featu
 - Catalog: `product_categories`, `products`
 - Customers and suppliers: `customers`, `suppliers`
 - Sales: `sales`, `sale_items`, `payments`
-- Purchasing: `purchases`, `purchase_items`
+- Purchasing: `purchases`, `purchase_items`, `purchase_reversals`, `purchase_reversal_items`
 - Inventory: `inventory_movements` (append-only ledger), cached balance in `products.stock_quantity`
 - Cash control: `cash_sessions`, `cash_movements`
 - Expenses: `expenses`
@@ -44,7 +44,7 @@ A confirmed sale must be committed as one database transaction:
 6. Insert audit log records.
 7. Commit only if every step succeeds; otherwise roll back everything.
 
-Receiving a purchase follows the same atomic pattern: validate draft, insert purchase lines, mark received, write positive inventory movements, audit, commit. A return/refund must be validated against the original sold quantities and prior returns before writing return and stock/cash movements.
+Receiving a purchase follows the same atomic pattern: validate draft, insert purchase lines, mark received, write positive inventory movements, audit, commit. A received purchase is immutable. Correct it through `purchase_reversals` and `purchase_reversal_items`, with compensating negative inventory movements in the same transaction. A sale return/refund must be validated against the original sold quantities and prior returns before writing return and stock/cash movements.
 
 ## Data integrity rules
 - Never delete confirmed sales, received purchases, payments, or inventory ledger entries.
