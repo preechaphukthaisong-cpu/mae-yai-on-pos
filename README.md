@@ -1,12 +1,35 @@
 # ร้านแม่ใหญ่อ่อน POS
 
-Android POS แบบ Offline-first สำหรับมือถือเครื่องเดียว ใช้ SQLite ฐานข้อมูลกลางชุดเดียว
+## สถานะ: รีเซ็ตโค้ดเพื่อเริ่มพัฒนาใหม่
 
-- Android source: app/
-- Existing SQL foundation and historical architecture: database/, api/, backend/, docs/
-- Implementation scope and risk invariants: docs/implementation-status.md
-- GitHub Actions: Android CI
+Repository นี้เก็บข้อกำหนดทางธุรกิจ เอกสารสถาปัตยกรรม และเอกสารอ้างอิงของระบบ POS ร้านแม่ใหญ่อ่อน โดยเริ่มต้นซอร์สโค้ดแอปใหม่ทั้งหมด
 
-Build: workflow Android CI builds a debug APK and publishes it as an artifact.
+**สถานะปัจจุบัน:** ยังไม่มี Android application source, Gradle build project หรือ GitHub Actions workflow จึงยังไม่สามารถ Build APK จาก branch `main` ได้
 
-The existing SQL files are retained for audit and must be reconciled through tested Android migrations before being used by the runtime database. CI build is not a substitute for real-device acceptance.
+## เอกสารที่เก็บรักษาไว้
+
+- `docs/` — สถาปัตยกรรม ขอบเขตระบบ ความปลอดภัย และสถานะโครงการ
+- `database/README.md` — ข้อกำหนดฐานข้อมูลกลาง กฎธุรกรรม และความถูกต้องของข้อมูล
+- `database/seeds/README.md` — นโยบายข้อมูลตั้งต้น
+- `api/` — ขอบเขต API และ OpenAPI contract (เอกสารอ้างอิงเท่านั้น ไม่ใช่ API ที่เปิดใช้งาน)
+- `frontend/README.md` และ `backend/README.md` — ขอบเขตโมดูลและข้อจำกัดการออกแบบ
+- `tests/database-validation.md` — รายการตรวจสอบฐานข้อมูล
+
+## การเก็บรักษาโค้ดเดิม
+
+ซอร์สโค้ดและ SQL implementation ก่อนรีเซ็ตยังอยู่ใน Git history และใน branch:
+
+`archive/pre-code-reset-2026-11-17`
+
+ห้ามลบ branch สำรองหรือเขียนทับประวัติเดิมโดยไม่จำเป็น
+
+## หลักการพัฒนารอบใหม่
+
+- ยืนยันข้อกำหนดก่อนลงมือพัฒนาแต่ละโมดูล
+- ใช้ฐานข้อมูลกลางเพียงชุดเดียวสำหรับทุกหน้าจอ
+- แยก UI, domain/business rules, data access และ database migrations
+- งานขาย การรับชำระ และการเคลื่อนไหวสต็อกต้องทำแบบ transaction
+- เก็บเงินเป็นจำนวนเต็มหน่วยสตางค์
+- บันทึกประวัติทางการเงินและสต็อกแบบตรวจสอบย้อนหลังได้
+- เพิ่ม automated tests และ CI ก่อนถือว่าแต่ละระยะเสร็จ
+- CI ผ่านไม่ถือเป็นการยอมรับบนอุปกรณ์จริง ต้องทดสอบบนมือถือก่อนใช้งานร้าน

@@ -3,12 +3,9 @@
 ## Purpose
 One SQLite database is the single source of truth for every POS screen and feature. Screens must call shared repositories/services; they must not maintain independent copies of business data.
 
-## Files
-- `schema.sql`: baseline schema (version 1).
-- `migrations/002_pos_operations.sql`: purchasing, expenses, cash sessions, cash movements, returns, and inventory-ledger safeguards.
-- `migrations/003_platform_foundation.sql`: staff/RBAC, attendance, barcodes, variants, promotions, loyalty, payment gateway metadata, devices, printing, receipt delivery and offline sync.
-- `seeds/001_default_roles.sql`: idempotent owner/manager/cashier roles and permission catalogue.
-- Other seed data must be stable reference data only; never put real customer, sales, or financial data here.
+## Status after code reset
+
+This file is retained as a database design reference. Executable SQL schema, migration and seed scripts are not present on the current `main` branch after the code reset. The previous SQL implementation remains in Git history and branch `archive/pre-code-reset-2026-11-17`; it must be reviewed and tested before any reuse.
 
 ## Core domains
 - Catalog: `product_categories`, `products`
