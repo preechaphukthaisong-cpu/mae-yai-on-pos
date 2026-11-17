@@ -113,12 +113,11 @@ name_key ใช้ตรวจชื่อซ้ำ แต่กฎ normalize �
 | price_snap_satang | INTEGER | NOT NULL, CHECK >= 0 |
 | cost_snap_satang | INTEGER | NOT NULL, CHECK >= 0 |
 | qty | INTEGER | NOT NULL, CHECK > 0; precision รอ O-019 |
-| fee_satang | INTEGER | NOT NULL, CHECK >= 0 |
 | line_total_satang | INTEGER | NOT NULL, CHECK >= 0 |
 
 UNIQUE(sale_id, line_no) เก็บ snapshot ชื่อ/ราคา/ต้นทุน ณ เวลาขาย ห้ามแก้ snapshot หลัง commit
 
-fee_satang ต้องเป็นจำนวนเต็มสตางค์ และค่าบริการ 5% ใช้การปัดเศษแบบ Half Up ตาม D-034 โดยคำนวณด้วย integer arithmetic เท่านั้น; ฐานคำนวณยังรอ O-004 จึงยังไม่กำหนดสูตรฐานใน schema
+ค่าบริการ 5% คำนวณจาก subtotal_satang ของทั้งบิลและปัดเศษครั้งเดียวแบบ Half Up ตาม D-034/D-035; เก็บผลไว้ใน sale.fee_total_satang เท่านั้น ไม่เก็บ fee ใน sale_line ใช้ integer arithmetic เท่านั้น โดย 5% เท่ากับหาร 20: quotient = subtotal_satang / 20, remainder = subtotal_satang % 20, แล้วบวก 1 สตางค์เมื่อ remainder >= 10
 
 ### 2.7 debt_payment
 
@@ -155,7 +154,7 @@ sale_return_line:
 | fee_satang | INTEGER | NOT NULL, CHECK >= 0 |
 | restock | INTEGER | NOT NULL, CHECK IN (0,1) |
 
-ห้ามคืนเกินจำนวนที่ขายลบจำนวนที่คืนก่อนหน้า ต้องตรวจใน transaction และมี trigger/guard ระดับ DB เพิ่มเติมเมื่อ finalize schema การคืนจากบิลเชื่อค้างลดหนี้ด้วยมูลค่าสินค้าบวก fee; บิลที่ชำระแล้วคืนเงินสดตามกฎที่ยืนยัน วิธีปัดเศษค่าบริการกำหนดเป็น Half Up แล้วตาม D-034; ฐานคำนวณรอ O-004 ส่วนการคืนหลายครั้ง, ยกเลิกหลังคืนบางส่วน และวิธีคืนเงินรอ O-005/O-006/O-017/O-030
+ห้ามคืนเกินจำนวนที่ขายลบจำนวนที่คืนก่อนหน้า ต้องตรวจใน transaction และมี trigger/guard ระดับ DB เพิ่มเติมเมื่อ finalize schema การคืนจากบิลเชื่อค้างลดหนี้ด้วยมูลค่าสินค้าบวก fee; บิลที่ชำระแล้วคืนเงินสดตามกฎที่ยืนยัน ค่าบริการระดับบิลคำนวณจาก subtotal_satang และปัดครั้งเดียวแบบ Half Up ตาม D-034/D-035; วิธีจัดสรร/คืน fee เมื่อคืนหลายครั้ง, ยกเลิกหลังคืนบางส่วน และวิธีคืนเงินรอ O-005/O-006/O-017/O-030
 
 ### 2.9 stock_count และ stock_count_line
 
@@ -310,7 +309,7 @@ Room ต้อง export schema JSON ทุก version และใช้ explic
 
 | Decision | สิ่งที่ต้องยืนยันก่อน finalize |
 |---|---|
-| O-004 | ฐานคำนวณ fee 5% |
+| O-005 | การจัดสรร/คืน fee ระดับบิลเมื่อคืนสินค้า |
 | O-005/O-006/O-017/O-029/O-030 | สูตรคืน/ยกเลิก/คืนเงิน/เหตุผลไม่ restock/ยกเลิกหลังคืนบางส่วน |
 | O-007 | วิธีระบุคืนเต็มบิล |
 | O-008 | บล็อกขายเมื่อจำนวนเกิน stock ที่เหลือหรือไม่ |
