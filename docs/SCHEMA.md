@@ -132,7 +132,7 @@ UNIQUE(sale_id, line_no) เก็บ snapshot ชื่อ/ราคา/ต้�
 | amount_satang | INTEGER | NOT NULL, CHECK > 0 |
 | paid_at_utc | TEXT | NOT NULL |
 
-หนึ่งบิลรับชำระเต็มจำนวนได้ครั้งเดียว ไม่รองรับ partial payment; ต้องตรวจ amount เท่ากับยอดค้างจริงใน service transaction เงินชำระหนี้ไม่เพิ่มยอดขาย การชำระหลายบิลพร้อมกัน atomic แบบใดรอ O-013
+หนึ่งบิลรับชำระเต็มจำนวนได้ครั้งเดียว ไม่รองรับ partial payment; ต้องตรวจ amount เท่ากับยอดค้างจริงใน service transaction เงินชำระหนี้ไม่เพิ่มยอดขาย. การชำระหลายบิลที่เลือกในครั้งเดียวต้องอยู่ใน atomic transaction เดียว; หากบิลใดผิด validation ให้ rollback ทั้งชุด (D-044)
 
 ### 2.8 sale_return และ sale_return_line
 
