@@ -123,7 +123,8 @@ User action
 
 ### 6.2 Transaction ที่ต้อง atomic
 
-- สร้างบาร์โค้ด: อ่าน/เพิ่ม counter และ insert barcode_registry ใน transaction เดียว
+- สร้างบาร์โค้ดของร้าน: อ่าน next_value, ข้ามเลขที่มีอยู่แล้วใน barcode_registry ไม่ว่าจะเป็น source_type ใด, insert registry เป็น SYSTEM และเลื่อน counter ใน transaction เดียว
+- รับสินค้าที่มีบาร์โค้ดโรงงาน: ลงทะเบียนเลขเดิมเป็น MANUFACTURER และผูก product ใน transaction เดียว; ห้ามสร้างเลขใหม่ทับบาร์โค้ดโรงงาน
 - รับสินค้า/ปรับสต๊อก/ตรวจนับ: บันทึก stock_log และปรับยอดคงเหลือใน transaction เดียว
 - ขายเงินสด/ขายเชื่อ: sale, sale_line, stock movement, stock_log, summary, audit และ backup_journal
 - ชำระหนี้: เปลี่ยนสถานะบิลและ insert debt_payment; การชำระหลายบิลให้รอคำตอบ O-013
@@ -173,7 +174,7 @@ User action
 
 ## 10. การทดสอบที่ผูกกับสถาปัตยกรรม
 
-- Unit tests: Satang/fee calculation, content hash, date grouping
+- Unit tests: Satang/fee calculation, content hash, date grouping, barcode allocation ที่ต้องข้ามเลข MANUFACTURER/SYSTEM ที่ถูกลงทะเบียนแล้ว
 - Room in-memory tests: UNIQUE/FK/CHECK, triggers, DAO, transaction rollback
 - Migration tests: fresh install และ upgrade จาก schema version ก่อนหน้า
 - Architecture tests: ไม่มี feature-to-feature dependency และ core ไม่พึ่ง feature
@@ -185,7 +186,7 @@ CI ผ่านไม่เท่ากับ device acceptance; ต้องท
 
 ## 11. ข้อกำหนดที่ยังไม่ล็อก
 
-ห้ามเดาเพื่อเริ่ม implementation: O-001 ถึง O-022 ตาม DECISIONS, O-027 ถึง O-030 และ O-024/O-026 ตามเฟสที่เกี่ยวข้อง โดยเฉพาะ barcode source, เมนูย่อย, fee rounding/base, quantity precision, stock underflow, business date, report formula, retention/archive, backup format และ cash validation
+ห้ามเดาเพื่อเริ่ม implementation: ประเด็นที่ยังเปิดตาม DECISIONS โดยเฉพาะ fee rounding/base, quantity precision, stock underflow, business date, report formula, retention/archive, backup format และ cash validation; barcode source และ collision handling ถูกกำหนดแล้วใน D-033
 
 ## 12. เกณฑ์ผ่านเฟส 2
 
@@ -194,5 +195,5 @@ CI ผ่านไม่เท่ากับ device acceptance; ต้องท
 - dependency rules ชัดเจนและไม่มี feature import feature อื่น
 - เมนูหลัก 6 รายการไม่เปลี่ยน; เมนูย่อยจะ lock หลังผู้ใช้ยืนยัน
 - schema ระบุ keys, indexes, constraints, transactions และ delete behavior
-- ไม่มีการตัดสินใจแทนผู้ใช้ในประเด็นเปิด
+- ไม่มีการตัดสินใจแทนผู้ใช้ในประเด็นเปิด; O-001 และ O-002 ต้องแสดงเป็น RESOLVED ตาม DECISIONS
 - ผู้ใช้ตรวจและยืนยันเอกสารก่อนเริ่มเฟส 3
