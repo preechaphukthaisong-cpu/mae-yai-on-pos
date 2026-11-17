@@ -165,7 +165,7 @@ sale_return_line:
 | before_qty | INTEGER | NOT NULL |
 | after_qty | INTEGER | NOT NULL |
 | diff_qty | INTEGER | NOT NULL, CHECK after_qty - before_qty = diff_qty |
-| reason | TEXT | NOT NULL, CHECK IN ('RECEIVE','SALE','RETURN','COUNT_REPLACE') |
+| reason | TEXT | NOT NULL, CHECK IN ('RECEIVE','SALE','RETURN','CANCEL','COUNT_REPLACE') |
 | ref_id | TEXT | NULL ได้; อ้างอิง sale/return/count operation |
 | created_at_utc | TEXT | NOT NULL |
 
