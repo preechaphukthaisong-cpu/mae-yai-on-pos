@@ -36,7 +36,7 @@
 | created_at_utc | TEXT | NOT NULL |
 | updated_at_utc | TEXT | NOT NULL |
 
-ห้ามลบสินค้าเชิงกายภาพเมื่อมีประวัติ; ใช้ is_active=0 เมื่อเลิกขาย การแก้ราคาเพิ่ม price_history ทุกครั้ง ห้ามแก้ stock_qty จาก UI/repository โดยตรง
+ห้ามลบสินค้าเชิงกายภาพเมื่อมีประวัติ; ใช้ is_active=0 เมื่อเลิกขาย การแก้ราคาเพิ่ม price_history ทุกครั้ง ห้ามแก้ stock_qty_milli จาก UI/repository โดยตรง
 
 ### 2.2 barcode_registry
 
