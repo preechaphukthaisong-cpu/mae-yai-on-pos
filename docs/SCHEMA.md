@@ -101,6 +101,8 @@ name_key ใช้ตรวจชื่อซ้ำ แต่กฎ normalize �
 
 สถานะคืนสินค้าไม่ใช้แทน payment_status/lifecycle_status; คำนวณจากยอด/จำนวนใน sale_return_line หรือ view แยก การกำหนดสถานะคืนครบทั้งบิลรอ O-007
 
+ค่าบริการ 5% ของบิล CREDIT คำนวณจาก subtotal_satang (ยอดรวมค่าสินค้าทั้งบิลก่อน fee) และปัดเศษครั้งเดียวแบบ Half Up ตาม D-034/D-035; เก็บผลไว้ใน sale.fee_total_satang เท่านั้น ไม่เก็บ fee ใน sale_line ใช้ integer arithmetic เท่านั้น โดย 5% เท่ากับหาร 20: quotient = subtotal_satang / 20, remainder = subtotal_satang % 20, แล้วบวก 1 สตางค์เมื่อ remainder >= 10; CASH มี fee_total_satang = 0
+
 ### 2.6 sale_line
 
 | คอลัมน์ | ชนิด | ข้อกำหนด |
@@ -117,7 +119,7 @@ name_key ใช้ตรวจชื่อซ้ำ แต่กฎ normalize �
 
 UNIQUE(sale_id, line_no) เก็บ snapshot ชื่อ/ราคา/ต้นทุน ณ เวลาขาย ห้ามแก้ snapshot หลัง commit
 
-ค่าบริการ 5% คำนวณจาก subtotal_satang ของทั้งบิลและปัดเศษครั้งเดียวแบบ Half Up ตาม D-034/D-035; เก็บผลไว้ใน sale.fee_total_satang เท่านั้น ไม่เก็บ fee ใน sale_line ใช้ integer arithmetic เท่านั้น โดย 5% เท่ากับหาร 20: quotient = subtotal_satang / 20, remainder = subtotal_satang % 20, แล้วบวก 1 สตางค์เมื่อ remainder >= 10
+
 
 ### 2.7 debt_payment
 
