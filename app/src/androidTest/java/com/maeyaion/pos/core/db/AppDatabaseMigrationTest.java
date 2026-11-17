@@ -55,15 +55,17 @@ public final class AppDatabaseMigrationTest {
                 .build();
 
         SupportSQLiteDatabase sql = database.getOpenHelper().getWritableDatabase();
-        assertEquals(2, sql.getVersion());
+        assertEquals(3, sql.getVersion());
         assertEquals("preserved_value", database.appMetaDao().findValue("legacy_key"));
         assertNotNull(database.barcodeCounterDao().get());
         assertEquals(2_000_001L, database.barcodeCounterDao().get().nextValue);
+        assertEquals(3, database.getOpenHelper().getWritableDatabase().getVersion());
         assertTableExists(sql, "barcode_registry");
         assertTableExists(sql, "product");
         assertTableExists(sql, "customer");
         assertTableExists(sql, "stock_log");
         assertTableExists(sql, "op_log");
+        assertTableExists(sql, "backup_journal");
     }
 
     @Test public void freshDatabaseSeedsBarcodeCounter() {
@@ -118,6 +120,24 @@ public final class AppDatabaseMigrationTest {
         assertSqlFails(() -> sql.execSQL("INSERT INTO product(sku, barcode, name, price_satang, cost_satang, unit, stock_limit_qty_milli, stock_qty_milli, is_active, created_at_utc, updated_at_utc) VALUES('SKU-2', 'missing', 'Bad FK', 1, 1, 'ชิ้น', NULL, 0, 1, 'now', 'now')"));
         assertNotNull(database.productDao().findBySku("SKU-1"));
         assertNull(database.productDao().findBySku("SKU-2"));
+    }
+
+
+    @Test public void backupJournalIsOrderedAndOnlyUploadFlagCanChange() {
+        openFreshDatabase();
+        BackupJournalEntity first = new BackupJournalEntity(0, "op-1", "PRODUCT_CREATE",
+                "{\\"sku\\":\\"SKU-1\\"}", "sha256-1", 3,
+                "2026-11-17T00:00:00Z", 0);
+        long seq = database.backupJournalDao().append(first);
+        assertEquals(1L, database.backupJournalDao().pendingCount());
+        assertEquals(1, database.backupJournalDao().pendingBatch(10).size());
+        assertEquals(1, database.backupJournalDao().markUploaded(seq));
+        assertEquals(0L, database.backupJournalDao().pendingCount());
+
+        SupportSQLiteDatabase sql = database.getOpenHelper().getWritableDatabase();
+        assertSqlFails(() -> sql.execSQL("UPDATE backup_journal SET payload = '{}' WHERE seq = " + seq));
+        assertSqlFails(() -> sql.execSQL("DELETE FROM backup_journal WHERE seq = " + seq));
+        assertEquals(1, database.backupJournalDao().markUploaded(seq));
     }
 
     private void openFreshDatabase() {
