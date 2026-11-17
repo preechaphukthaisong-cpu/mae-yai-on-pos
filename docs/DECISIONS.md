@@ -180,11 +180,11 @@
 
 ### D-022 — ระยะเวลาเก็บข้อมูล
 
-- บิลจ่ายแล้วเก็บ 30 วัน
-- บิลค้างชำระห้ามลบจนกว่าจะจ่ายครบ และหลังจากนั้นจึงเก็บต่อ 30 วัน
-- daily_summary และ product_daily เก็บ 15 เดือน
-- ประวัติอื่นเก็บ 3 เดือน
-- product และ barcode registry เก็บถาวร
+- บิลเงินสดที่ชำระแล้วเก็บ 30 วันจากเวลาขาย; บิลเงินเชื่อที่ชำระแล้วเก็บ 30 วันจาก paid_at ตาม D-043
+- บิลที่ยังมียอดค้างจริงห้ามลบ; กรณียอดเป็นศูนย์จาก reversal ใช้ settled_by_reversal_at_utc ตาม D-043
+- sale_return, sale_cancel, debt_payment, stock_log, price_history และ op_log เก็บ 90 วันตาม D-042
+- daily_summary, product_daily และ sale_reconciliation เก็บ 15 เดือน
+- product และ barcode_registry เก็บถาวร
 
 ### D-023 — กฎก่อนลบข้อมูล
 
