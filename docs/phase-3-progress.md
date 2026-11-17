@@ -10,8 +10,8 @@
 - [x] Shared Room transaction-runner contract and adapter.
 - [x] GitHub Actions unit-test and debug-APK pipeline.
 - [x] Disabled Android platform auto-backup pending the explicit encrypted backup design.
-- [x] Room v2 foundational entities and DAOs: barcode registry/counter, product, customer, stock ledger and operation log.
-- [x] Explicit non-destructive Migration 1→2; preserves the existing app_meta table.
+- [x] Room v3 foundational entities and DAOs: barcode registry/counter, product, customer, stock ledger, operation log and backup journal.
+- [x] Explicit non-destructive migrations 1→2→3; preserve the existing app_meta table and add backup_journal.
 - [x] Database guards: immutable barcode registry, append-only stock/op ledgers, stock before-balance validation, non-negative stock and stock cache update from stock_log only.
 - [x] Barcode allocator: manufacturer values are preserved as TEXT; generated values start at 2000001, skip collisions, and reserve/update the counter in one transaction.
 - [x] Unit tests for barcode collision skipping, leading-zero preservation, duplicate rejection and whitespace validation.
@@ -19,8 +19,8 @@
 
 ## Remaining
 - [x] CI validation of the current database and barcode changes (unit-test/build run 44193436872 passed; emulator instrumentation is being added now).
-- [ ] Instrumentation tests for fresh creation, Migration 1→2, foreign keys, triggers and rollback behavior (test suite added; awaiting emulator CI result).
-- [ ] Phase 3 backup foundation tables and services: `backup_journal`, snapshot manifest, reconciliation metadata and safe restore state. Sales/returns/debt/reporting entities belong to their implementation phases (7–9), not Phase 3.
+- [ ] Instrumentation tests for fresh creation, Migration 1→2→3, foreign keys, triggers, backup-journal immutability and rollback behavior (test suite added; awaiting emulator CI result).
+- [ ] Phase 3 backup foundation services: snapshot manifest, reconciliation metadata and safe restore state (`backup_journal` table/DAO and migration are now implemented). Sales/returns/debt/reporting entities belong to their implementation phases (7–9), not Phase 3.
 - [ ] Backup journal, consistent SQLite snapshots, manifest/checksum validation, staged restore and safety snapshots.
 - [ ] Google account authorization using only `drive.appdata`; remote transfer remains blocked by the encryption gate below.
 - [ ] CameraX + bundled ML Kit offline scanner and lifecycle tests.
