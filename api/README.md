@@ -1,13 +1,5 @@
-# API contract
+# API scope
 
-Endpoints will be versioned under /api/v1 after the runtime framework and hosting target are selected.
+No HTTP API is used by the approved version 1. The POS runs offline on one Android device and uses one local SQLite database.
 
-Conventions:
-- JSON bodies and stable machine-readable error codes.
-- Bearer authentication for private endpoints.
-- Permission checks for every mutation.
-- Idempotency-Key for sale confirmation, payment creation, refunds and sync.
-- Cursor pagination for large collections.
-- UTC timestamps and integer-satang amounts.
-- Never expose secrets, password hashes, stack traces or raw provider payloads.
-- Verify and deduplicate payment provider callbacks.
+The existing OpenAPI document is historical planning material only. Do not wire the Android app to these routes or introduce authentication, cloud sync or payment-provider endpoints in phases 0–8. Any future remote API requires a separate scope decision and security review.
