@@ -3,7 +3,7 @@
 The existing repository was a framework-neutral specification and SQL foundation, not a runnable Android application. The new Android source is the first executable application layer.
 
 ## Authoritative phases
-0. Android foundation, single SQLite provider, migrations, backup/restore and device verification.
+0. Android foundation, single SQLite provider, versioned migrations and file backup/restore are implemented in source; automated build and physical-device restore verification remain pending.
 1. Barcode sequence and barcode catalogue.
 2. Inventory: add/list/count/low-stock threshold.
 3. Cash sales and stock deduction.
@@ -26,5 +26,5 @@ The existing repository was a framework-neutral specification and SQL foundation
 ## Decisions not to invent
 Credit service fee, stock-zero policy, reminder schedule, return/void permissions and legally applicable retention periods require explicit shop rules. These remain disabled until confirmed.
 
-## Physical-device acceptance
+## Current Phase 0 implementation status\n- Implemented: SQLiteOpenHelper singleton, foreign-key enforcement, WAL, synchronous durability, schema version 2, migration tracking, v1-to-v2 upgrade path, backup export via Android document picker, and restore with integrity/foreign-key/schema checks plus rollback to the previous database if installation fails.\n- Not yet verified: upgrade using a real v1 database, backup/restore on physical Android devices, interruption/power-loss behavior, and repeated restore/reopen cycles. Do not mark Phase 0 complete until these checks pass.\n\n## Physical-device acceptance
 CI success is not device acceptance. Camera barcode scanning, speech/audio, backup export/restore, power-loss recovery and the 1–2 week parallel shop trial require real-device verification.
