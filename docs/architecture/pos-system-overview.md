@@ -1,50 +1,30 @@
-# POS system overview
+# POS system overview — approved single-device scope
 
-## Three logical layers
+## Runtime architecture
 
-    FRONTEND: cashier and owner screens
-      Sales | Cart | Checkout | Receipt | Cash Drawer
-      Catalog | Inventory | CRM | Staff | Promotions | Reports
-                         |
-                         v
-    BACKEND: business rules, API and integrations
-      Auth/RBAC | Sales | Payments | Inventory | Purchasing
-      Cash | CRM/Loyalty | Promotions | Workforce | Reports
-      Sync Engine | Print Queue | Receipt Delivery
-                         |
-                         v
-    DATA: local-first SQLite and optional cloud database
-      Master Data | Sales/Payment/Stock Ledgers | Staff/Roles
-      Loyalty | Promotions | Audit | Sync Inbox/Outbox | Devices
+    Android screens
+       |
+    Feature services (sales, catalog, inventory, credit, history, settings, reports)
+       |
+    Shared repositories and transaction manager
+       |
+    One app-private SQLite database
 
-## Sales flow
-1. Staff signs in; roles and permissions are checked.
-2. Scan/search products and load current catalog and prices.
-3. Add products/options to cart; calculate provisional totals.
-4. Domain service validates product state, prices, discounts, promotions and stock.
-5. Confirm sale with a stable idempotency key.
-6. In one local transaction write sale, item snapshots, payment tenders, stock movements, audit event and sync outbox event.
-7. Commit locally before showing the sale as saved. If offline, mark it pending sync.
-8. For electronic payments, verify provider status. A displayed QR is not proof of payment.
-9. Queue receipt print/delivery. Print failure must not undo a committed sale.
-10. Reports query committed records; no duplicate report database is maintained.
+Every feature uses the same database provider. Screens must not run independent SQL, keep separate copies of financial data, or calculate authoritative totals.
 
-## Offline-first sync
-- Local SQLite stores committed transactions while offline.
-- Every syncable write adds an outbox event in the same transaction.
-- Send events with stable idempotency keys; retry with bounded backoff.
-- Server deduplicates events, revalidates business rules and returns durable acknowledgements/cursors.
-- Store inbound events in an inbox before applying them.
-- Never silently overwrite financial records or stock. Resolve conflicts with explicit reversal/adjustment events and audit history.
-- Catalog changes may use server revisions; inventory and money must use ledgers, not blind last-write-wins.
+## Confirmed sale flow
 
-## Integrations
-- Scanner: camera or keyboard-wedge input.
-- Payment gateway: provider adapters for PromptPay QR, card and supported transfers; verify signatures/status.
-- Printing: receipt, label and optional kitchen print adapters.
-- Cash drawer: issue supported drawer command only after an authorized cash workflow.
-- Email/LINE: asynchronous receipt-delivery jobs.
-- Cloud: server persistence and multi-device sync; local SQLite remains usable offline.
+1. Search or scan a product and load its current price and stock from SQLite.
+2. Validate the cart and recompute amounts with integer satang arithmetic.
+3. Confirm with a unique operation ID.
+4. In one SQLite transaction write the sale, line snapshots, payment/debt, stock ledger and audit record.
+5. Show success only after commit. On any failure roll back the whole operation.
+6. Reports read committed records from the same database.
 
-## Non-functional requirements
-Atomic writes; integer satang; UUIDs and idempotency; UTC timestamps; least-privilege authorization; app-private database storage; TLS; consistent backups; restore verification; migration tests; safe observability.
+## Scope exclusions for version 1
+
+No cloud database, remote backend, REST API runtime, payment gateway, multi-device sync, Wi-Fi replication, email/LINE receipt delivery or online account system. Cash and credit records are stored locally. A transfer recorded by an operator is not treated as independently verified provider settlement.
+
+## Reliability
+
+Use short transactions, foreign keys, WAL, busy timeout, synchronous durability, integer satang, UUID identifiers, parameterized SQL, immutable financial/stock evidence, verified backup/restore and migration tests. Physical-device recovery and parallel shop testing remain mandatory before live use.
