@@ -8,7 +8,7 @@ import androidx.room.PrimaryKey;
 
 /** Append-only backup journal entry; only uploaded may transition from 0 to 1. */
 @Entity(tableName = "backup_journal",
-        indices = @Index(value = {"uploaded", "seq"}))
+        indices = {@Index(value = {"uploaded", "seq"}), @Index(value = "operation_id", unique = true)})
 public final class BackupJournalEntity {
     @PrimaryKey(autoGenerate = true)
     @ColumnInfo(name = "seq")
