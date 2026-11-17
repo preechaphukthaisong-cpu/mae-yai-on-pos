@@ -32,6 +32,11 @@ UI code must not execute ad-hoc SQL or calculate authoritative totals. Reports r
 - Cash service: cash sessions and cash movements.
 - Expense service: expense records and cash movements.
 - Reporting service: read-only queries over committed business data.
+- Workforce/auth service: staff, sessions, roles, permissions and attendance.
+- Promotion/loyalty service: coupons, promotion usage and points ledger.
+- Payment integration service: gateway attempts, verified webhooks and split tenders.
+- Device/printing service: printers, print queue, barcode labels and receipt delivery.
+- Sync service: durable outbox/inbox, cursors, idempotency and conflict handling.
 - Database service: connection lifecycle, migrations, transactions, and backup/restore.
 
 ## Concurrency and reliability
