@@ -6,7 +6,8 @@ A retail Point of Sale project organized into frontend, backend, and shared data
 - frontend/: cashier and owner application modules.
 - backend/: business services, API and integration boundaries.
 - database/: SQLite baseline schema, ordered migrations and data rules.
-- api/: API contract conventions.
+- api/: API contract conventions and OpenAPI specification.
+- database/seeds/: idempotent built-in role/permission catalogue.
 - docs/architecture/: system architecture and offline-sync contracts.
 - tests/: database integrity and acceptance checklist.
 
