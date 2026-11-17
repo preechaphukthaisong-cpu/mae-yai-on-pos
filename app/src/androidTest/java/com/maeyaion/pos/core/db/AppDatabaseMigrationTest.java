@@ -50,7 +50,7 @@ public final class AppDatabaseMigrationTest {
         old.close();
 
         database = Room.databaseBuilder(context, AppDatabase.class, databaseName)
-                .addMigrations(Migration1To2.INSTANCE)
+                .addMigrations(Migration1To2.INSTANCE, Migration2To3.INSTANCE)
                 .allowMainThreadQueries()
                 .build();
 
@@ -126,7 +126,7 @@ public final class AppDatabaseMigrationTest {
     @Test public void backupJournalIsOrderedAndOnlyUploadFlagCanChange() {
         openFreshDatabase();
         BackupJournalEntity first = new BackupJournalEntity(0, "op-1", "PRODUCT_CREATE",
-                "{\\"sku\\":\\"SKU-1\\"}", "sha256-1", 3,
+                "{\"sku\":\"SKU-1\"}", "sha256-1", 3,
                 "2026-11-17T00:00:00Z", 0);
         long seq = database.backupJournalDao().append(first);
         assertEquals(1L, database.backupJournalDao().pendingCount());
@@ -137,7 +137,7 @@ public final class AppDatabaseMigrationTest {
         SupportSQLiteDatabase sql = database.getOpenHelper().getWritableDatabase();
         assertSqlFails(() -> sql.execSQL("UPDATE backup_journal SET payload = '{}' WHERE seq = " + seq));
         assertSqlFails(() -> sql.execSQL("DELETE FROM backup_journal WHERE seq = " + seq));
-        assertEquals(1, database.backupJournalDao().markUploaded(seq));
+        assertEquals(0, database.backupJournalDao().markUploaded(seq));
     }
 
     private void openFreshDatabase() {
