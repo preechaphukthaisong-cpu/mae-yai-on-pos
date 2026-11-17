@@ -26,4 +26,4 @@ Android native application written in Java. Single-device, offline-first POS.
 - `docs/phase-3-progress.md` — implementation progress and security gates.
 
 ## Build
-GitHub Actions runs unit tests, Room instrumentation tests on an Android emulator, and assembles a debug APK on pushes to `main` and on pull requests targeting `main`.
+GitHub Actions runs unit tests, Room instrumentation tests on an Android emulator, and assembles a debug APK on pushes to `main` and `phase-3-foundation` (one run per branch push).
