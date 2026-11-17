@@ -6,6 +6,7 @@ One SQLite database is the single source of truth for every POS screen and featu
 ## Files
 - `schema.sql`: baseline schema (version 1).
 - `migrations/002_pos_operations.sql`: purchasing, expenses, cash sessions, cash movements, returns, and inventory-ledger safeguards.
+- `migrations/003_platform_foundation.sql`: staff/RBAC, attendance, barcodes, variants, promotions, loyalty, payment gateway metadata, devices, printing, receipt delivery and offline sync.
 - `seeds/`: optional reference data only. Do not put real customer, sales, or financial data here.
 
 ## Core domains
@@ -17,6 +18,11 @@ One SQLite database is the single source of truth for every POS screen and featu
 - Cash control: `cash_sessions`, `cash_movements`
 - Expenses: `expenses`
 - Returns: `sale_returns`, `sale_return_items`
+- Workforce/security: `staff`, `roles`, `permissions`, `staff_roles`, `role_permissions`, `auth_sessions`, `attendance_records`
+- Product extensions: `product_barcodes`, `product_images`, `product_variant_groups`, `product_variant_options`
+- Promotions/loyalty: `promotions`, `coupons`, `sale_discounts`, `loyalty_accounts`, `loyalty_movements`
+- Integrations: `payment_gateway_transactions`, `payment_webhook_events`, `receipt_delivery_jobs`, `devices`, `printer_configs`, `print_jobs`
+- Offline sync: `sync_outbox`, `sync_inbox`, `sync_state`, `api_idempotency`
 - System: `app_settings`, `schema_migrations`, `audit_logs`
 
 ## Mandatory connection settings
@@ -61,7 +67,7 @@ Receiving a purchase follows the same atomic pattern: validate draft, insert pur
 - Insert the migration version/name/applied timestamp only after all migration statements succeed.
 - If any statement fails, roll back the entire migration.
 - Never edit a migration already released to users; add a new numbered migration.
-- Baseline install: execute `schema.sql`, then record version 1 in `schema_migrations`, then apply migration 2.
+- Baseline install: execute `schema.sql`, then record version 1 in `schema_migrations`, then apply migrations 2 and 3 in order.
 - Test migrations against both a fresh database and a copy of the previous released database.
 
 ## Important scope boundary
