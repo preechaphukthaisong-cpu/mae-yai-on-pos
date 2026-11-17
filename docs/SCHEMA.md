@@ -132,7 +132,7 @@ UNIQUE(sale_id, line_no) เก็บ snapshot ชื่อ/ราคา/ต้�
 | amount_satang | INTEGER | NOT NULL, CHECK > 0 |
 | paid_at_utc | TEXT | NOT NULL |
 
-หนึ่งบิลรับชำระเต็มจำนวนได้ครั้งเดียว ไม่รองรับ partial payment; ต้องตรวจ amount เท่ากับยอดค้างจริงใน service transaction เงินชำระหนี้ไม่เพิ่มยอดขาย. การชำระหลายบิลที่เลือกในครั้งเดียวต้องอยู่ใน atomic transaction เดียว; หากบิลใดผิด validation ให้ rollback ทั้งชุด (D-044)
+หนึ่งบิลรับชำระเต็มจำนวนของยอดค้างปัจจุบันได้ครั้งเดียว ไม่รองรับ partial payment; ต้องตรวจ amount เท่ากับ outstanding balance จริงใน service transaction เงินชำระหนี้ไม่เพิ่มยอดขาย. การชำระหลายบิลที่เลือกในครั้งเดียวต้องอยู่ใน transaction เดียว; หากบิลใดผิด validation ให้ rollback ทั้งชุด (D-044). outstanding balance คำนวณจาก total ลบ return/cancel reversals; ถ้าเป็นศูนย์จาก reversal ให้ตั้ง settled_by_reversal_at_utc โดยไม่สร้าง debt_payment
 
 ### 2.8 sale_return และ sale_return_line
 
@@ -147,6 +147,7 @@ sale_return:
 | debt_reduction_satang | INTEGER | NOT NULL DEFAULT 0; ใช้กับ CREDIT ที่ยังมียอดค้าง |
 | fee_reversal_satang | INTEGER | NOT NULL DEFAULT 0; ส่วนของ fee ที่กลับรายการในครั้งนี้ |
 | recipient_name | TEXT | ต้องมีเมื่อ cash_refund_satang > 0 |
+| operator_label | TEXT | NOT NULL; ผู้ดำเนินการคืนเงิน/ยกเลิก |
 | created_at_utc | TEXT | NOT NULL |
 
 sale_return_line:
@@ -161,7 +162,8 @@ sale_return_line:
 | fee_satang | INTEGER | NOT NULL, CHECK >= 0; ค่าบริการที่จัดสรรให้การคืนครั้งนี้ |
 | restock | INTEGER | NOT NULL, CHECK IN (0,1) |
 | non_restock_reason | TEXT | NOT NULL เมื่อ restock=0; NULL เมื่อ restock=1 |
-| evidence_content_hash | TEXT | NULL ได้; hash ของรูปถ่ายหลักฐานเสริม |
+| evidence_local_ref | TEXT | NULL ได้; ตำแหน่งไฟล์ใน app-private storage |
+| evidence_content_hash | TEXT | NULL ได้; SHA-256 ของรูปถ่ายหลักฐานเสริม |
 
 ห้ามคืนเกินจำนวนขายลบจำนวนคืนก่อนหน้า; ตรวจใน transaction และมี DB guard/trigger เพิ่มเติมเมื่อ finalize schema. มูลค่าสินค้าต่อ sale_line ใช้เป้าหมายสะสมแบบ Half Up จาก line_total × qty_returned_cumulative ÷ qty_sold; fee ใช้เป้าหมายสะสมแบบ Half Up จาก fee_total × returned_goods_value_cumulative ÷ subtotal. ค่าของครั้งปัจจุบันเป็นส่วนต่างจากยอดสะสมเดิม เพื่อไม่ให้เกิดเศษซ้ำหรือคืนเกินต้นฉบับ (D-036). หากบิลยังค้างให้ลดหนี้; หากชำระแล้วให้คืนเงินสดหน้าร้านและบันทึกผู้รับตาม D-048.
 
@@ -178,6 +180,7 @@ sale_cancel:
 | debt_reduction_satang | INTEGER | NOT NULL DEFAULT 0 |
 | fee_reversal_satang | INTEGER | NOT NULL DEFAULT 0 |
 | recipient_name | TEXT | ต้องมีเมื่อ cash_refund_satang > 0 |
+| operator_label | TEXT | NOT NULL; ผู้ดำเนินการคืนเงิน/ยกเลิก |
 | created_at_utc | TEXT | NOT NULL |
 
 sale_cancel_line:
@@ -192,9 +195,10 @@ sale_cancel_line:
 | fee_satang | INTEGER | NOT NULL, CHECK >= 0; fee ที่ยังไม่เคยกลับรายการ |
 | restock | INTEGER | NOT NULL, CHECK IN (0,1) |
 | non_restock_reason | TEXT | NOT NULL เมื่อ restock=0 |
-| evidence_content_hash | TEXT | NULL ได้ |
+| evidence_local_ref | TEXT | NULL ได้; ตำแหน่งไฟล์ใน app-private storage |
+| evidence_content_hash | TEXT | NULL ได้; SHA-256 ของหลักฐานเสริม |
 
-การยกเลิกหลังคืนบางส่วนบันทึกเฉพาะจำนวนคงเหลือ; ห้ามกลับรายการคืนเดิมซ้ำ. fee reversal ของการยกเลิกเท่ากับ fee ต้นฉบับลบ fee ที่คืน/ยกเลิกก่อนหน้า (D-057). การคืนเงิน/ลดหนี้, stock movement, summary, audit และ backup journal ต้อง atomic.
+การยกเลิกหลังคืนบางส่วนบันทึกเฉพาะจำนวนคงเหลือ; ห้ามกลับรายการคืนเดิมซ้ำ. fee reversal ของการยกเลิกเท่ากับ fee ต้นฉบับลบ fee ที่คืน/ยกเลิกก่อนหน้า (D-057). หาก restock=0 ต้องมีเหตุผล; หลักฐานภาพเก็บใน app-private storage พร้อม content hash. การคืนเงิน/ลดหนี้, stock movement, summary, audit และ backup journal ต้อง atomic.
 
 ### 2.9 stock_count และ stock_count_line
 
@@ -238,14 +242,18 @@ Append-only; index (sku, changed_at_utc); update/delete ไม่อนุญา
 - cash_sales_satang INTEGER NOT NULL DEFAULT 0 CHECK >= 0 (ยอดสินค้า ไม่รวม fee)
 - credit_sales_satang INTEGER NOT NULL DEFAULT 0 CHECK >= 0 (ยอดสินค้า ไม่รวม fee)
 - fees_satang INTEGER NOT NULL DEFAULT 0 CHECK >= 0 (fee ที่เรียกเก็บ)
-- returned_goods_satang INTEGER NOT NULL DEFAULT 0 CHECK >= 0
-- returned_fee_satang INTEGER NOT NULL DEFAULT 0 CHECK >= 0
-- cancelled_goods_satang INTEGER NOT NULL DEFAULT 0 CHECK >= 0
-- cancelled_fee_satang INTEGER NOT NULL DEFAULT 0 CHECK >= 0
+- cash_returned_goods_satang INTEGER NOT NULL DEFAULT 0 CHECK >= 0
+- credit_returned_goods_satang INTEGER NOT NULL DEFAULT 0 CHECK >= 0
+- cash_returned_fee_satang INTEGER NOT NULL DEFAULT 0 CHECK >= 0
+- credit_returned_fee_satang INTEGER NOT NULL DEFAULT 0 CHECK >= 0
+- cash_cancelled_goods_satang INTEGER NOT NULL DEFAULT 0 CHECK >= 0
+- credit_cancelled_goods_satang INTEGER NOT NULL DEFAULT 0 CHECK >= 0
+- cash_cancelled_fee_satang INTEGER NOT NULL DEFAULT 0 CHECK >= 0
+- credit_cancelled_fee_satang INTEGER NOT NULL DEFAULT 0 CHECK >= 0
 - net_sales_satang INTEGER NOT NULL (อาจติดลบในวันที่มีรายการกลับด้านมากกว่ายอดขายใหม่)
 - updated_at_utc TEXT NOT NULL
 
-สูตร: net_sales = cash_sales + credit_sales + fees - returned_goods - returned_fee - cancelled_goods - cancelled_fee. การคืน/ยกเลิกลง business_date ที่เกิดเหตุการณ์ และแยกประเภทตามบิลต้นทาง (D-046). เก็บ 15 เดือน.
+สูตร: net_sales = cash_sales + credit_sales + fees - cash/credit returned_goods - cash/credit returned_fee - cash/credit cancelled_goods - cash/credit cancelled_fee. การคืน/ยกเลิกลง business_date ที่เกิดเหตุการณ์และจัดประเภทตาม sale.type ต้นทาง (D-046). เก็บ 15 เดือน.
 
 ### 2.13 product_daily
 
@@ -263,7 +271,7 @@ Append-only; index (sku, changed_at_utc); update/delete ไม่อนุญา
 
 เก็บ 15 เดือน; ขายดี/ขายน้อยคำนวณจากยอดจำนวนขายสุทธิรวมช่วงที่เลือก. สินค้าขายน้อยสุด 20 อันดับดูย้อนหลัง 30 วัน เฉพาะ net_qty_milli รวมมากกว่า 0 (D-047).
 
-### 2.15 op_log
+### 2.14 op_log
 
 - id TEXT PK UUID
 - action TEXT NOT NULL
@@ -274,7 +282,7 @@ Append-only; index (sku, changed_at_utc); update/delete ไม่อนุญา
 
 เก็บ 90 วันตาม D-042; append-only; index created_at_utc และ (entity_type, entity_id)
 
-### 2.16 backup_journal
+### 2.15 backup_journal
 
 - seq INTEGER PRIMARY KEY AUTOINCREMENT
 - operation_id TEXT NOT NULL UNIQUE
@@ -287,7 +295,7 @@ Append-only; index (sku, changed_at_utc); update/delete ไม่อนุญา
 
 insert ภายใน transaction เดียวกับ business write; index (uploaded, seq) เพื่อส่งตามลำดับ. แต่ละ record มี operation_id และ SHA-256; snapshot เป็น SQLite consistent snapshot รองรับ WAL บรรจุ ZIP พร้อม manifest/checkpoint. Restore ตรวจ checksum/integrity แล้ว replay journal ตาม seq ต่อเนื่องแบบ idempotent. เก็บ snapshot ที่ตรวจผ่านหลายชุดและห้ามลบชุดล่าสุดที่กู้คืนได้ก่อนชุดใหม่ผ่าน. Encryption รอ O-025 (D-052); แจ้งเตือนคิวค้างเกิน 24 ชั่วโมง (D-053).
 
-## 2.17 sale_reconciliation
+### 2.16 sale_reconciliation
 
 - sale_ref_hash TEXT PRIMARY KEY; SHA-256 reference derived from sale ID with version prefix
 - business_date TEXT NOT NULL
