@@ -43,6 +43,12 @@ public abstract class AppDatabase extends RoomDatabase {
                             .addMigrations(Migration1To2.INSTANCE)
                             .addCallback(new Callback() {
                                 @Override
+                                public void onCreate(@NonNull SupportSQLiteDatabase db) {
+                                    super.onCreate(db);
+                                    db.execSQL("INSERT OR IGNORE INTO barcode_counter (id, next_value) VALUES (1, 2000001)");
+                                }
+
+                                @Override
                                 public void onOpen(@NonNull SupportSQLiteDatabase db) {
                                     super.onOpen(db);
                                     db.setForeignKeyConstraintsEnabled(true);
