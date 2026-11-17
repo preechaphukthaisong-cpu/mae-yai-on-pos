@@ -203,6 +203,27 @@ CREATE TABLE IF NOT EXISTS api_idempotency (
  response_code INTEGER, response_json TEXT, created_at TEXT NOT NULL, expires_at TEXT NOT NULL
 );
 
+
+-- Link business events to the responsible staff member without rewriting history.
+ALTER TABLE sales ADD COLUMN staff_id TEXT REFERENCES staff(id) ON DELETE RESTRICT;
+ALTER TABLE sales ADD COLUMN idempotency_key TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sales_idempotency_key
+    ON sales(idempotency_key) WHERE idempotency_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_sales_staff_time
+    ON sales(staff_id, created_at DESC);
+
+ALTER TABLE payments ADD COLUMN payment_channel TEXT NOT NULL DEFAULT 'standard'
+    CHECK(payment_channel IN ('standard','promptpay_qr','bank_transfer','card_terminal'));
+ALTER TABLE payments ADD COLUMN payment_provider TEXT;
+
+ALTER TABLE cash_sessions ADD COLUMN opened_by_staff_id TEXT
+    REFERENCES staff(id) ON DELETE RESTRICT;
+ALTER TABLE cash_sessions ADD COLUMN closed_by_staff_id TEXT
+    REFERENCES staff(id) ON DELETE RESTRICT;
+
+ALTER TABLE products ADD COLUMN low_stock_threshold INTEGER NOT NULL DEFAULT 0
+    CHECK(low_stock_threshold >= 0);
+
 CREATE INDEX IF NOT EXISTS idx_staff_active ON staff(is_active,display_name);
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_staff_expiry ON auth_sessions(staff_id,expires_at);
 CREATE INDEX IF NOT EXISTS idx_auth_attempts_staff_time ON auth_login_attempts(staff_code,attempted_at DESC);
