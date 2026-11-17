@@ -193,7 +193,7 @@ CI ผ่านไม่เท่ากับ device acceptance; ต้องท
 - มีเอกสาร ARCHITECTURE, SCHEMA และ MENU_LOCK ครบ
 - ยืนยันได้ว่า Room/SQLite มีเพียงไฟล์เดียวและทุก feature ใช้ provider เดียว
 - dependency rules ชัดเจนและไม่มี feature import feature อื่น
-- เมนูหลัก 6 รายการไม่เปลี่ยน; เมนูย่อยจะ lock หลังผู้ใช้ยืนยัน
+- เมนูหลัก 6 รายการไม่เปลี่ยน; เมนูย่อยทั้ง 20 รายการได้รับการยืนยันและล็อกไว้ใน MENU_LOCK.json แล้ว
 - schema ระบุ keys, indexes, constraints, transactions และ delete behavior
 - ไม่มีการตัดสินใจแทนผู้ใช้ในประเด็นเปิด; O-001 และ O-002 ต้องแสดงเป็น RESOLVED ตาม DECISIONS
 - ผู้ใช้ตรวจและยืนยันเอกสารก่อนเริ่มเฟส 3
