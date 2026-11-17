@@ -261,6 +261,7 @@
 - PriceSnapshotTest
 - StockZeroBlockTest
 - BarcodeCounterConcurrencyTest
+- BarcodeSourceAndCollisionTest
 - DebtPaymentNotSaleTest
 - ReturnMathTest
 - RetentionGuardTest
