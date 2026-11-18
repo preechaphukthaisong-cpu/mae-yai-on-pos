@@ -83,17 +83,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -s app/schemas/4.json || {
-            echo "::error::Room schema v4 was not generated at app/schemas/4.json"
-            find app/schemas -maxdepth 2 -type f -print || true
+          SCHEMA_FILE="app/schemas/com.maeyaion.pos.core.db.AppDatabase/4.json"
+          test -s "$SCHEMA_FILE" || {
+            echo "::error::Room schema v4 was not generated at $SCHEMA_FILE"
+            find app/schemas -type f -print || true
             exit 1
           }
-          python3 -m json.tool app/schemas/4.json >/dev/null
+          python3 -m json.tool "$SCHEMA_FILE" >/dev/null
       - name: Upload Room schema
         uses: actions/upload-artifact@v4
         with:
           name: mae-yai-on-pos-room-schema-v4
-          path: app/schemas/4.json
+          path: app/schemas/com.maeyaion.pos.core.db.AppDatabase/4.json
           if-no-files-found: error
           retention-days: 30
       - name: Upload debug APK
