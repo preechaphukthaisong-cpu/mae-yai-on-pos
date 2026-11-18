@@ -12,6 +12,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
 import androidx.core.content.ContextCompat;
 import androidx.lifecycle.LifecycleOwner;
+import android.view.Surface;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
@@ -30,6 +31,7 @@ public final class OfflineBarcodeScanner implements AutoCloseable {
     private final ImageAnalysis analysis;
     private final OfflineBarcodeAnalyzer analyzer;
     private volatile ProcessCameraProvider cameraProvider;
+    private volatile boolean closed;
 
     public OfflineBarcodeScanner(@NonNull Context context, @NonNull LifecycleOwner lifecycleOwner,
             @NonNull PreviewView previewView, @NonNull Executor cameraExecutor,
@@ -55,10 +57,13 @@ public final class OfflineBarcodeScanner implements AutoCloseable {
                 ProcessCameraProvider.getInstance(context.getApplicationContext());
         providerFuture.addListener(() -> {
             try {
-                if (analysis.getTargetRotation() == -1) {
-                    analysis.setTargetRotation(previewView.getDisplay().getRotation());
-                }
                 ProcessCameraProvider provider = providerFuture.get();
+                if (closed) return;
+                if (previewView.getDisplay() != null) {
+                    analysis.setTargetRotation(previewView.getDisplay().getRotation());
+                } else {
+                    analysis.setTargetRotation(Surface.ROTATION_0);
+                }
                 Preview preview = new Preview.Builder().build();
                 preview.setSurfaceProvider(previewView.getSurfaceProvider());
                 provider.unbindAll();
@@ -72,8 +77,9 @@ public final class OfflineBarcodeScanner implements AutoCloseable {
     }
 
     @Override public void close() {
+        closed = true;
         ProcessCameraProvider provider = cameraProvider;
-        if (provider != null) provider.unbind(analysis);
+        if (provider != null) provider.unbindAll();
         analyzer.close();
     }
 }
