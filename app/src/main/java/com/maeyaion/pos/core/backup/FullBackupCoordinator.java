@@ -76,7 +76,7 @@ public final class FullBackupCoordinator {
             DriveBackupWorkScheduler.enqueueUpload(app, encryptedBackup, googleAccountName);
             return encryptedBackup;
         } finally {
-            Arrays.fill(passwordCopy, '\\0');
+            Arrays.fill(passwordCopy, '\0');
             if (snapshotBytes != null) Arrays.fill(snapshotBytes, (byte) 0);
             if (snapshot != null && snapshot.file.exists() && !snapshot.file.delete()) {
                 // A plaintext snapshot is never uploaded; cleanup failure is surfaced.
