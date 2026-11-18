@@ -178,6 +178,10 @@ public final class AppDatabaseMigrationTest {
         assertSqlFails(() -> sql.execSQL("INSERT INTO product(sku, barcode, name, price_satang, cost_satang, unit, stock_limit_qty_milli, stock_qty_milli, is_active, created_at_utc, updated_at_utc) VALUES('SKU-2', 'missing', 'Bad FK', 1, 1, 'ชิ้น', NULL, 0, 1, 'now', 'now')"));
         assertNotNull(database.productDao().findBySku("SKU-1"));
         assertNull(database.productDao().findBySku("SKU-2"));
+        assertSqlFails(() -> sql.execSQL("DELETE FROM barcode_counter WHERE id = 1"));
+        sql.execSQL("INSERT INTO op_log(id, action, entity_type, entity_id, detail_json, created_at_utc) VALUES('op-1', 'TEST', 'PRODUCT', 'SKU-1', NULL, '2026-11-17T00:00:00Z')");
+        assertSqlFails(() -> sql.execSQL("UPDATE op_log SET action = 'CHANGED' WHERE id = 'op-1'"));
+        assertSqlFails(() -> sql.execSQL("DELETE FROM op_log WHERE id = 'op-1'"));
     }
 
 
