@@ -10,16 +10,20 @@
 - [x] Shared Room transaction-runner contract and adapter.
 - [x] GitHub Actions unit-test and debug-APK pipeline.
 - [x] Disabled Android platform auto-backup pending the explicit encrypted backup design.
-- [x] Room v3 foundational entities and DAOs: barcode registry/counter, product, customer, stock ledger, operation log and backup journal.
-- [x] Explicit non-destructive migrations 1→2→3; preserve the existing app_meta table and add backup_journal.
-- [x] Database guards: immutable barcode registry, append-only stock/op ledgers, stock before-balance validation, non-negative stock and stock cache update from stock_log only.
-- [x] Barcode allocator: manufacturer values are preserved as TEXT; generated values start at 2000001, skip collisions, and reserve/update the counter in one transaction.
+- [x] Room v4 foundational entities and DAOs: barcode registry/counter, product, customer, stock ledger, operation log and backup journal.
+- [x] Explicit non-destructive migrations 1→2→3→4; preserve existing records and refresh database guards for existing v3 installations.
+- [x] Shared database guard installer is called for fresh creation and migrations; protects barcode registry/counter, product identity/retention, initial zero stock, stock ledger, operation log and backup journal.
+- [x] Barcode allocator preserves manufacturer values as TEXT; generated values start at 2000001, skip collisions and reserve/update the counter in one transaction.
+- [x] ProductRegistrationService creates product + barcode + operation log + backup journal in one transaction; product stock always starts at zero.
+- [x] Rollback unit tests verify that product insert failure reverts barcode registry, counter, operation log and backup journal.
 - [x] Unit tests for barcode collision skipping, leading-zero preservation, duplicate rejection and whitespace validation.
-- [x] Fresh-install barcode counter seed.
+- [x] Fresh-install barcode counter seed and database guards.
 
 ## Remaining
-- [x] CI validation of the current database and barcode changes (unit-test/build run 44193436872 passed; emulator instrumentation is being added now).
-- [ ] Instrumentation tests for fresh creation, Migration 1→2→3, foreign keys, triggers, backup-journal immutability and rollback behavior (test suite added; awaiting emulator CI result).
+- [ ] Export and commit Room schema JSON for every database version; current `app/schemas/` is not yet populated.
+- [ ] Resolve the append-only versus 90-day retention conflict with a verified archive/reconciliation design before implementing purge. Current stock/op log delete guards intentionally block deletion; retention is not yet implemented.
+- [ ] CI validation of the current schema-v4 changes; latest run must pass unit tests, migration instrumentation tests and APK build before this item can be checked.
+- [ ] Instrumentation tests for fresh creation, Migration 1→2→3→4 (including upgrade from v3), foreign keys, stock/product triggers, backup-journal immutability and rollback behavior (tests added; awaiting CI execution).
 - [ ] Phase 3 backup foundation services: snapshot manifest, reconciliation metadata and safe restore state (`backup_journal` table/DAO and migration are now implemented). Sales/returns/debt/reporting entities belong to their implementation phases (7–9), not Phase 3.
 - [ ] Backup journal, consistent SQLite snapshots, manifest/checksum validation, staged restore and safety snapshots.
 - [ ] Google account authorization using only `drive.appdata`; remote transfer remains blocked by the encryption gate below.
