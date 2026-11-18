@@ -54,11 +54,10 @@ public final class RoomDatabaseRestorer {
                             }
                             oldDatabaseMoved = true;
                         }
-                        if (!replacement.renameTo(live)) {
-                            throw new IOException("Unable to atomically activate staged database");
-                        }
-
                         try {
+                            if (!replacement.renameTo(live)) {
+                                throw new IOException("Unable to atomically activate staged database");
+                            }
                             AppDatabase restored = AppDatabase.getInstance(context);
                             SupportSQLiteDatabase sql = restored.getOpenHelper().getWritableDatabase();
                             if (sql.getVersion() != expectedSchemaVersion || !validator.isValid(live)) {
