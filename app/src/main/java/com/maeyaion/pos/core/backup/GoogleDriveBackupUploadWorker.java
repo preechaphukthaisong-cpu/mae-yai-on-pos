@@ -154,7 +154,7 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
             if (status == 429 || status >= 500) throw new IOException("Drive lookup temporarily unavailable");
             if (status < 200 || status >= 300) return null;
             String response = readLimited(lookup.getInputStream(), 32 * 1024);
-            Matcher matcher = Pattern.compile("\\"id\\"\\s*:\\s*\\"([^\\"]+)\\"").matcher(response);
+            Matcher matcher = Pattern.compile("\"id\"\\s*:\\s*\"([^\"]+)\"").matcher(response);
             return matcher.find() ? matcher.group(1) : null;
         } finally {
             lookup.disconnect();
