@@ -55,11 +55,11 @@ public final class AppDatabaseMigrationTest {
                 .build();
 
         SupportSQLiteDatabase sql = database.getOpenHelper().getWritableDatabase();
-        assertEquals(3, sql.getVersion());
+        assertEquals(4, sql.getVersion());
         assertEquals("preserved_value", database.appMetaDao().findValue("legacy_key"));
         assertNotNull(database.barcodeCounterDao().get());
         assertEquals(2_000_001L, database.barcodeCounterDao().get().nextValue);
-        assertEquals(3, database.getOpenHelper().getWritableDatabase().getVersion());
+        assertEquals(4, database.getOpenHelper().getWritableDatabase().getVersion());
         assertTableExists(sql, "barcode_registry");
         assertTableExists(sql, "product");
         assertTableExists(sql, "customer");
