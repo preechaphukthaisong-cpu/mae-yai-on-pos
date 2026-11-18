@@ -126,37 +126,73 @@ public final class ProductRegistrationService {
     }
 
     private static String canonicalPayload(ProductEntity product, String operation) {
-        return "{\\"v\\":1,\\"op\\":\\"" + operation + "\\","
-                + "\\"sku\\":\\"" + jsonEscape(product.sku) + "\\","
-                + "\\"barcode\\":\\"" + jsonEscape(product.barcode) + "\\","
-                + "\\"name\\":\\"" + jsonEscape(product.name) + "\\","
-                + "\\"price_satang\\":" + product.priceSatang + ","
-                + "\\"cost_satang\\":" + product.costSatang + ","
-                + "\\"unit\\":\\"" + jsonEscape(product.unit) + "\\","
-                + "\\"stock_limit_qty_milli\\":"
-                + (product.stockLimitQtyMilli == null ? "null" : product.stockLimitQtyMilli) + ","
-                + "\\"created_at_utc\\":\\"" + jsonEscape(product.createdAtUtc) + "\\","
-                + "\\"updated_at_utc\\":\\"" + jsonEscape(product.updatedAtUtc) + "\\"}";
+        StringBuilder json = new StringBuilder(256);
+        json.append('{');
+        appendQuoted(json, "v");
+        json.append(":1,");
+        appendQuoted(json, "op");
+        json.append(':');
+        appendQuoted(json, operation);
+        json.append(',');
+        appendQuoted(json, "sku");
+        json.append(':');
+        appendQuoted(json, product.sku);
+        json.append(',');
+        appendQuoted(json, "barcode");
+        json.append(':');
+        appendQuoted(json, product.barcode);
+        json.append(',');
+        appendQuoted(json, "name");
+        json.append(':');
+        appendQuoted(json, product.name);
+        json.append(',');
+        appendQuoted(json, "price_satang");
+        json.append(':').append(product.priceSatang).append(',');
+        appendQuoted(json, "cost_satang");
+        json.append(':').append(product.costSatang).append(',');
+        appendQuoted(json, "unit");
+        json.append(':');
+        appendQuoted(json, product.unit);
+        json.append(',');
+        appendQuoted(json, "stock_limit_qty_milli");
+        json.append(':');
+        if (product.stockLimitQtyMilli == null) json.append("null");
+        else json.append(product.stockLimitQtyMilli);
+        json.append(',');
+        appendQuoted(json, "created_at_utc");
+        json.append(':');
+        appendQuoted(json, product.createdAtUtc);
+        json.append(',');
+        appendQuoted(json, "updated_at_utc");
+        json.append(':');
+        appendQuoted(json, product.updatedAtUtc);
+        return json.append('}').toString();
     }
 
-    private static String jsonEscape(String value) {
-        StringBuilder out = new StringBuilder(value.length() + 16);
+    private static void appendQuoted(StringBuilder out, String value) {
+        out.append('"');
         for (int i = 0; i < value.length(); i++) {
-            char ch = value.charAt(i);
+            int ch = value.charAt(i);
             switch (ch) {
-                case '\\': out.append("\\\\"); break;
-                case '"': out.append("\\\""); break;
-                case '\\b': out.append("\\b"); break;
-                case '\\f': out.append("\\f"); break;
-                case '\\n': out.append("\\n"); break;
-                case '\\r': out.append("\\r"); break;
-                case '\\t': out.append("\\t"); break;
+                case 34: out.append((char) 92).append((char) 34); break;
+                case 92: out.append((char) 92).append((char) 92); break;
+                case 8: out.append((char) 92).append('b'); break;
+                case 12: out.append((char) 92).append('f'); break;
+                case 10: out.append((char) 92).append('n'); break;
+                case 13: out.append((char) 92).append('r'); break;
+                case 9: out.append((char) 92).append('t'); break;
                 default:
-                    if (ch < 0x20) out.append(String.format("\\u%04x", (int) ch));
-                    else out.append(ch);
+                    if (ch < 0x20) {
+                        out.append((char) 92).append('u');
+                        String hex = Integer.toHexString(ch);
+                        for (int pad = hex.length(); pad < 4; pad++) out.append('0');
+                        out.append(hex);
+                    } else {
+                        out.append((char) ch);
+                    }
             }
         }
-        return out.toString();
+        out.append('"');
     }
 
     private static String sha256(String value) {
