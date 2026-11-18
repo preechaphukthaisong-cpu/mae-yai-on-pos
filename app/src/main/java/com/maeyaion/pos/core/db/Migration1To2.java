@@ -34,6 +34,7 @@ public final class Migration1To2 {
             db.execSQL("CREATE TRIGGER op_log_no_delete BEFORE DELETE ON op_log BEGIN SELECT RAISE(ABORT, 'op_log_append_only'); END");
             db.execSQL("CREATE TRIGGER barcode_registry_no_update BEFORE UPDATE ON barcode_registry BEGIN SELECT RAISE(ABORT, 'barcode_registry_immutable'); END");
             db.execSQL("CREATE TRIGGER barcode_registry_no_delete BEFORE DELETE ON barcode_registry BEGIN SELECT RAISE(ABORT, 'barcode_registry_immutable'); END");
+            DatabaseGuards.installCore(db);
         }
     };
 }
