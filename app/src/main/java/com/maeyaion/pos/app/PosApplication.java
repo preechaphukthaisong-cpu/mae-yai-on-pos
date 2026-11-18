@@ -1,11 +1,21 @@
 package com.maeyaion.pos.app;
+
 import android.app.Application;
+
 import com.maeyaion.pos.core.db.AppDatabase;
+
 public final class PosApplication extends Application {
-    private AppDatabase database;
-    @Override public void onCreate() {
+    @Override
+    public void onCreate() {
         super.onCreate();
-        database = AppDatabase.getInstance(this);
+        AppDatabase.getInstance(this);
     }
-    public AppDatabase database() { return database; }
+
+    /**
+     * Resolve the current singleton on every access. Restore replaces the
+     * underlying Room instance, so caching it in Application would be stale.
+     */
+    public AppDatabase database() {
+        return AppDatabase.getInstance(this);
+    }
 }
