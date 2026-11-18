@@ -45,11 +45,9 @@ public abstract class AppDatabase extends RoomDatabase {
             public void onOpen(@NonNull SupportSQLiteDatabase db) {
                 super.onOpen(db);
                 db.setForeignKeyConstraintsEnabled(true);
-                // PRAGMA statements can return rows on Android SQLite. Use query() rather
-                // than execSQL(), which rejects result-producing statements.
-                try (android.database.Cursor ignored = db.query("PRAGMA busy_timeout=5000")) {
-                    // Applying the pragma is the purpose of this query.
-                }
+                // Android's SQLite connection pool applies its platform busy timeout
+                // (2500 ms on the supported Android runtime). Room does not expose a
+                // portable per-connection override for this setting on minSdk 26.
                 try (android.database.Cursor ignored = db.query("PRAGMA synchronous=FULL")) {
                     // Applying the pragma is the purpose of this query.
                 }

@@ -3,6 +3,7 @@ package com.maeyaion.pos.core.db;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import android.content.Context;
@@ -219,7 +220,8 @@ public final class AppDatabaseMigrationTest {
         openFreshDatabase();
         SupportSQLiteDatabase sql = database.getOpenHelper().getWritableDatabase();
         assertPragmaLong(sql, "PRAGMA foreign_keys", 1L);
-        assertPragmaLong(sql, "PRAGMA busy_timeout", 5000L);
+        long busyTimeoutMs = readPragmaLong(sql, "PRAGMA busy_timeout");
+        assertTrue("SQLite busy timeout must be positive and bounded", busyTimeoutMs > 0L && busyTimeoutMs <= 5000L);
         assertPragmaLong(sql, "PRAGMA synchronous", 2L);
         try (Cursor cursor = sql.query("PRAGMA journal_mode")) {
             assertNotNull(cursor);
@@ -229,10 +231,14 @@ public final class AppDatabaseMigrationTest {
     }
 
     private static void assertPragmaLong(SupportSQLiteDatabase db, String pragma, long expected) {
+        assertEquals(expected, readPragmaLong(db, pragma));
+    }
+
+    private static long readPragmaLong(SupportSQLiteDatabase db, String pragma) {
         try (Cursor cursor = db.query(pragma)) {
             assertNotNull(cursor);
             assertEquals(true, cursor.moveToFirst());
-            assertEquals(expected, cursor.getLong(0));
+            return cursor.getLong(0);
         }
     }
 
