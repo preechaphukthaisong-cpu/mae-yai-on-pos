@@ -20,8 +20,13 @@ public final class SQLiteStagedRestoreValidator implements EncryptedBackupFileSt
         if (stagedDatabase == null || !stagedDatabase.isFile() || stagedDatabase.length() <= 0) {
             return false;
         }
-        SQLiteDatabase database = SQLiteDatabase.openDatabase(
-                stagedDatabase.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
+        final SQLiteDatabase database;
+        try {
+            database = SQLiteDatabase.openDatabase(
+                    stagedDatabase.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
+        } catch (android.database.sqlite.SQLiteException invalidDatabase) {
+            return false;
+        }
         try {
             try (Cursor integrity = database.rawQuery("PRAGMA integrity_check", null)) {
                 if (!integrity.moveToFirst() || !"ok".equalsIgnoreCase(integrity.getString(0))) {
