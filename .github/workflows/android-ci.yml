@@ -72,6 +72,10 @@ jobs:
             exit 1
           }
           python3 -m json.tool "$SCHEMA_FILE" >/dev/null
+          git diff --exit-code -- "$SCHEMA_FILE" || {
+            echo "::error::Generated Room schema differs from the committed schema. Commit the Room-generated JSON after reviewing the migration."
+            exit 1
+          }
       - name: Upload Room schema
         uses: actions/upload-artifact@v4
         with:
