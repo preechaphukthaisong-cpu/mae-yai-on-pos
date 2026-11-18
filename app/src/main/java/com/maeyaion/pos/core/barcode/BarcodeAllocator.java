@@ -29,46 +29,56 @@ public final class BarcodeAllocator {
     @NonNull
     public BarcodeRegistryEntity registerManufacturer(@NonNull String barcode,
             @NonNull String displayName, long priceSatang, @NonNull String createdAtUtc) {
+        return transactions.runInTransaction(
+                () -> registerManufacturerInTransaction(barcode, displayName, priceSatang, createdAtUtc));
+    }
+
+    @NonNull
+    BarcodeRegistryEntity registerManufacturerInTransaction(@NonNull String barcode,
+            @NonNull String displayName, long priceSatang, @NonNull String createdAtUtc) {
         validate(barcode, displayName, priceSatang, createdAtUtc);
+        if (registryDao.findByBarcode(barcode) != null) {
+            throw new IllegalStateException("Barcode is already registered");
+        }
         BarcodeRegistryEntity entity = new BarcodeRegistryEntity(
                 barcode, displayName, priceSatang, "MANUFACTURER", createdAtUtc);
-        return transactions.runInTransaction(() -> {
-            if (registryDao.findByBarcode(barcode) != null) {
-                throw new IllegalStateException("Barcode is already registered");
-            }
-            registryDao.insert(entity);
-            return entity;
-        });
+        registryDao.insert(entity);
+        return entity;
     }
 
     @NonNull
     public BarcodeRegistryEntity allocateSystem(@NonNull String displayName,
             long priceSatang, @NonNull String createdAtUtc) {
+        return transactions.runInTransaction(
+                () -> allocateSystemInTransaction(displayName, priceSatang, createdAtUtc));
+    }
+
+    @NonNull
+    BarcodeRegistryEntity allocateSystemInTransaction(@NonNull String displayName,
+            long priceSatang, @NonNull String createdAtUtc) {
         validate("2000001", displayName, priceSatang, createdAtUtc);
-        return transactions.runInTransaction(() -> {
-            BarcodeCounterEntity counter = counterDao.get();
-            if (counter == null || counter.id != 1 || counter.nextValue < FIRST_SYSTEM_VALUE) {
-                throw new IllegalStateException("Barcode counter is missing or invalid");
-            }
-            long candidate = counter.nextValue;
-            while (true) {
-                String barcode = Long.toString(candidate);
-                long next = Math.addExact(candidate, 1L);
-                if (registryDao.findByBarcode(barcode) == null) {
-                    BarcodeRegistryEntity entity = new BarcodeRegistryEntity(
-                            barcode, displayName, priceSatang, "SYSTEM", createdAtUtc);
-                    registryDao.insert(entity);
-                    if (counterDao.update(new BarcodeCounterEntity(1, next)) != 1) {
-                        throw new IllegalStateException("Barcode counter update failed");
-                    }
-                    return entity;
-                }
+        BarcodeCounterEntity counter = counterDao.get();
+        if (counter == null || counter.id != 1 || counter.nextValue < FIRST_SYSTEM_VALUE) {
+            throw new IllegalStateException("Barcode counter is missing or invalid");
+        }
+        long candidate = counter.nextValue;
+        while (true) {
+            String barcode = Long.toString(candidate);
+            long next = Math.addExact(candidate, 1L);
+            if (registryDao.findByBarcode(barcode) == null) {
+                BarcodeRegistryEntity entity = new BarcodeRegistryEntity(
+                        barcode, displayName, priceSatang, "SYSTEM", createdAtUtc);
+                registryDao.insert(entity);
                 if (counterDao.update(new BarcodeCounterEntity(1, next)) != 1) {
                     throw new IllegalStateException("Barcode counter update failed");
                 }
-                candidate = next;
+                return entity;
             }
-        });
+            if (counterDao.update(new BarcodeCounterEntity(1, next)) != 1) {
+                throw new IllegalStateException("Barcode counter update failed");
+            }
+            candidate = next;
+        }
     }
 
 
