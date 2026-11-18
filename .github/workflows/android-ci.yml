@@ -68,26 +68,17 @@ jobs:
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -memory 4096
           disable-animations: true
           script: |
-            set -euo pipefail
+            set -eu
             adb wait-for-device
 
             echo "Waiting for Android package service..."
-            PACKAGE_SERVICE_READY=false
-            for attempt in $(seq 1 90); do
-              if adb shell service check package 2>/dev/null | grep -q "found"; then
-                echo "Android package service is ready (attempt $attempt)"
-                PACKAGE_SERVICE_READY=true
-                break
-              fi
-              sleep 2
-            done
-
-            if [ "$PACKAGE_SERVICE_READY" != "true" ]; then
+            if ! timeout 180 sh -c 'until adb shell service check package 2>/dev/null | grep -q found; do sleep 2; done'; then
               adb shell service list || true
               adb logcat -d -b all > "$RUNNER_TEMP/emulator-logcat.txt" || true
               echo "::error::Android package service did not become ready within 180 seconds"
               exit 1
             fi
+            echo "Android package service is ready."
 
             adb shell settings put global package_verifier_enable 0 || true
             adb shell settings put global verifier_verify_adb_installs 0 || true
