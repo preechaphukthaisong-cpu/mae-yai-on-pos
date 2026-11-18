@@ -188,7 +188,7 @@ public final class AppDatabaseMigrationTest {
     @Test public void backupJournalIsOrderedAndOnlyUploadFlagCanChange() {
         openFreshDatabase();
         BackupJournalEntity first = new BackupJournalEntity(0, "op-1", "PRODUCT_CREATE",
-                "{\"sku\":\"SKU-1\"}", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", 3,
+                "{\"sku\":\"SKU-1\"}", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", 4,
                 "2026-11-17T00:00:00Z", 0);
         long seq = database.backupJournalDao().append(first);
         assertEquals(1L, database.backupJournalDao().pendingCount());
