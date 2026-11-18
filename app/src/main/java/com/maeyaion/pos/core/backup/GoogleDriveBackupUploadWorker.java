@@ -170,6 +170,7 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
                 || candidate.length() <= 0 || candidate.length() > MAX_UPLOAD_BYTES) {
             throw new IOException("Only app-private encrypted backup files may be uploaded");
         }
+        BackupCrypto.validateEnvelopeFile(candidate);
         return candidate;
     }
 
