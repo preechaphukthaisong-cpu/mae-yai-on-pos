@@ -1,5 +1,9 @@
 package com.maeyaion.pos.core.barcode;
 
+import com.maeyaion.pos.core.db.BackupJournalDao;
+import com.maeyaion.pos.core.db.BackupJournalEntity;
+import com.maeyaion.pos.core.db.OpLogDao;
+import com.maeyaion.pos.core.db.OpLogEntity;
 import com.maeyaion.pos.core.db.BarcodeCounterDao;
 import com.maeyaion.pos.core.db.BarcodeCounterEntity;
 import com.maeyaion.pos.core.db.BarcodeRegistryDao;
@@ -30,6 +34,9 @@ public final class ProductRegistrationServiceTest {
         assertEquals(2000002L, store.counter.value.nextValue);
         assertNotNull(store.registry.findByBarcode("2000001"));
         assertNotNull(store.products.findBySku("SKU-1"));
+        assertEquals(1, store.opLogs.entries.size());
+        assertEquals(1, store.journal.entries.size());
+        assertEquals(64, store.journal.entries.get(0).payload_sha256.length());
     }
 
     @Test public void productInsertFailureRollsBackBarcodeAndCounter() {
@@ -44,7 +51,11 @@ public final class ProductRegistrationServiceTest {
         }
         assertNull(store.registry.findByBarcode("2000001"));
         assertEquals(2000001L, store.counter.value.nextValue);
+        assertEquals(1, store.opLogs.entries.size());
+        assertEquals(1, store.journal.entries.size());
         assertNull(store.products.findBySku("SKU-FAIL"));
+        assertTrue(store.opLogs.entries.isEmpty());
+        assertTrue(store.journal.entries.isEmpty());
     }
 
     @Test public void manufacturerBarcodeAndProductAreCreatedTogether() {
@@ -59,17 +70,23 @@ public final class ProductRegistrationServiceTest {
 
     private static ProductRegistrationService service(Store store) {
         BarcodeAllocator allocator = new BarcodeAllocator(store.registry, store.counter, store);
-        return new ProductRegistrationService(allocator, store.products, store);
+        return new ProductRegistrationService(allocator, store.products,
+                store.opLogs, store.journal, store);
     }
 
     private static final class Store implements TransactionRunner {
         final FakeRegistry registry = new FakeRegistry();
         final FakeCounter counter = new FakeCounter();
         final FakeProducts products = new FakeProducts();
+        final FakeOpLogs opLogs = new FakeOpLogs();
+        final FakeJournal journal = new FakeJournal();
 
         @Override public <T> T runInTransaction(Callable<T> operation) {
             Map<String, BarcodeRegistryEntity> oldRegistry = new HashMap<>(registry.values);
             Map<String, ProductEntity> oldProducts = new HashMap<>(products.values);
+            List<OpLogEntity> oldOpLogs = new ArrayList<>(opLogs.entries);
+            List<BackupJournalEntity> oldJournal = new ArrayList<>(journal.entries);
+            long oldJournalSeq = journal.nextSeq;
             BarcodeCounterEntity oldCounter = counter.value;
             try {
                 return operation.call();
@@ -78,6 +95,11 @@ public final class ProductRegistrationServiceTest {
                 registry.values.putAll(oldRegistry);
                 products.values.clear();
                 products.values.putAll(oldProducts);
+                opLogs.entries.clear();
+                opLogs.entries.addAll(oldOpLogs);
+                journal.entries.clear();
+                journal.entries.addAll(oldJournal);
+                journal.nextSeq = oldJournalSeq;
                 counter.value = oldCounter;
                 throw error;
             } catch (Exception error) {
@@ -105,6 +127,30 @@ public final class ProductRegistrationServiceTest {
         BarcodeCounterEntity value = new BarcodeCounterEntity(1, 2000001L);
         @Override public BarcodeCounterEntity get() { return value; }
         @Override public int update(BarcodeCounterEntity next) { value = next; return 1; }
+    }
+
+    private static final class FakeOpLogs implements OpLogDao {
+        final List<OpLogEntity> entries = new ArrayList<>();
+        @Override public void append(OpLogEntity entry) { entries.add(entry); }
+        @Override public List<OpLogEntity> latest(int limit) {
+            return new ArrayList<>(entries.subList(Math.max(0, entries.size() - limit), entries.size()));
+        }
+    }
+
+    private static final class FakeJournal implements BackupJournalDao {
+        final List<BackupJournalEntity> entries = new ArrayList<>();
+        long nextSeq = 1L;
+        @Override public long append(BackupJournalEntity entry) {
+            entries.add(new BackupJournalEntity(nextSeq, entry.operation_id, entry.op,
+                    entry.payload, entry.payload_sha256, entry.schema_version,
+                    entry.created_at_utc, entry.uploaded));
+            return nextSeq++;
+        }
+        @Override public List<BackupJournalEntity> pendingBatch(int limit) {
+            return new ArrayList<>(entries.subList(0, Math.min(limit, entries.size())));
+        }
+        @Override public int markUploaded(long seq) { return 0; }
+        @Override public long pendingCount() { return entries.size(); }
     }
 
     private static final class FakeProducts implements ProductDao {
