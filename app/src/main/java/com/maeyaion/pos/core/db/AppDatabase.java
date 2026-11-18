@@ -80,7 +80,7 @@ public abstract class AppDatabase extends RoomDatabase {
         synchronized (AppDatabase.class) {
             AppDatabase current = INSTANCE;
             INSTANCE = null;
-            if (current != null && !current.isOpen()) {
+            if (current != null && current.isOpen()) {
                 current.close();
             }
         }
