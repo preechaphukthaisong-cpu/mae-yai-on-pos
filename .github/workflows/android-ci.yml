@@ -68,6 +68,13 @@ jobs:
             gradle --no-daemon :app:connectedDebugAndroidTest
       - name: Assemble debug APK
         run: gradle --no-daemon :app:assembleDebug
+      - name: Upload Room schema
+        uses: actions/upload-artifact@v4
+        with:
+          name: mae-yai-on-pos-room-schema
+          path: app/schemas/
+          if-no-files-found: error
+          retention-days: 7
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
