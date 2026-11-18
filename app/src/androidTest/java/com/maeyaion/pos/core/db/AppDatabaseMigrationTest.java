@@ -99,6 +99,8 @@ public final class AppDatabaseMigrationTest {
         old.execSQL("CREATE TABLE backup_journal (seq INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, operation_id TEXT NOT NULL, op TEXT NOT NULL, payload TEXT NOT NULL, payload_sha256 TEXT NOT NULL, schema_version INTEGER NOT NULL, created_at_utc TEXT NOT NULL, uploaded INTEGER NOT NULL DEFAULT 0)");
         old.execSQL("CREATE UNIQUE INDEX index_backup_journal_operation_id ON backup_journal(operation_id)");
         old.execSQL("CREATE INDEX index_backup_journal_uploaded_seq ON backup_journal(uploaded, seq)");
+        old.execSQL("INSERT INTO barcode_registry(barcode, display_name, price_satang, source_type, created_at_utc) VALUES('009999', 'Legacy item', 100, 'MANUFACTURER', '2026-11-17T00:00:00Z')");
+        old.execSQL("INSERT INTO product(sku, barcode, name, price_satang, cost_satang, unit, stock_limit_qty_milli, stock_qty_milli, is_active, created_at_utc, updated_at_utc) VALUES('SKU-LEGACY', '009999', 'Legacy item', 100, 50, 'ชิ้น', NULL, 2500, 1, '2026-11-17T00:00:00Z', '2026-11-17T00:00:00Z')");
         old.execSQL("CREATE TRIGGER stock_log_validate BEFORE INSERT ON stock_log BEGIN SELECT RAISE(ABORT, 'obsolete_v3_guard'); END");
         old.setVersion(3);
         old.close();
@@ -111,6 +113,14 @@ public final class AppDatabaseMigrationTest {
         assertEquals(4, sql.getVersion());
         assertEquals("v3_value", database.appMetaDao().findValue("legacy_key"));
         assertCoreGuardsExist(sql);
+        assertEquals(2500L, database.productDao().findBySku("SKU-LEGACY").stockQtyMilli);
+        try (Cursor cursor = sql.query("SELECT before_qty_milli, after_qty_milli, diff_qty_milli FROM stock_log WHERE sku = 'SKU-LEGACY' AND ref_id = 'MIGRATION_V3_BASELINE'")) {
+            assertNotNull(cursor);
+            assertEquals(true, cursor.moveToFirst());
+            assertEquals(0L, cursor.getLong(0));
+            assertEquals(2500L, cursor.getLong(1));
+            assertEquals(2500L, cursor.getLong(2));
+        }
         insertBarcodeAndProduct(sql);
         appendStock(sql, "stock-after-v3", 0, 1_000, 1_000);
         assertEquals(1_000L, database.productDao().findBySku("SKU-1").stockQtyMilli);
