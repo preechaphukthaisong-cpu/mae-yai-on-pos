@@ -1,8 +1,8 @@
 # สถาปัตยกรรมระบบ POS ร้านแม่ใหญ่อ่อน (ARCHITECTURE)
 
-- รุ่นเอกสาร: 1.0.5-draft
-- เฟส: 2 — ออกแบบโครงสร้าง
-- สถานะ: ออกแบบตาม D-001 ถึง D-061; การตัดสินใจ O-001 ถึง O-030 ได้รับการยืนยันครบแล้ว
+- รุ่นเอกสาร: 1.0.6
+- เฟส: 3 — Foundation implementation in progress
+- สถานะ: สถาปัตยกรรมอ้างอิงตาม D-001 ถึง D-061; มี Android Java source และ Room schema v4 foundation แล้ว แต่ business features และ device acceptance ยังไม่เสร็จ
 - อ้างอิงหลัก: docs/SPEC.md, docs/DECISIONS.md
 - Package หลัก: com.maeyaion.pos
 
@@ -18,7 +18,7 @@
 - จำนวนสินค้าเก็บเป็น integer milli-unit (1 หน่วย = 1,000); ห้ามใช้ floating point
 - วันธุรกิจใช้ Asia/Bangkok ตัดวัน 00:00 น.; timestamp เก็บ UTC
 
-เอกสารนี้เป็นแบบออกแบบ ไม่ใช่หลักฐานว่ามี Android source, Gradle project หรือ feature runtime อยู่แล้ว
+เอกสารนี้เป็นสถาปัตยกรรมอ้างอิง; การมี source code หรือ CI ผ่านไม่ถือเป็นหลักฐานว่า feature runtime หรือการยอมรับบนอุปกรณ์จริงเสร็จสมบูรณ์
 
 ## 2. ภาพรวมสถาปัตยกรรม
 
@@ -105,7 +105,8 @@ app/src/androidTest/
 - ทุก DAO ต้องมาจาก AppDatabase instance เดียวกัน
 - เปิด WAL ตอน initialize และตรวจค่าที่ SQLite คืนกลับ
 - เปิด foreign keys และ busy timeout ทุก connection; ห้ามใช้ allowMainThreadQueries
-- export Room schema ทุก version และเก็บ migration ใน source control
+- export Room schema ทุก version และเก็บ migration ใน source control; schema v4 ใช้ migration 1→2→3→4 แบบไม่ทำลายข้อมูล
+- ใช้ DatabaseGuards installer ชุดเดียวกันทั้ง fresh install และ migration; Migration 3→4 refreshes guards สำหรับฐานข้อมูลที่อยู่ v3
 - ห้าม destructive migration หรือแก้ปัญหาด้วยการลบฐานข้อมูล
 - Entity/DAO เป็น persistence boundary; UI ห้าม query ฐานข้อมูลโดยตรง
 
