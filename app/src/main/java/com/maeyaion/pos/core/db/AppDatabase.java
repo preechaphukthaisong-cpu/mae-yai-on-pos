@@ -31,6 +31,26 @@ public abstract class AppDatabase extends RoomDatabase {
     public abstract OpLogDao opLogDao();
     public abstract BackupJournalDao backupJournalDao();
 
+    static RoomDatabase.Callback databaseCallback() {
+        return new RoomDatabase.Callback() {
+            @Override
+            public void onCreate(@NonNull SupportSQLiteDatabase db) {
+                super.onCreate(db);
+                db.execSQL("INSERT OR IGNORE INTO barcode_counter (id, next_value) VALUES (1, 2000001)");
+                DatabaseGuards.installCore(db);
+                DatabaseGuards.installBackupJournal(db);
+            }
+
+            @Override
+            public void onOpen(@NonNull SupportSQLiteDatabase db) {
+                super.onOpen(db);
+                db.setForeignKeyConstraintsEnabled(true);
+                db.execSQL("PRAGMA busy_timeout=5000");
+                db.execSQL("PRAGMA synchronous=FULL");
+            }
+        };
+    }
+
     public static AppDatabase getInstance(Context context) {
         AppDatabase local = INSTANCE;
         if (local == null) {
@@ -43,23 +63,7 @@ public abstract class AppDatabase extends RoomDatabase {
                                     "maeyaion_pos.db")
                             .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
                             .addMigrations(Migration1To2.INSTANCE, Migration2To3.INSTANCE, Migration3To4.INSTANCE)
-                            .addCallback(new Callback() {
-                                @Override
-                                public void onCreate(@NonNull SupportSQLiteDatabase db) {
-                                    super.onCreate(db);
-                                    db.execSQL("INSERT OR IGNORE INTO barcode_counter (id, next_value) VALUES (1, 2000001)");
-                                    DatabaseGuards.installCore(db);
-                                    DatabaseGuards.installBackupJournal(db);
-                                }
-
-                                @Override
-                                public void onOpen(@NonNull SupportSQLiteDatabase db) {
-                                    super.onOpen(db);
-                                    db.setForeignKeyConstraintsEnabled(true);
-                                    db.execSQL("PRAGMA busy_timeout=5000");
-                                    db.execSQL("PRAGMA synchronous=FULL");
-                                }
-                            })
+                            .addCallback(databaseCallback())
                             .build();
                     INSTANCE = local;
                 }
