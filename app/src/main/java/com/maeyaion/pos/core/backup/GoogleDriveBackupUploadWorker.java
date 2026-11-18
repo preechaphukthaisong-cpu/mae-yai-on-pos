@@ -24,6 +24,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import java.net.URLEncoder;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -73,6 +74,11 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
 
         HttpURLConnection connection = null;
         try {
+            String existingDriveId = findExistingDriveFile(token, backup.getName());
+            if (existingDriveId != null) {
+                return Result.success(new Data.Builder()
+                        .putString(OUTPUT_DRIVE_FILE_ID, existingDriveId).build());
+            }
             connection = (HttpURLConnection) new URL(
                     "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,size")
                     .openConnection();
@@ -128,6 +134,30 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
             return Result.retry();
         } finally {
             if (connection != null) connection.disconnect();
+        }
+    }
+
+    /** Reconciles a prior successful upload whose response may have been lost. */
+    private String findExistingDriveFile(String token, String fileName) throws IOException {
+        String query = "name = '" + fileName.replace("'", "\\'") + "' and trashed = false";
+        String url = "https://www.googleapis.com/drive/v3/files?q="
+                + URLEncoder.encode(query, "UTF-8")
+                + "&spaces=appDataFolder&pageSize=10&fields=files(id,name)";
+        HttpURLConnection lookup = (HttpURLConnection) new URL(url).openConnection();
+        try {
+            lookup.setRequestMethod("GET");
+            lookup.setConnectTimeout(CONNECT_TIMEOUT_MS);
+            lookup.setReadTimeout(30_000);
+            lookup.setRequestProperty("Authorization", "Bearer " + token);
+            int status = lookup.getResponseCode();
+            if (status == HttpURLConnection.HTTP_UNAUTHORIZED) return null;
+            if (status == 429 || status >= 500) throw new IOException("Drive lookup temporarily unavailable");
+            if (status < 200 || status >= 300) return null;
+            String response = readLimited(lookup.getInputStream(), 32 * 1024);
+            Matcher matcher = Pattern.compile("\\"id\\"\\s*:\\s*\\"([^\\"]+)\\"").matcher(response);
+            return matcher.find() ? matcher.group(1) : null;
+        } finally {
+            lookup.disconnect();
         }
     }
 
