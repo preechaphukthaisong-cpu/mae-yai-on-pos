@@ -182,7 +182,7 @@ User action
 - ใช้ parameterized queries; ห้ามต่อ SQL จาก input
 - ตรวจสิทธิ์/กฎธุรกิจใน use case ไม่ใช่ซ่อนปุ่มอย่างเดียว
 - ไม่บันทึกรหัสผ่าน, token หรือข้อมูลส่วนบุคคลเกินจำเป็นลง log
-- ห้ามเริ่ม implementation ของ app lock/SQLCipher/backup encryption ก่อนเฟส 10; เมื่อถึงเฟส 10 ต้องทำตาม D-060 และห้ามเก็บ key/password แบบ plaintext
+- Backup encryption + Recovery Password/Recovery Key ต้อง implement และผ่าน security tests ใน Phase 3 ก่อนเปิด Drive upload ตาม D-062; App Lock และ SQLCipher database-at-rest encryption ยังคงอยู่ Phase 10 ตาม D-060
 - ห้าม hard-delete ข้อมูลการเงิน/สต๊อกเพื่อแก้รายการผิด; ใช้ reversal/audit records
 - ข้อผิดพลาด DB ต้องไม่ถูกกลืนเงียบ; rollback และแจ้งข้อความที่ผู้ใช้แก้ไขได้
 
@@ -202,7 +202,7 @@ CI ผ่านไม่เท่ากับ device acceptance; ต้องท
 
 ## 11. สถานะการตัดสินใจและการจัดเฟส
 
-O-001 ถึง O-030 ปิดครบแล้วตาม docs/DECISIONS.md (D-033 ถึง D-061). O-023 Google Drive authentication และ O-024 Thai TTS fallback ทำในเฟส 3; O-026 restore entry point/flow ทำในเฟส 3/4; O-025 app lock, SQLCipher และ backup encryption ทำในเฟส 10. การปิดประเด็นหมายถึงข้อกำหนดได้รับการอนุมัติ ไม่ได้หมายความว่า implementation เสร็จแล้ว.
+O-001 ถึง O-030 ปิดครบแล้วตาม docs/DECISIONS.md (D-033 ถึง D-061). O-023 Google Drive authentication และ O-024 Thai TTS fallback ทำในเฟส 3; O-026 restore entry point/flow ทำในเฟส 3/4; O-025 app lock และ SQLCipher ทำในเฟส 10; backup encryption/Recovery Password/Recovery Key ทำในเฟส 3 ตาม D-062. การปิดประเด็นหมายถึงข้อกำหนดได้รับการอนุมัติ ไม่ได้หมายความว่า implementation เสร็จแล้ว.
 
 ## 12. เกณฑ์ผ่านเฟส 2
 
