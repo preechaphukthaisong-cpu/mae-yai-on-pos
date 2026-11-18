@@ -13,6 +13,7 @@ import java.util.UUID;
 public final class EncryptedBackupFileStore {
     private static final String BACKUP_SUFFIX = ".myobak";
     private static final String TEMP_SUFFIX = ".tmp";
+    private static final long MAX_ENVELOPE_BYTES = 512L * 1024L * 1024L + 256L;
 
     public File writeBackup(File privateBackupDirectory, byte[] databaseSnapshot,
                             char[] recoveryPassword, String recoveryKey)
@@ -49,6 +50,9 @@ public final class EncryptedBackupFileStore {
                 "." + UUID.randomUUID() + TEMP_SUFFIX);
         File staged = new File(privateStagingDirectory,
                 UUID.randomUUID() + ".restore.db");
+        if (encryptedBackup.length() <= 0 || encryptedBackup.length() > MAX_ENVELOPE_BYTES) {
+            throw new IOException("Backup file size is outside the supported range");
+        }
         byte[] envelope = java.nio.file.Files.readAllBytes(encryptedBackup.toPath());
         byte[] plaintext = null;
         try {
@@ -69,7 +73,6 @@ public final class EncryptedBackupFileStore {
             if (temporary.exists() && !temporary.delete()) {
                 // Best effort cleanup; no live database path is touched here.
             }
-            if (!staged.exists()) returnIfNothing();
         }
     }
 
@@ -90,8 +93,6 @@ public final class EncryptedBackupFileStore {
     private static void wipe(byte[] value) {
         if (value != null) java.util.Arrays.fill(value, (byte) 0);
     }
-
-    private static void returnIfNothing() { /* keeps cleanup branch explicit */ }
 
     public interface StagedRestoreValidator {
         /** Must check SQLite integrity, expected schema version, and application invariants. */
