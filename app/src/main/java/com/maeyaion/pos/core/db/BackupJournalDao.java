@@ -12,6 +12,9 @@ public interface BackupJournalDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     long append(BackupJournalEntity entry);
 
+    @Query("SELECT * FROM backup_journal WHERE operation_id = :operationId LIMIT 1")
+    BackupJournalEntity findByOperationId(String operationId);
+
     @Query("SELECT * FROM backup_journal WHERE uploaded = 0 ORDER BY seq ASC LIMIT :limit")
     List<BackupJournalEntity> pendingBatch(int limit);
 
