@@ -96,7 +96,7 @@ public final class ProductRegistrationService {
         if (prior == null) return null;
         ProductEntity existing = productDao.findBySku(sku);
         if (existing == null) {
-            throw new IllegalStateException("Idempotency journal exists without its product");
+            throw new IllegalStateException("Idempotency key journal exists without its product");
         }
         com.maeyaion.pos.core.db.BarcodeRegistryEntity registry =
                 barcodeAllocator.findRegistered(existing.barcode);

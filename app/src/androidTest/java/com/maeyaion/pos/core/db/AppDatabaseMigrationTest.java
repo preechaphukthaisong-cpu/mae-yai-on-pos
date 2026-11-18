@@ -215,6 +215,27 @@ public final class AppDatabaseMigrationTest {
         assertEquals(0, database.backupJournalDao().markUploaded(seq));
     }
 
+    @Test public void databaseConnectionPragmasAreAppliedAndVerified() {
+        openFreshDatabase();
+        SupportSQLiteDatabase sql = database.getOpenHelper().getWritableDatabase();
+        assertPragmaLong(sql, "PRAGMA foreign_keys", 1L);
+        assertPragmaLong(sql, "PRAGMA busy_timeout", 5000L);
+        assertPragmaLong(sql, "PRAGMA synchronous", 2L);
+        try (Cursor cursor = sql.query("PRAGMA journal_mode")) {
+            assertNotNull(cursor);
+            assertEquals(true, cursor.moveToFirst());
+            assertEquals("wal", cursor.getString(0).toLowerCase(java.util.Locale.ROOT));
+        }
+    }
+
+    private static void assertPragmaLong(SupportSQLiteDatabase db, String pragma, long expected) {
+        try (Cursor cursor = db.query(pragma)) {
+            assertNotNull(cursor);
+            assertEquals(true, cursor.moveToFirst());
+            assertEquals(expected, cursor.getLong(0));
+        }
+    }
+
     private void openFreshDatabase() {
         database = Room.databaseBuilder(context, AppDatabase.class, databaseName)
                 .addCallback(AppDatabase.databaseCallback())

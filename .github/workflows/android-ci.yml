@@ -58,6 +58,7 @@ jobs:
       - name: Run unit tests
         run: gradle --no-daemon :app:testDebugUnitTest
       - name: Run database instrumentation tests
+        id: instrumentation
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
@@ -69,7 +70,7 @@ jobs:
           # Keep this to one command: this action invokes each script line separately.
           script: bash .github/scripts/run-emulator-tests.sh
       - name: Upload emulator logcat
-        if: always()
+        if: always() && steps.instrumentation.outcome != 'skipped'
         uses: actions/upload-artifact@v4
         with:
           name: mae-yai-on-pos-emulator-logcat

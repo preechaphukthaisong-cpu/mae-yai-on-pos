@@ -15,7 +15,7 @@ import static org.junit.Assert.*;
 public class BarcodeAllocatorTest {
     @Test public void allocatesFromReservedRangeAndSkipsExistingCodes() {
         FakeRegistry registry = new FakeRegistry();
-        registry.insert(new BarcodeRegistryEntity("2000001", "Factory", 100, "MANUFACTURER", "t"));
+        registry.insert(new BarcodeRegistryEntity("2000001", "Factory", 100, "MANUFACTURER", "2026-11-18T00:00:00Z"));
         FakeCounter counter = new FakeCounter();
         BarcodeAllocator allocator = new BarcodeAllocator(registry, counter, new DirectTransactions());
         BarcodeRegistryEntity allocated = allocator.allocateSystem("System item", 250, "2026-11-18T00:00:00Z");
@@ -27,7 +27,7 @@ public class BarcodeAllocatorTest {
     @Test public void preservesLeadingZeroInManufacturerBarcode() {
         FakeRegistry registry = new FakeRegistry();
         BarcodeAllocator allocator = new BarcodeAllocator(registry, new FakeCounter(), new DirectTransactions());
-        BarcodeRegistryEntity saved = allocator.registerManufacturer("0001234567890", "Item", 0, "t");
+        BarcodeRegistryEntity saved = allocator.registerManufacturer("0001234567890", "Item", 0, "2026-11-18T00:00:00Z");
         assertEquals("0001234567890", saved.barcode);
         assertEquals("MANUFACTURER", saved.sourceType);
     }
@@ -35,15 +35,15 @@ public class BarcodeAllocatorTest {
     @Test(expected = IllegalStateException.class)
     public void rejectsPreviouslyRegisteredManufacturerBarcode() {
         FakeRegistry registry = new FakeRegistry();
-        registry.insert(new BarcodeRegistryEntity("0123", "Existing", 0, "MANUFACTURER", "t"));
+        registry.insert(new BarcodeRegistryEntity("0123", "Existing", 0, "MANUFACTURER", "2026-11-18T00:00:00Z"));
         new BarcodeAllocator(registry, new FakeCounter(), new DirectTransactions())
-                .registerManufacturer("0123", "Duplicate", 0, "t");
+                .registerManufacturer("0123", "Duplicate", 0, "2026-11-18T00:00:00Z");
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void rejectsWhitespaceAroundBarcodeInsteadOfSilentlyChangingIt() {
         new BarcodeAllocator(new FakeRegistry(), new FakeCounter(), new DirectTransactions())
-                .registerManufacturer(" 0123", "Item", 0, "t");
+                .registerManufacturer(" 0123", "Item", 0, "2026-11-18T00:00:00Z");
     }
 
     private static final class DirectTransactions implements TransactionRunner {
