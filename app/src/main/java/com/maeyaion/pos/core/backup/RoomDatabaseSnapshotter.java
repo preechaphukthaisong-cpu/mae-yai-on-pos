@@ -40,7 +40,9 @@ public final class RoomDatabaseSnapshotter {
             return DatabaseMaintenanceGate.withExclusiveAccess(() -> {
                 SupportSQLiteDatabase database = roomDatabase.getOpenHelper().getWritableDatabase();
                 checkpointWal(database);
-                File source = context.getDatabasePath("maeyaion_pos.db");
+                String databaseName = roomDatabase.getOpenHelper().getDatabaseName();
+                if (databaseName == null) throw new IOException("In-memory databases cannot be snapshotted");
+                File source = context.getDatabasePath(databaseName);
                 if (!source.isFile() || source.length() <= 0 || source.length() > MAX_DATABASE_BYTES) {
                     throw new IOException("Live database is missing, empty, or exceeds snapshot limit");
                 }
