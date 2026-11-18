@@ -5,6 +5,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import android.content.Context;
+import android.database.sqlite.SQLiteDatabase;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -89,6 +90,42 @@ public final class RoomDatabaseRestorerTest {
             // Validation occurs before closing the live Room database.
         }
         assertEquals("must-remain", database.appMetaDao().findValue("restore_probe"));
+    }
+
+    @Test public void roomOpenFailureAfterReplacementRestoresPreviousDatabase() throws Exception {
+        RoomTransactionRunner transactions = new RoomTransactionRunner(database);
+        transactions.runInTransaction(() -> {
+            database.appMetaDao().put(new AppMetaEntity(
+                    "rollback_probe", "original-database", "2026-11-18T10:00:00Z"));
+            return null;
+        });
+        RoomDatabaseSnapshotter.Snapshot safety = new RoomDatabaseSnapshotter()
+                .create(context, database, workDirectory);
+        File staged = new File(workDirectory, "bad-room-identity-" + UUID.randomUUID() + ".db");
+        Files.copy(safety.file.toPath(), staged.toPath());
+
+        // Keep the SQLite file structurally valid, but make Room reject its identity
+        // after the candidate has replaced the live file. This exercises real rollback.
+        SQLiteDatabase candidate = SQLiteDatabase.openDatabase(
+                staged.getAbsolutePath(), null, SQLiteDatabase.OPEN_READWRITE);
+        try {
+            candidate.execSQL(
+                    "UPDATE room_master_table SET identity_hash='invalid-room-identity'");
+        } finally {
+            candidate.close();
+        }
+        assertTrue(new SQLiteStagedRestoreValidator(4).isValid(staged));
+
+        try {
+            new RoomDatabaseRestorer().activate(context, staged, safety.file, 4);
+            fail("Room identity mismatch must fail activation");
+        } catch (java.io.IOException expected) {
+            // Activation failed after replacement; the previous DB must be restored.
+        }
+
+        database = AppDatabase.getInstance(context);
+        assertEquals("original-database", database.appMetaDao().findValue("rollback_probe"));
+        assertEquals(4, database.getOpenHelper().getWritableDatabase().getVersion());
     }
 
     private static void deleteRecursively(File file) {
