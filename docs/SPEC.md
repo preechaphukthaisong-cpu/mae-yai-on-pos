@@ -441,11 +441,18 @@ v1 อนุญาตให้สร้างภาพบาร์โค้ด�
 - ตั้ง Room, export schema และ migration เปล่า
 - สร้าง core/money และ core/tx/TransactionRunner
 - สร้าง backup_journal, daily snapshot, backup/restore flow
-- เชื่อม Google Drive drive.appdata และ WorkManager
+- สร้าง consistent SQLite/WAL snapshot, backup journal delta, manifest และ checksum
+- ทำ authenticated backup encryption AES-256-GCM, Recovery Password + Recovery Key; ทดสอบ wrong password/key, tampering และ restore ข้ามเครื่องก่อนเปิดอัปโหลด
+- เชื่อม Google Drive drive.appdata และ WorkManager โดยอัปโหลดเฉพาะ backup ที่เข้ารหัสและผ่าน integrity validation
+- commit Room schema JSON ทุกเวอร์ชันใน Git และทดสอบ Migration ด้วย schema history จริง
+- กำหนด/ตรวจ busy_timeout=5000 และ synchronous=FULL สำหรับทุก Room connection พร้อม instrumentation tests
 - สร้างโปรแกรมทดสอบ CameraX + ML Kit, TextToSpeech และ lifecycle ตอนจอดับ/กลับมา
 
 เกณฑ์ผ่าน:
-- restore จากไฟล์สำรองในเครื่องและ Google Drive บนเครื่องจริงได้ครบ
+- restore จากไฟล์สำรองในเครื่องและ Google Drive บนเครื่องจริงได้ครบ โดยทดสอบ Recovery Password และ Recovery Key ข้ามเครื่อง
+- ไม่มี plaintext database/backup/journal ถูกส่งไป Google Drive
+- schema JSON ทุกเวอร์ชันอยู่ใน Git และ CI ตรวจ schema drift
+- SQLite durability settings ผ่าน instrumentation tests ทุก connection
 - migration test ผ่าน
 - สแกนต่อเนื่องและเสียงทำงานบนเครื่องจริง
 - backup failure ไม่ขวางการทำงานในเครื่อง
