@@ -48,9 +48,9 @@ public abstract class AppDatabase extends RoomDatabase {
                 // Android's SQLite connection pool applies its platform busy timeout
                 // (2500 ms on the supported Android runtime). Room does not expose a
                 // portable per-connection override for this setting on minSdk 26.
-                try (android.database.Cursor ignored = db.query("PRAGMA synchronous=FULL")) {
-                    // Applying the pragma is the purpose of this query.
-                }
+                // synchronous is connection-scoped in SQLite. Execute it on each
+                // Room connection instead of issuing it through the query API.
+                db.execSQL("PRAGMA synchronous=FULL");
             }
         };
     }

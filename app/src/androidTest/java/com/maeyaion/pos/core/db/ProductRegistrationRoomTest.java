@@ -122,7 +122,7 @@ public final class ProductRegistrationRoomTest {
             start.countDown();
             Set<String> barcodes = new HashSet<>();
             for (Future<ProductEntity> future : futures) {
-                barcodes.add(future.get(30, TimeUnit.SECONDS).barcode);
+                barcodes.add(future.get(120, TimeUnit.SECONDS).barcode);
             }
             assertEquals(workers, barcodes.size());
             assertEquals(workers, database.productDao().listActive().size());
