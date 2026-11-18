@@ -16,7 +16,7 @@ public final class DatabaseGuards {
         db.execSQL("CREATE TRIGGER IF NOT EXISTS barcode_registry_no_delete BEFORE DELETE ON barcode_registry BEGIN SELECT RAISE(ABORT, 'barcode_registry_immutable'); END");
 
         db.execSQL("DROP TRIGGER IF EXISTS barcode_counter_insert_guard");
-        db.execSQL("CREATE TRIGGER IF NOT EXISTS barcode_counter_insert_guard BEFORE INSERT ON barcode_counter WHEN NEW.id != 1 OR NEW.next_value < 2000001 BEGIN SELECT RAISE(ABORT, 'barcode_counter_invalid'); END");
+        db.execSQL("CREATE TRIGGER IF NOT EXISTS barcode_counter_insert_guard BEFORE INSERT ON barcode_counter WHEN NEW.id != 1 OR NEW.next_value < 2000001 OR NEW.next_value < OLD.next_value BEGIN SELECT RAISE(ABORT, 'barcode_counter_invalid'); END");
         db.execSQL("DROP TRIGGER IF EXISTS barcode_counter_update_guard");
         db.execSQL("CREATE TRIGGER IF NOT EXISTS barcode_counter_update_guard BEFORE UPDATE ON barcode_counter WHEN NEW.id != OLD.id OR NEW.id != 1 OR NEW.next_value < 2000001 BEGIN SELECT RAISE(ABORT, 'barcode_counter_invalid'); END");
         db.execSQL("DROP TRIGGER IF EXISTS barcode_counter_no_delete");
@@ -48,7 +48,7 @@ public final class DatabaseGuards {
 
     public static void installBackupJournal(@NonNull SupportSQLiteDatabase db) {
         db.execSQL("DROP TRIGGER IF EXISTS backup_journal_insert_guard");
-        db.execSQL("CREATE TRIGGER IF NOT EXISTS backup_journal_insert_guard BEFORE INSERT ON backup_journal WHEN length(trim(NEW.operation_id)) = 0 OR length(trim(NEW.op)) = 0 OR length(NEW.payload_sha256) != 64 OR NEW.schema_version < 1 OR NEW.uploaded NOT IN (0,1) BEGIN SELECT RAISE(ABORT, 'backup_journal_invalid'); END");
+        db.execSQL("CREATE TRIGGER IF NOT EXISTS backup_journal_insert_guard BEFORE INSERT ON backup_journal WHEN length(trim(NEW.operation_id)) = 0 OR length(trim(NEW.op)) = 0 OR length(NEW.payload_sha256) != 64 OR NEW.payload_sha256 GLOB '*[^0-9a-fA-F]*' OR NEW.schema_version < 1 OR NEW.uploaded NOT IN (0,1) BEGIN SELECT RAISE(ABORT, 'backup_journal_invalid'); END");
         db.execSQL("DROP TRIGGER IF EXISTS backup_journal_update_guard");
         db.execSQL("CREATE TRIGGER IF NOT EXISTS backup_journal_update_guard BEFORE UPDATE ON backup_journal WHEN OLD.seq != NEW.seq OR OLD.operation_id != NEW.operation_id OR OLD.op != NEW.op OR OLD.payload != NEW.payload OR OLD.payload_sha256 != NEW.payload_sha256 OR OLD.schema_version != NEW.schema_version OR OLD.created_at_utc != NEW.created_at_utc OR OLD.uploaded != 0 OR NEW.uploaded != 1 BEGIN SELECT RAISE(ABORT, 'backup_journal_immutable'); END");
         db.execSQL("DROP TRIGGER IF EXISTS backup_journal_no_delete");
