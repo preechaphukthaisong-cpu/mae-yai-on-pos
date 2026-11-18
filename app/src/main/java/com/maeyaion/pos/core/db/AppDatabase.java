@@ -31,7 +31,7 @@ public abstract class AppDatabase extends RoomDatabase {
     public abstract OpLogDao opLogDao();
     public abstract BackupJournalDao backupJournalDao();
 
-    static RoomDatabase.Callback databaseCallback() {
+    public static RoomDatabase.Callback databaseCallback() {
         return new RoomDatabase.Callback() {
             @Override
             public void onCreate(@NonNull SupportSQLiteDatabase db) {
