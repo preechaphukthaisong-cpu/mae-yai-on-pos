@@ -89,6 +89,8 @@ public final class AppDatabaseMigrationTest {
         openFreshDatabase();
         SupportSQLiteDatabase sql = database.getOpenHelper().getWritableDatabase();
         insertBarcodeAndProduct(sql);
+        sql.execSQL("INSERT INTO barcode_registry(barcode, display_name, price_satang, source_type, created_at_utc) VALUES('000124', 'Invalid opening stock', 100, 'MANUFACTURER', '2026-11-17T00:00:00Z')");
+        assertSqlFails(() -> sql.execSQL("INSERT INTO product(sku, barcode, name, price_satang, cost_satang, unit, stock_limit_qty_milli, stock_qty_milli, is_active, created_at_utc, updated_at_utc) VALUES('SKU-OPENING', '000124', 'Invalid opening stock', 100, 50, 'ชิ้น', NULL, 1, 1, 'now', 'now')"));
         assertSqlFails(() -> sql.execSQL("UPDATE product SET stock_qty_milli = 500 WHERE sku = 'SKU-1'"));
         assertSqlFails(() -> sql.execSQL("UPDATE product SET price_satang = -1 WHERE sku = 'SKU-1'"));
         assertSqlFails(() -> sql.execSQL("DELETE FROM product WHERE sku = 'SKU-1'"));
