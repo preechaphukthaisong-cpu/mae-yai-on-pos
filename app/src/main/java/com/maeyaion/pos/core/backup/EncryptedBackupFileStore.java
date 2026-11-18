@@ -37,43 +37,115 @@ public final class EncryptedBackupFileStore {
         }
     }
 
+    /**
+     * Stores a portable encrypted backup plus a device-only Keystore-wrapped DEK sidecar.
+     * Upload only the returned .myobak file; never upload the .localkey sidecar.
+     */
+    public File writeBackupWithLocalKey(File privateBackupDirectory, byte[] databaseSnapshot,
+            char[] recoveryPassword, String recoveryKey, AndroidKeystoreKeyProtector protector)
+            throws IOException, GeneralSecurityException {
+        requireDirectory(privateBackupDirectory);
+        BackupCrypto.EncryptedEnvelope encrypted = BackupCrypto.encryptWithLocalKeyProtector(
+                databaseSnapshot, recoveryPassword, recoveryKey, protector);
+        String id = UUID.randomUUID().toString();
+        File backupTemp = new File(privateBackupDirectory, "." + id + TEMP_SUFFIX);
+        File keyTemp = new File(privateBackupDirectory, "." + id + ".key" + TEMP_SUFFIX);
+        File backup = new File(privateBackupDirectory, id + BACKUP_SUFFIX);
+        File localKey = localKeyFile(backup);
+        try {
+            writeAndSync(backupTemp, encrypted.envelope);
+            writeAndSync(keyTemp, encrypted.locallyProtectedDataKey);
+            if (!keyTemp.renameTo(localKey)) throw new IOException("Unable to publish local Keystore key sidecar");
+            if (!backupTemp.renameTo(backup)) {
+                // The encrypted portable backup is the publication marker.
+                // If publication fails, remove its otherwise orphaned sidecar.
+                //noinspection ResultOfMethodCallIgnored
+                localKey.delete();
+                throw new IOException("Atomic backup publication failed");
+            }
+            return backup;
+        } finally {
+            wipe(encrypted.envelope);
+            wipe(encrypted.locallyProtectedDataKey);
+            if (backupTemp.exists()) backupTemp.delete();
+            if (keyTemp.exists()) keyTemp.delete();
+        }
+    }
+
+    /** Restores on the originating installation using its Keystore-protected DEK. */
+    public File restoreWithLocalKeyToStaging(File privateStagingDirectory, File encryptedBackup,
+            AndroidKeystoreKeyProtector protector, StagedRestoreValidator validator)
+            throws IOException, GeneralSecurityException {
+        requireDirectory(privateStagingDirectory);
+        requireBackupFile(encryptedBackup);
+        File localKey = localKeyFile(encryptedBackup);
+        if (!localKey.isFile() || localKey.length() != 60) {
+            throw new IOException("Local Keystore key sidecar is missing or invalid; use Recovery Password or Recovery Key");
+        }
+        byte[] envelope = readBounded(encryptedBackup);
+        byte[] protectedKey = readBounded(localKey);
+        byte[] plaintext = null;
+        try {
+            plaintext = BackupCrypto.decryptWithLocalKey(envelope, protectedKey, protector);
+            return publishStagedPlaintext(privateStagingDirectory, plaintext, validator);
+        } finally {
+            wipe(envelope);
+            wipe(protectedKey);
+            wipe(plaintext);
+        }
+    }
+
     public File restoreToStaging(File privateStagingDirectory, File encryptedBackup,
                                  char[] recoveryPassword, String recoveryKey,
                                  StagedRestoreValidator validator)
             throws IOException, GeneralSecurityException {
         requireDirectory(privateStagingDirectory);
-        if (encryptedBackup == null || !encryptedBackup.isFile()
-                || !encryptedBackup.getName().endsWith(BACKUP_SUFFIX)) {
-            throw new IOException("Backup file is missing or has an unsupported extension");
-        }
-        File temporary = new File(privateStagingDirectory,
-                "." + UUID.randomUUID() + TEMP_SUFFIX);
-        File staged = new File(privateStagingDirectory,
-                UUID.randomUUID() + ".restore.db");
-        if (encryptedBackup.length() <= 0 || encryptedBackup.length() > MAX_ENVELOPE_BYTES) {
-            throw new IOException("Backup file size is outside the supported range");
-        }
-        byte[] envelope = java.nio.file.Files.readAllBytes(encryptedBackup.toPath());
+        requireBackupFile(encryptedBackup);
+        byte[] envelope = readBounded(encryptedBackup);
         byte[] plaintext = null;
         try {
             plaintext = recoveryPassword != null
                     ? BackupCrypto.decryptWithPassword(envelope, recoveryPassword)
                     : BackupCrypto.decryptWithRecoveryKey(envelope, recoveryKey);
+            return publishStagedPlaintext(privateStagingDirectory, plaintext, validator);
+        } finally {
+            wipe(envelope);
+            wipe(plaintext);
+        }
+    }
+
+    private static File publishStagedPlaintext(File directory, byte[] plaintext,
+            StagedRestoreValidator validator) throws IOException {
+        File temporary = new File(directory, "." + UUID.randomUUID() + TEMP_SUFFIX);
+        File staged = new File(directory, UUID.randomUUID() + ".restore.db");
+        try {
             writeAndSync(temporary, plaintext);
             if (validator == null || !validator.isValid(temporary)) {
                 throw new IOException("Staged database failed integrity/schema validation");
             }
-            if (!temporary.renameTo(staged)) {
-                throw new IOException("Unable to publish staged restore file");
-            }
+            if (!temporary.renameTo(staged)) throw new IOException("Unable to publish staged restore file");
             return staged;
         } finally {
-            wipe(envelope);
-            wipe(plaintext);
-            if (temporary.exists() && !temporary.delete()) {
-                // Best effort cleanup; no live database path is touched here.
-            }
+            if (temporary.exists()) temporary.delete();
         }
+    }
+
+    private static void requireBackupFile(File encryptedBackup) throws IOException {
+        if (encryptedBackup == null || !encryptedBackup.isFile()
+                || !encryptedBackup.getName().endsWith(BACKUP_SUFFIX)) {
+            throw new IOException("Backup file is missing or has an unsupported extension");
+        }
+    }
+
+    private static File localKeyFile(File backup) {
+        return new File(backup.getParentFile(), backup.getName() + ".localkey");
+    }
+
+    private static byte[] readBounded(File file) throws IOException {
+        if (file.length() <= 0 || file.length() > MAX_ENVELOPE_BYTES) {
+            throw new IOException("Backup file size is outside the supported range");
+        }
+        return java.nio.file.Files.readAllBytes(file.toPath());
     }
 
     private static void requireDirectory(File directory) throws IOException {
