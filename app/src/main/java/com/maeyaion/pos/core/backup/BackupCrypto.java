@@ -49,50 +49,83 @@ public final class BackupCrypto {
 
     public static byte[] encrypt(byte[] plaintext, char[] recoveryPassword, String recoveryKey)
             throws GeneralSecurityException {
+        return encryptInternal(plaintext, recoveryPassword, recoveryKey, null).envelope.clone();
+    }
+
+    /** Creates a portable envelope and a separate device-bound DEK wrapper. */
+    public static EncryptedEnvelope encryptWithLocalKeyProtector(byte[] plaintext,
+            char[] recoveryPassword, String recoveryKey, AndroidKeystoreKeyProtector protector)
+            throws GeneralSecurityException {
+        if (protector == null) throw new GeneralSecurityException("Local key protector is required");
+        return encryptInternal(plaintext, recoveryPassword, recoveryKey, protector);
+    }
+
+    private static EncryptedEnvelope encryptInternal(byte[] plaintext, char[] recoveryPassword,
+            String recoveryKey, AndroidKeystoreKeyProtector localProtector)
+            throws GeneralSecurityException {
         requirePayload(plaintext);
         requirePasswordForCreation(recoveryPassword);
-        byte[] recoveryKeyBytes = decodeRecoveryKey(recoveryKey);
 
-        byte[] dataKey = randomBytes(KEY_BYTES);
-        byte[] payloadNonce = randomBytes(NONCE_BYTES);
-        byte[] passwordSalt = randomBytes(SALT_BYTES);
-        byte[] passwordNonce = randomBytes(NONCE_BYTES);
-        byte[] recoveryNonce = randomBytes(NONCE_BYTES);
+        byte[] recoveryKeyBytes = null;
+        byte[] dataKey = null;
+        byte[] passwordKey = null;
+        byte[] recoveryWrappingKey = null;
+        byte[] authenticatedPlaintext = null;
+        byte[] digest = null;
+        byte[] passwordWrapped = null;
+        byte[] recoveryWrapped = null;
+        byte[] ciphertext = null;
+        byte[] locallyProtectedKey = null;
+        try {
+            recoveryKeyBytes = decodeRecoveryKey(recoveryKey);
+            dataKey = randomBytes(KEY_BYTES);
+            byte[] payloadNonce = randomBytes(NONCE_BYTES);
+            byte[] passwordSalt = randomBytes(SALT_BYTES);
+            byte[] passwordNonce = randomBytes(NONCE_BYTES);
+            byte[] recoveryNonce = randomBytes(NONCE_BYTES);
 
-        byte[] baseHeader = baseHeader(payloadNonce, passwordSalt, passwordNonce, recoveryNonce);
-        byte[] passwordKey = derivePasswordKey(recoveryPassword, passwordSalt);
-        byte[] recoveryWrappingKey = recoveryWrappingKey(recoveryKeyBytes);
+            byte[] baseHeader = baseHeader(payloadNonce, passwordSalt, passwordNonce, recoveryNonce);
+            passwordKey = derivePasswordKey(recoveryPassword, passwordSalt);
+            recoveryWrappingKey = recoveryWrappingKey(recoveryKeyBytes);
 
-        byte[] passwordWrapped = gcm(Cipher.ENCRYPT_MODE, new SecretKeySpec(passwordKey, "AES"), passwordNonce,
-                wrapAad(baseHeader, "password"), dataKey);
-        byte[] recoveryWrapped = gcm(Cipher.ENCRYPT_MODE, new SecretKeySpec(recoveryWrappingKey, "AES"), recoveryNonce,
-                wrapAad(baseHeader, "recovery"), dataKey);
+            passwordWrapped = gcm(Cipher.ENCRYPT_MODE, new SecretKeySpec(passwordKey, "AES"),
+                    passwordNonce, wrapAad(baseHeader, "password"), dataKey);
+            recoveryWrapped = gcm(Cipher.ENCRYPT_MODE, new SecretKeySpec(recoveryWrappingKey, "AES"),
+                    recoveryNonce, wrapAad(baseHeader, "recovery"), dataKey);
 
-        byte[] digest = sha256(plaintext);
-        byte[] authenticatedPlaintext = new byte[DIGEST_BYTES + plaintext.length];
-        System.arraycopy(digest, 0, authenticatedPlaintext, 0, DIGEST_BYTES);
-        System.arraycopy(plaintext, 0, authenticatedPlaintext, DIGEST_BYTES, plaintext.length);
+            digest = sha256(plaintext);
+            authenticatedPlaintext = new byte[DIGEST_BYTES + plaintext.length];
+            System.arraycopy(digest, 0, authenticatedPlaintext, 0, DIGEST_BYTES);
+            System.arraycopy(plaintext, 0, authenticatedPlaintext, DIGEST_BYTES, plaintext.length);
 
-        int ciphertextLength = authenticatedPlaintext.length + GCM_TAG_BITS / 8;
-        byte[] header = fullHeader(payloadNonce, passwordSalt, passwordNonce, recoveryNonce,
-                ciphertextLength);
-        byte[] ciphertext = gcm(Cipher.ENCRYPT_MODE, new SecretKeySpec(dataKey, "AES"),
-                payloadNonce, header, authenticatedPlaintext);
+            int ciphertextLength = authenticatedPlaintext.length + GCM_TAG_BITS / 8;
+            byte[] header = fullHeader(payloadNonce, passwordSalt, passwordNonce, recoveryNonce,
+                    ciphertextLength);
+            ciphertext = gcm(Cipher.ENCRYPT_MODE, new SecretKeySpec(dataKey, "AES"),
+                    payloadNonce, header, authenticatedPlaintext);
 
-        ByteArrayOutputStream output = new ByteArrayOutputStream(
-                header.length + passwordWrapped.length + recoveryWrapped.length + ciphertext.length);
-        output.write(header, 0, header.length);
-        output.write(passwordWrapped, 0, passwordWrapped.length);
-        output.write(recoveryWrapped, 0, recoveryWrapped.length);
-        output.write(ciphertext, 0, ciphertext.length);
+            if (localProtector != null) locallyProtectedKey = localProtector.protect(dataKey);
 
-        wipe(dataKey);
-        wipe(passwordKey);
-        wipe(recoveryWrappingKey);
-        wipe(recoveryKeyBytes);
-        wipe(authenticatedPlaintext);
-        wipe(digest);
-        return output.toByteArray();
+            ByteArrayOutputStream output = new ByteArrayOutputStream(
+                    header.length + passwordWrapped.length + recoveryWrapped.length + ciphertext.length);
+            output.write(header, 0, header.length);
+            output.write(passwordWrapped, 0, passwordWrapped.length);
+            output.write(recoveryWrapped, 0, recoveryWrapped.length);
+            output.write(ciphertext, 0, ciphertext.length);
+            return new EncryptedEnvelope(output.toByteArray(), locallyProtectedKey);
+        } finally {
+            wipe(recoveryKeyBytes);
+            wipe(dataKey);
+            wipe(passwordKey);
+            wipe(recoveryWrappingKey);
+            wipe(authenticatedPlaintext);
+            wipe(digest);
+            wipe(passwordWrapped);
+            wipe(recoveryWrapped);
+            wipe(ciphertext);
+            // EncryptedEnvelope owns a defensive copy of this wrapped key.
+            wipe(locallyProtectedKey);
+        }
     }
 
     public static byte[] decryptWithPassword(byte[] envelope, char[] password)
@@ -121,6 +154,14 @@ public final class BackupCrypto {
             wipe(recoveryBytes);
             wipe(wrappingKey);
         }
+    }
+
+    public static byte[] decryptWithLocalKey(byte[] envelope, byte[] locallyProtectedDataKey,
+            AndroidKeystoreKeyProtector protector) throws GeneralSecurityException {
+        if (protector == null) throw new GeneralSecurityException("Local key protector is required");
+        Parsed parsed = parse(envelope);
+        byte[] dataKey = protector.unprotect(locallyProtectedDataKey);
+        return decryptPayload(parsed, dataKey);
     }
 
     private static byte[] decryptPayload(Parsed parsed, byte[] dataKey)
@@ -279,6 +320,17 @@ public final class BackupCrypto {
 
     private static void wipe(byte[] value) {
         if (value != null) Arrays.fill(value, (byte) 0);
+    }
+
+    public static final class EncryptedEnvelope {
+        public final byte[] envelope;
+        public final byte[] locallyProtectedDataKey;
+
+        private EncryptedEnvelope(byte[] envelope, byte[] locallyProtectedDataKey) {
+            this.envelope = envelope.clone();
+            this.locallyProtectedDataKey = locallyProtectedDataKey == null
+                    ? null : locallyProtectedDataKey.clone();
+        }
     }
 
     private static final class Parsed {
