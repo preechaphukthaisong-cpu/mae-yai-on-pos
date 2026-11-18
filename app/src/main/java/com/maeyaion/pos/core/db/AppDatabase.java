@@ -18,7 +18,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase;
         StockLogEntity.class,
         OpLogEntity.class,
         BackupJournalEntity.class
-}, version = 3, exportSchema = true)
+}, version = 4, exportSchema = true)
 public abstract class AppDatabase extends RoomDatabase {
     private static volatile AppDatabase INSTANCE;
 
@@ -42,7 +42,7 @@ public abstract class AppDatabase extends RoomDatabase {
                                     AppDatabase.class,
                                     "maeyaion_pos.db")
                             .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                            .addMigrations(Migration1To2.INSTANCE, Migration2To3.INSTANCE)
+                            .addMigrations(Migration1To2.INSTANCE, Migration2To3.INSTANCE, Migration3To4.INSTANCE)
                             .addCallback(new Callback() {
                                 @Override
                                 public void onCreate(@NonNull SupportSQLiteDatabase db) {
