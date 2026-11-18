@@ -1,49 +1,50 @@
 # Implementation status
 
 ## Approved baseline
-Phase 2 design and business decisions O-001 through O-030 were approved and merged into `main` in PR #2 on 17 November 2026. The pre-reset implementation is preserved in `archive/pre-code-reset-2026-11-17`.
 
-## Authoritative feature phases
-0. Android foundation, one shared SQLite provider, versioned migrations, safe backup/restore and CI.
-1. Barcode sequence and barcode catalogue.
-2. Inventory: add/list/count/low-stock threshold.
-3. Cash sales and stock deduction.
-4. Credit sales and customer debt ledger.
-5. Sales history and safe retention.
-6. Store/product price management.
-7. Reports and sales-screen summaries.
-8. In-store parallel acceptance test for 1–2 weeks.
+Phase 2 design and business decisions O-001 through O-030 were approved and merged into `main` in PR #2 on 17 November 2026. The pre-reset implementation remains in `archive/pre-code-reset-2026-11-17`.
 
-The current branch implements only a subset of the foundation. It is not a complete POS.
+## Current development state
+
+Phase 3 is in progress on `phase-3-foundation` in PR #3. It is not accepted, is not production-ready, and is not a complete POS. Do not start Phase 4 until Phase 3 acceptance is complete.
+
+## Implemented source areas
+
+- Android Java scaffold, Java 17, minSdk 26.
+- Room v4, WAL, explicit migrations 1→2→3→4, foundation entities and database guards.
+- Product/barcode registration, operation log and backup journal transaction path.
+- Integer-satang money and 5% bill-level Half Up fee calculation.
+- SQLite/WAL snapshot, staged restore and rollback-oriented activation.
+- AES-256-GCM backup envelope, Recovery Password/Recovery Key wrapping and Android Keystore local key protection.
+- Google Drive appDataFolder upload worker with app-private path and envelope-structure preflight.
+- CameraX/ML Kit offline scanner source and Thai TTS source.
+- Unit and instrumentation test source plus Android CI workflow.
+
+Source existence is not equivalent to passing CI, device acceptance or release readiness.
+
+## Known outstanding acceptance items
+
+- Latest CI must complete green on the current PR head; all test jobs must actually execute.
+- Drive OAuth consent/account selection, remote download/list, and end-to-end remote restore are not complete.
+- Durable delta-journal upload cursor/reconciliation and daily full-snapshot scheduling are not complete.
+- Only Room schema v4 is committed; historical schema coverage required by D-063 is unresolved.
+- Pool-wide SQLite durability PRAGMA enforcement required by D-064 is not proven.
+- Restore rollback failure-path coverage and real-device recovery tests remain.
+- Crypto and file storage currently materialize large payloads in memory; memory usage must be redesigned/tested for handset-sized resources.
+- Every production database write path must be audited against the maintenance gate.
+- Camera, Thai voice selection, process-death, power-loss and backup/recovery require physical-device acceptance.
+- Append-only audit/ledger retention needs a verifiable archive/reconciliation gate before purge.
 
 ## Required invariants
-- One app-private SQLite database; every screen uses the same provider.
-- Financial and stock writes are transactional and audited.
-- Money is integer satang.
-- Sale lines snapshot product name, barcode, cost and price.
-- Technical retries use unique idempotency keys; repeated legitimate purchases remain allowed.
-- No cloud sync, payment gateway or multi-device behavior.
-- Never purge unpaid debt, audit history or inventory evidence.
-- Backup and restore must be verified before retention purge.
+
+- One app-private SQLite database.
+- Financial and stock writes are atomic and audited.
+- Money is integer satang; no floating-point money.
+- Technical retries use idempotency keys.
+- No cloud sync, payment gateway or multi-device operation in v1.
 - Never transfer plaintext database or backup data to Google Drive.
-
-## Verified implementation at current branch head
-- Android Java scaffold, Java 17, minSdk 26, compile/target SDK 36.
-- Room database version 4 with explicit migrations 1→2→3→4.
-- Foundation entities/DAOs for app metadata, barcode registry/counter, product, customer, stock ledger, operation log and backup journal.
-- Database triggers protect barcode identity, product identity, zero-stock creation, stock-ledger consistency and append-only audit/journal rows.
-- Barcode allocation and product registration use transaction boundaries; idempotency is implemented for product registration.
-- Integer-satang value object and bill-level 5% Half Up fee calculator.
-- Offline Thai TTS selector/service exists, but actual device voice availability and lifecycle behavior are not device-verified.
-
-## Not implemented / not release-ready
-- Full POS screens and business workflows (sales, inventory UI, debt, reports, returns/cancellations and product management).
-- Google Drive account authorization and remote backup workflow.
-- Consistent SQLite snapshot, manifest validation, restore staging and recovery.
-- Retention archive/reconciliation and controlled purge. Append-only evidence must not be deleted until a verified archive/reconciliation gate exists.
-- SQLCipher, app lock and password-encrypted backup are assigned to Phase 10; plaintext remote transfer remains disabled until then.
-- CameraX/ML Kit offline scanner.
-- Real-device migration, process-death, power-loss, backup/restore and operational acceptance.
+- Never purge unpaid debt or audit/inventory evidence without the approved retention/archive safeguards.
 
 ## Acceptance policy
-A successful CI build proves only the checks that actually ran. It does not prove the complete POS is implemented, backup is recoverable, or the app is safe for live shop operations. Do not call this branch production-ready until the outstanding items above are implemented and tested.
+
+A successful build proves only the checks that actually ran. No merge, release tag, Phase 4 start or production-readiness claim is permitted until the Phase 3 checklist and physical-device acceptance are complete.
