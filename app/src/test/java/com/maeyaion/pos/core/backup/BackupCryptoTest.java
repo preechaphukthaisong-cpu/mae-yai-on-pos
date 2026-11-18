@@ -7,6 +7,8 @@ import static org.junit.Assert.fail;
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.io.File;
+import java.nio.file.Files;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
 
@@ -64,6 +66,27 @@ public final class BackupCryptoTest {
         expectFailure(() -> BackupCrypto.encrypt(new byte[]{1}, "short".toCharArray(),
                 BackupCrypto.generateRecoveryKey()));
         expectFailure(() -> BackupCrypto.encrypt(new byte[]{1}, PASSWORD, "not-a-key"));
+    }
+
+    @Test public void uploadPreflightAcceptsEnvelopeAndRejectsRenamedPlaintext() throws Exception {
+        String recoveryKey = BackupCrypto.generateRecoveryKey();
+        byte[] envelope = BackupCrypto.encrypt(new byte[]{4, 5, 6}, PASSWORD, recoveryKey);
+        File valid = File.createTempFile("backup-valid-", ".myobak");
+        File plain = File.createTempFile("backup-plain-", ".myobak");
+        try {
+            Files.write(valid.toPath(), envelope);
+            BackupCrypto.validateEnvelopeFile(valid);
+            Files.write(plain.toPath(), "plain sqlite bytes".getBytes(StandardCharsets.UTF_8));
+            try {
+                BackupCrypto.validateEnvelopeFile(plain);
+                fail("Plaintext renamed as .myobak must be rejected");
+            } catch (GeneralSecurityException expected) {
+                // Structural envelope validation rejects non-backup payloads.
+            }
+        } finally {
+            valid.delete();
+            plain.delete();
+        }
     }
 
     private static void expectFailure(CheckedAction action) throws Exception {
