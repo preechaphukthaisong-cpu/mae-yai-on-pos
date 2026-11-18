@@ -63,9 +63,9 @@ public final class BackupCrypto {
         byte[] passwordKey = derivePasswordKey(recoveryPassword, passwordSalt);
         byte[] recoveryWrappingKey = recoveryWrappingKey(recoveryKeyBytes);
 
-        byte[] passwordWrapped = gcm(Cipher.ENCRYPT_MODE, passwordKey, passwordNonce,
+        byte[] passwordWrapped = gcm(Cipher.ENCRYPT_MODE, new SecretKeySpec(passwordKey, "AES"), passwordNonce,
                 wrapAad(baseHeader, "password"), dataKey);
-        byte[] recoveryWrapped = gcm(Cipher.ENCRYPT_MODE, recoveryWrappingKey, recoveryNonce,
+        byte[] recoveryWrapped = gcm(Cipher.ENCRYPT_MODE, new SecretKeySpec(recoveryWrappingKey, "AES"), recoveryNonce,
                 wrapAad(baseHeader, "recovery"), dataKey);
 
         byte[] digest = sha256(plaintext);
@@ -100,7 +100,7 @@ public final class BackupCrypto {
         Parsed parsed = parse(envelope);
         byte[] passwordKey = derivePasswordKey(password, parsed.passwordSalt);
         try {
-            byte[] dataKey = gcm(Cipher.DECRYPT_MODE, passwordKey, parsed.passwordNonce,
+            byte[] dataKey = gcm(Cipher.DECRYPT_MODE, new SecretKeySpec(passwordKey, "AES"), parsed.passwordNonce,
                     wrapAad(parsed.baseHeader, "password"), parsed.passwordWrapped);
             return decryptPayload(parsed, dataKey);
         } finally {
@@ -114,7 +114,7 @@ public final class BackupCrypto {
         byte[] recoveryBytes = decodeRecoveryKey(recoveryKey);
         byte[] wrappingKey = recoveryWrappingKey(recoveryBytes);
         try {
-            byte[] dataKey = gcm(Cipher.DECRYPT_MODE, wrappingKey, parsed.recoveryNonce,
+            byte[] dataKey = gcm(Cipher.DECRYPT_MODE, new SecretKeySpec(wrappingKey, "AES"), parsed.recoveryNonce,
                     wrapAad(parsed.baseHeader, "recovery"), parsed.recoveryWrapped);
             return decryptPayload(parsed, dataKey);
         } finally {
