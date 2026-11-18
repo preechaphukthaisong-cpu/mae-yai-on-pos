@@ -94,6 +94,19 @@ public final class BackupSnapshotRestoreTest {
         File restoredByRecoveryKey = store.restoreToStaging(stagingDirectory, encrypted, null,
                 recoveryKey, new SQLiteStagedRestoreValidator(4));
         assertTrue(restoredByRecoveryKey.isFile());
+
+        AndroidKeystoreKeyProtector localProtector = new AndroidKeystoreKeyProtector();
+        File localEncrypted = store.writeBackupWithLocalKey(backupDirectory, rawSnapshot,
+                PASSWORD, recoveryKey, localProtector);
+        File restoredLocally = store.restoreWithLocalKeyToStaging(stagingDirectory,
+                localEncrypted, localProtector, new SQLiteStagedRestoreValidator(4));
+        assertTrue(restoredLocally.isFile());
+        File restoredPortablePassword = store.restoreToStaging(stagingDirectory,
+                localEncrypted, PASSWORD, null, new SQLiteStagedRestoreValidator(4));
+        assertTrue(restoredPortablePassword.isFile());
+        File restoredPortableRecovery = store.restoreToStaging(stagingDirectory,
+                localEncrypted, null, recoveryKey, new SQLiteStagedRestoreValidator(4));
+        assertTrue(restoredPortableRecovery.isFile());
     }
 
     @Test public void wrongPasswordAndInvalidSqlitePayloadNeverPublishStagedDatabase()
