@@ -59,7 +59,11 @@ jobs:
           emulator-boot-timeout: 900000
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot
           disable-animations: true
-          script: gradle --no-daemon :app:connectedDebugAndroidTest
+          script: |
+            adb shell settings put global package_verifier_enable 0 || true
+            adb shell settings put global verifier_verify_adb_installs 0 || true
+            adb shell settings put global package_verifier_user_consent -1 || true
+            gradle --no-daemon :app:connectedDebugAndroidTest
       - name: Assemble debug APK
         run: gradle --no-daemon :app:assembleDebug
       - name: Upload debug APK
