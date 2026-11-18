@@ -10,7 +10,6 @@ import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Base64;
 
-import javax.crypto.AEADBadTagException;
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
@@ -82,10 +81,10 @@ public final class BackupCrypto {
 
         ByteArrayOutputStream output = new ByteArrayOutputStream(
                 header.length + passwordWrapped.length + recoveryWrapped.length + ciphertext.length);
-        output.write(header);
-        output.write(passwordWrapped);
-        output.write(recoveryWrapped);
-        output.write(ciphertext);
+        output.write(header, 0, header.length);
+        output.write(passwordWrapped, 0, passwordWrapped.length);
+        output.write(recoveryWrapped, 0, recoveryWrapped.length);
+        output.write(ciphertext, 0, ciphertext.length);
 
         wipe(dataKey);
         wipe(passwordKey);
