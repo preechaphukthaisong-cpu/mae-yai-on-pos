@@ -44,15 +44,15 @@ public final class ProductRegistrationService {
         validateProduct(sku, name, priceSatang, costSatang, unit,
                 stockLimitQtyMilli, createdAtUtc, updatedAtUtc);
         return transactions.runInTransaction(() -> {
-            ProductEntity replay = findReplay(operationId, sku, name, priceSatang,
-                    costSatang, unit, stockLimitQtyMilli, createdAtUtc, updatedAtUtc);
+            ProductEntity replay = findReplay(operationId, "PRODUCT_CREATE_SYSTEM", sku, name,
+                    priceSatang, costSatang, unit, stockLimitQtyMilli, createdAtUtc, updatedAtUtc);
             if (replay != null) return replay;
             BarcodeRegistryEntity barcode = barcodeAllocator.allocateSystemInTransaction(
                     name, priceSatang, createdAtUtc);
             ProductEntity product = new ProductEntity(sku, barcode.barcode, name,
                     priceSatang, costSatang, unit, stockLimitQtyMilli, 0L, 1,
                     createdAtUtc, updatedAtUtc);
-            persistEvidence(product, operationId, createdAtUtc);
+            persistEvidence(product, operationId, "PRODUCT_CREATE_SYSTEM", createdAtUtc);
             productDao.insert(product);
             return product;
         });
@@ -67,33 +67,39 @@ public final class ProductRegistrationService {
         validateProduct(sku, name, priceSatang, costSatang, unit,
                 stockLimitQtyMilli, createdAtUtc, updatedAtUtc);
         return transactions.runInTransaction(() -> {
-            ProductEntity replay = findReplay(operationId, sku, name, priceSatang,
-                    costSatang, unit, stockLimitQtyMilli, createdAtUtc, updatedAtUtc);
-            if (replay != null) return replay;
+            ProductEntity replay = findReplay(operationId, "PRODUCT_CREATE_MANUFACTURER", sku, name,
+                    priceSatang, costSatang, unit, stockLimitQtyMilli, createdAtUtc, updatedAtUtc);
+            if (replay != null) {
+                if (!barcodeValue.equals(replay.barcode)) {
+                    throw new IllegalStateException("Idempotency key was already used for a different barcode");
+                }
+                return replay;
+            }
             BarcodeRegistryEntity barcode = barcodeAllocator.registerManufacturerInTransaction(
                     barcodeValue, name, priceSatang, createdAtUtc);
             ProductEntity product = new ProductEntity(sku, barcode.barcode, name,
                     priceSatang, costSatang, unit, stockLimitQtyMilli, 0L, 1,
                     createdAtUtc, updatedAtUtc);
-            persistEvidence(product, operationId, createdAtUtc);
+            persistEvidence(product, operationId, "PRODUCT_CREATE_MANUFACTURER", createdAtUtc);
             productDao.insert(product);
             return product;
         });
     }
 
-    private ProductEntity findReplay(String operationId, String sku, String name,
+    private ProductEntity findReplay(String operationId, String expectedOperation, String sku, String name,
             long priceSatang, long costSatang, String unit, Long stockLimitQtyMilli,
             String createdAtUtc, String updatedAtUtc) {
         BackupJournalEntity prior = backupJournalDao.findByOperationId(operationId);
         if (prior == null) return null;
         ProductEntity existing = productDao.findBySku(sku);
-        if (!"PRODUCT_CREATE".equals(prior.op) || existing == null
+        if (!expectedOperation.equals(prior.op) || existing == null
                 || !name.equals(existing.name) || priceSatang != existing.priceSatang
                 || costSatang != existing.costSatang || !unit.equals(existing.unit)
                 || !Objects.equals(stockLimitQtyMilli, existing.stockLimitQtyMilli)
                 || !createdAtUtc.equals(existing.createdAtUtc)
                 || !updatedAtUtc.equals(existing.updatedAtUtc)
-                || !prior.payload.equals(canonicalPayload(existing))) {
+                || !prior.payload.equals(canonicalPayload(existing, expectedOperation))
+                || !prior.payload_sha256.equals(sha256(prior.payload))) {
             throw new IllegalStateException("Idempotency key was already used for a different operation");
         }
         return existing;
@@ -109,17 +115,18 @@ public final class ProductRegistrationService {
         }
     }
 
-    private void persistEvidence(ProductEntity product, String operationId, String createdAtUtc) {
-        String payload = canonicalPayload(product);
+    private void persistEvidence(ProductEntity product, String operationId,
+            String operation, String createdAtUtc) {
+        String payload = canonicalPayload(product, operation);
         String digest = sha256(payload);
-        opLogDao.append(new OpLogEntity(UUID.randomUUID().toString(), "PRODUCT_CREATE",
+        opLogDao.append(new OpLogEntity(UUID.randomUUID().toString(), operation,
                 "PRODUCT", product.sku, payload, createdAtUtc));
-        backupJournalDao.append(new BackupJournalEntity(0L, operationId, "PRODUCT_CREATE",
+        backupJournalDao.append(new BackupJournalEntity(0L, operationId, operation,
                 payload, digest, 4, createdAtUtc, 0));
     }
 
-    private static String canonicalPayload(ProductEntity product) {
-        return "{\\"v\\":1,\\"op\\":\\"PRODUCT_CREATE\\","
+    private static String canonicalPayload(ProductEntity product, String operation) {
+        return "{\\"v\\":1,\\"op\\":\\"" + operation + "\\","
                 + "\\"sku\\":\\"" + jsonEscape(product.sku) + "\\","
                 + "\\"barcode\\":\\"" + jsonEscape(product.barcode) + "\\","
                 + "\\"name\\":\\"" + jsonEscape(product.name) + "\\","
