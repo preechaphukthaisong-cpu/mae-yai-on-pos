@@ -282,6 +282,9 @@ public final class BackupCrypto {
     }
 
     private static byte[] decodeRecoveryKey(String encoded) throws GeneralSecurityException {
+        if (encoded == null || encoded.isEmpty()) {
+            throw new GeneralSecurityException("Recovery Key is required");
+        }
         try {
             byte[] key = Base64.getUrlDecoder().decode(encoded);
             if (key.length != KEY_BYTES) {
