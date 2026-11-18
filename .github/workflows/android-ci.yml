@@ -33,7 +33,13 @@ jobs:
             echo "::error::Android SDK directory not found: $SDK_ROOT"
             exit 1
           fi
-          SDKMANAGER="$(find "$SDK_ROOT" -type f -name sdkmanager -perm -u+x 2>/dev/null | sort -V | tail -n 1)"
+          SDKMANAGER="$(command -v sdkmanager || true)"
+          if [[ -z "$SDKMANAGER" && -d "$SDK_ROOT/cmdline-tools" ]]; then
+            SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -maxdepth 4 -type f -name sdkmanager -perm -u+x 2>/dev/null | sort -V | tail -n 1)"
+          fi
+          if [[ -z "$SDKMANAGER" && -x "$SDK_ROOT/tools/bin/sdkmanager" ]]; then
+            SDKMANAGER="$SDK_ROOT/tools/bin/sdkmanager"
+          fi
           if [[ -z "$SDKMANAGER" ]]; then
             echo "::error::sdkmanager was not found under $SDK_ROOT"
             find "$SDK_ROOT" -maxdepth 4 -type d -print | head -n 80
