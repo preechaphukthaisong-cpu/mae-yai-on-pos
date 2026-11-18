@@ -12,7 +12,7 @@ concurrency:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - name: Set up JDK 17
@@ -60,57 +60,41 @@ jobs:
       - name: Run database instrumentation tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          # API 34 is used for a more stable CI emulator; compile/target SDK remain 36.
           api-level: 34
           arch: x86_64
           target: google_apis
           emulator-boot-timeout: 900
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -memory 4096
           disable-animations: true
-          script: |
-            set -eu
-            adb wait-for-device
-
-            echo "Waiting for Android package service..."
-            if ! timeout 180 sh -c 'until adb shell service check package 2>/dev/null | grep -q found; do sleep 2; done'; then
-              adb shell service list || true
-              adb logcat -d -b all > "$RUNNER_TEMP/emulator-logcat.txt" || true
-              echo "::error::Android package service did not become ready within 180 seconds"
-              exit 1
-            fi
-            echo "Android package service is ready."
-
-            adb shell settings put global package_verifier_enable 0 || true
-            adb shell settings put global verifier_verify_adb_installs 0 || true
-            adb shell settings put global package_verifier_user_consent -1 || true
-
-            set +e
-            gradle --no-daemon :app:connectedDebugAndroidTest
-            TEST_EXIT=$?
-            set -e
-            adb logcat -d -b all > "$RUNNER_TEMP/emulator-logcat.txt" || true
-            if [ "$TEST_EXIT" -ne 0 ]; then
-              echo "::error::Database instrumentation tests failed; emulator logcat captured"
-              tail -n 160 "$RUNNER_TEMP/emulator-logcat.txt" || true
-              exit "$TEST_EXIT"
-            fi
+          # Keep this to one command: this action invokes each script line separately.
+          script: bash .github/scripts/run-emulator-tests.sh
       - name: Upload emulator logcat
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: mae-yai-on-pos-emulator-logcat
           path: ${{ runner.temp }}/emulator-logcat.txt
-          if-no-files-found: ignore
+          if-no-files-found: warn
           retention-days: 7
       - name: Assemble debug APK
         run: gradle --no-daemon :app:assembleDebug
+      - name: Verify Room schema export
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s app/schemas/4.json || {
+            echo "::error::Room schema v4 was not generated at app/schemas/4.json"
+            find app/schemas -maxdepth 2 -type f -print || true
+            exit 1
+          }
+          python3 -m json.tool app/schemas/4.json >/dev/null
       - name: Upload Room schema
         uses: actions/upload-artifact@v4
         with:
-          name: mae-yai-on-pos-room-schema
-          path: app/schemas/
+          name: mae-yai-on-pos-room-schema-v4
+          path: app/schemas/4.json
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 30
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
