@@ -11,10 +11,10 @@
 - [x] GitHub Actions unit-test and debug-APK pipeline.
 - [x] Disabled Android platform auto-backup pending the explicit encrypted backup design.
 - [x] Room v4 foundational entities and DAOs: barcode registry/counter, product, customer, stock ledger, operation log and backup journal.
-- [x] Explicit non-destructive migrations 1→2→3→4; preserve existing records and refresh database guards for existing v3 installations.
+- [x] Explicit non-destructive migrations 1→2→3→4; preserve existing records, refresh database guards for v3 installations and reconcile legacy stock balances into a migration baseline ledger entry.
 - [x] Shared database guard installer is called for fresh creation and migrations; protects barcode registry/counter, product identity/retention, initial zero stock, stock ledger, operation log and backup journal.
 - [x] Barcode allocator preserves manufacturer values as TEXT; generated values start at 2000001, skip collisions and reserve/update the counter in one transaction.
-- [x] ProductRegistrationService creates product + barcode + operation log + backup journal in one transaction; product stock always starts at zero.
+- [x] ProductRegistrationService creates product + barcode + operation log + backup journal in one transaction; product stock always starts at zero and UUID idempotency keys protect retries.
 - [x] Rollback unit tests verify that product insert failure reverts barcode registry, counter, operation log and backup journal.
 - [x] Unit tests for barcode collision skipping, leading-zero preservation, duplicate rejection and whitespace validation.
 - [x] Fresh-install barcode counter seed and database guards.
@@ -22,7 +22,7 @@
 ## Remaining
 - [ ] Export and commit Room schema JSON for every database version; current `app/schemas/` is not yet populated.
 - [ ] Resolve the append-only versus 90-day retention conflict with a verified archive/reconciliation design before implementing purge. Current stock/op log delete guards intentionally block deletion; retention is not yet implemented.
-- [ ] CI validation of the current schema-v4 changes; latest run must pass unit tests, migration instrumentation tests and APK build before this item can be checked.
+- [ ] CI validation of the current schema-v4 changes; latest run must pass unit tests, migration instrumentation tests and APK build before this item can be checked. Latest PR validation run: #102 (pending at last check).
 - [ ] Instrumentation tests for fresh creation, Migration 1→2→3→4 (including upgrade from v3), foreign keys, stock/product triggers, backup-journal immutability and rollback behavior (tests added; awaiting CI execution).
 - [ ] Phase 3 backup foundation services: snapshot manifest, reconciliation metadata and safe restore state (`backup_journal` table/DAO and migration are now implemented). Sales/returns/debt/reporting entities belong to their implementation phases (7–9), not Phase 3.
 - [ ] Backup journal, consistent SQLite snapshots, manifest/checksum validation, staged restore and safety snapshots.
