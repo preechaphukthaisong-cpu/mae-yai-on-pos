@@ -55,6 +55,9 @@ jobs:
           api-level: 35
           arch: x86_64
           target: google_apis
+          profile: pixel_2
+          emulator-boot-timeout: 900000
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot
           disable-animations: true
           script: gradle --no-daemon :app:connectedDebugAndroidTest
       - name: Assemble debug APK
