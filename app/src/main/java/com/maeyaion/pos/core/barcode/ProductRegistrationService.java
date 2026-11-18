@@ -66,6 +66,7 @@ public final class ProductRegistrationService {
             ProductEntity product = new ProductEntity(sku, barcode.barcode, name,
                     priceSatang, costSatang, unit, stockLimitQtyMilli, 0L, 1,
                     createdAtUtc, updatedAtUtc);
+            persistEvidence(product, createdAtUtc);
             productDao.insert(product);
             return product;
         });
