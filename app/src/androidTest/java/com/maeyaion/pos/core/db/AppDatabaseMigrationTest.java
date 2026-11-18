@@ -241,7 +241,7 @@ public final class AppDatabaseMigrationTest {
                 "product_identity_immutable", "product_no_delete",
                 "stock_log_validate", "stock_log_apply",
                 "stock_log_no_update", "stock_log_no_delete",
-                "op_log_no_update", "op_log_no_delete"};
+                "op_log_insert_guard", "op_log_no_update", "op_log_no_delete"};
         for (String name : names) assertTriggerExists(db, name);
     }
 

@@ -101,6 +101,37 @@ public final class ProductRegistrationServiceTest {
         assertEquals(1, store.registry.values.size());
     }
 
+    @Test public void invalidTimestampIsRejectedBeforeAnyPersistentWrite() {
+        Store store = new Store();
+        try {
+            service(store).createWithSystemBarcode(OP_1, "SKU-BAD-TIME",
+                    "Rice", 2500, 1800, "ถุง", null, "not-a-timestamp", TIME);
+            fail("Expected invalid UTC timestamp to be rejected");
+        } catch (IllegalArgumentException expected) {
+            assertTrue(expected.getMessage().contains("timestamp"));
+        }
+        assertTrue(store.registry.values.isEmpty());
+        assertTrue(store.products.values.isEmpty());
+        assertTrue(store.opLogs.entries.isEmpty());
+        assertTrue(store.journal.entries.isEmpty());
+    }
+
+    @Test public void idempotentReplayRejectsMismatchedBarcodeRegistryEvidence() {
+        Store store = new Store();
+        ProductRegistrationService service = service(store);
+        service.createWithSystemBarcode(OP_1, "SKU-EVIDENCE",
+                "Rice", 2500, 1800, "ถุง", null, TIME, TIME);
+        store.registry.values.put("2000001", new BarcodeRegistryEntity(
+                "2000001", "Tampered", 2500, "SYSTEM", TIME));
+        try {
+            service.createWithSystemBarcode(OP_1, "SKU-EVIDENCE",
+                    "Rice", 2500, 1800, "ถุง", null, TIME, TIME);
+            fail("Expected inconsistent registry evidence to be rejected");
+        } catch (IllegalStateException expected) {
+            assertTrue(expected.getMessage().contains("inconsistent"));
+        }
+    }
+
     private static ProductRegistrationService service(Store store) {
         BarcodeAllocator allocator = new BarcodeAllocator(store.registry, store.counter, store);
         return new ProductRegistrationService(allocator, store.products,

@@ -9,7 +9,7 @@ public final class DatabaseGuards {
 
     public static void installCore(@NonNull SupportSQLiteDatabase db) {
         db.execSQL("DROP TRIGGER IF EXISTS barcode_registry_insert_guard");
-        db.execSQL("CREATE TRIGGER IF NOT EXISTS barcode_registry_insert_guard BEFORE INSERT ON barcode_registry WHEN length(NEW.barcode) = 0 OR length(NEW.barcode) > 128 OR NEW.price_satang < 0 OR NEW.source_type NOT IN ('SYSTEM','MANUFACTURER') OR length(trim(NEW.display_name)) = 0 OR length(trim(NEW.created_at_utc)) = 0 BEGIN SELECT RAISE(ABORT, 'barcode_registry_invalid'); END");
+        db.execSQL("CREATE TRIGGER IF NOT EXISTS barcode_registry_insert_guard BEFORE INSERT ON barcode_registry WHEN length(NEW.barcode) = 0 OR length(NEW.barcode) > 128 OR NEW.barcode != trim(NEW.barcode) OR NEW.price_satang < 0 OR NEW.source_type NOT IN ('SYSTEM','MANUFACTURER') OR length(trim(NEW.display_name)) = 0 OR length(trim(NEW.created_at_utc)) = 0 BEGIN SELECT RAISE(ABORT, 'barcode_registry_invalid'); END");
         db.execSQL("DROP TRIGGER IF EXISTS barcode_registry_no_update");
         db.execSQL("CREATE TRIGGER IF NOT EXISTS barcode_registry_no_update BEFORE UPDATE ON barcode_registry BEGIN SELECT RAISE(ABORT, 'barcode_registry_immutable'); END");
         db.execSQL("DROP TRIGGER IF EXISTS barcode_registry_no_delete");
@@ -23,16 +23,16 @@ public final class DatabaseGuards {
         db.execSQL("CREATE TRIGGER IF NOT EXISTS barcode_counter_no_delete BEFORE DELETE ON barcode_counter BEGIN SELECT RAISE(ABORT, 'barcode_counter_immutable'); END");
 
         db.execSQL("DROP TRIGGER IF EXISTS product_insert_guard");
-        db.execSQL("CREATE TRIGGER IF NOT EXISTS product_insert_guard BEFORE INSERT ON product WHEN NEW.stock_qty_milli != 0 OR NEW.price_satang < 0 OR NEW.cost_satang < 0 OR (NEW.stock_limit_qty_milli IS NOT NULL AND NEW.stock_limit_qty_milli < 0) OR NEW.is_active NOT IN (0,1) OR length(trim(NEW.sku)) = 0 OR length(trim(NEW.name)) = 0 OR length(trim(NEW.unit)) = 0 BEGIN SELECT RAISE(ABORT, 'product_invalid_initial_state'); END");
+        db.execSQL("CREATE TRIGGER IF NOT EXISTS product_insert_guard BEFORE INSERT ON product WHEN NEW.stock_qty_milli != 0 OR NEW.price_satang < 0 OR NEW.cost_satang < 0 OR (NEW.stock_limit_qty_milli IS NOT NULL AND NEW.stock_limit_qty_milli < 0) OR NEW.is_active NOT IN (0,1) OR length(trim(NEW.sku)) = 0 OR NEW.sku != trim(NEW.sku) OR length(trim(NEW.name)) = 0 OR length(trim(NEW.unit)) = 0 OR length(trim(NEW.created_at_utc)) = 0 OR length(trim(NEW.updated_at_utc)) = 0 BEGIN SELECT RAISE(ABORT, 'product_invalid_initial_state'); END");
         db.execSQL("DROP TRIGGER IF EXISTS product_update_guard");
-        db.execSQL("CREATE TRIGGER IF NOT EXISTS product_update_guard BEFORE UPDATE ON product WHEN NEW.price_satang < 0 OR NEW.cost_satang < 0 OR (NEW.stock_limit_qty_milli IS NOT NULL AND NEW.stock_limit_qty_milli < 0) OR NEW.is_active NOT IN (0,1) OR (NEW.stock_qty_milli != OLD.stock_qty_milli AND NOT EXISTS (SELECT 1 FROM stock_log WHERE rowid = (SELECT MAX(rowid) FROM stock_log WHERE sku = OLD.sku) AND sku = OLD.sku AND before_qty_milli = OLD.stock_qty_milli AND after_qty_milli = NEW.stock_qty_milli)) BEGIN SELECT RAISE(ABORT, 'product_invalid_update'); END");
+        db.execSQL("CREATE TRIGGER IF NOT EXISTS product_update_guard BEFORE UPDATE ON product WHEN NEW.price_satang < 0 OR NEW.cost_satang < 0 OR (NEW.stock_limit_qty_milli IS NOT NULL AND NEW.stock_limit_qty_milli < 0) OR NEW.is_active NOT IN (0,1) OR length(trim(NEW.name)) = 0 OR length(trim(NEW.unit)) = 0 OR length(trim(NEW.updated_at_utc)) = 0 OR (NEW.stock_qty_milli != OLD.stock_qty_milli AND NOT EXISTS (SELECT 1 FROM stock_log WHERE rowid = (SELECT MAX(rowid) FROM stock_log WHERE sku = OLD.sku) AND sku = OLD.sku AND before_qty_milli = OLD.stock_qty_milli AND after_qty_milli = NEW.stock_qty_milli)) BEGIN SELECT RAISE(ABORT, 'product_invalid_update'); END");
         db.execSQL("DROP TRIGGER IF EXISTS product_identity_immutable");
         db.execSQL("CREATE TRIGGER IF NOT EXISTS product_identity_immutable BEFORE UPDATE ON product WHEN NEW.sku != OLD.sku OR NEW.barcode != OLD.barcode BEGIN SELECT RAISE(ABORT, 'product_identity_immutable'); END");
         db.execSQL("DROP TRIGGER IF EXISTS product_no_delete");
         db.execSQL("CREATE TRIGGER IF NOT EXISTS product_no_delete BEFORE DELETE ON product BEGIN SELECT RAISE(ABORT, 'product_retained'); END");
 
         db.execSQL("DROP TRIGGER IF EXISTS stock_log_validate");
-        db.execSQL("CREATE TRIGGER IF NOT EXISTS stock_log_validate BEFORE INSERT ON stock_log BEGIN SELECT CASE WHEN NEW.before_qty_milli < 0 OR NEW.after_qty_milli < 0 THEN RAISE(ABORT, 'stock_negative') END; SELECT CASE WHEN NEW.before_qty_milli != COALESCE((SELECT stock_qty_milli FROM product WHERE sku = NEW.sku), -1) THEN RAISE(ABORT, 'stock_before_mismatch') END; SELECT CASE WHEN NEW.diff_qty_milli != NEW.after_qty_milli - NEW.before_qty_milli THEN RAISE(ABORT, 'stock_diff_mismatch') END; SELECT CASE WHEN NEW.reason NOT IN ('RECEIVE','SALE','RETURN','CANCEL','COUNT_REPLACE') THEN RAISE(ABORT, 'stock_reason_invalid') END; END");
+        db.execSQL("CREATE TRIGGER IF NOT EXISTS stock_log_validate BEFORE INSERT ON stock_log BEGIN SELECT CASE WHEN length(trim(NEW.id)) = 0 OR length(trim(NEW.sku)) = 0 OR length(trim(NEW.created_at_utc)) = 0 OR NEW.before_qty_milli < 0 OR NEW.after_qty_milli < 0 THEN RAISE(ABORT, 'stock_negative') END; SELECT CASE WHEN NEW.before_qty_milli != COALESCE((SELECT stock_qty_milli FROM product WHERE sku = NEW.sku), -1) THEN RAISE(ABORT, 'stock_before_mismatch') END; SELECT CASE WHEN NEW.diff_qty_milli != NEW.after_qty_milli - NEW.before_qty_milli THEN RAISE(ABORT, 'stock_diff_mismatch') END; SELECT CASE WHEN NEW.reason NOT IN ('RECEIVE','SALE','RETURN','CANCEL','COUNT_REPLACE') THEN RAISE(ABORT, 'stock_reason_invalid') END; END");
         db.execSQL("DROP TRIGGER IF EXISTS stock_log_apply");
         db.execSQL("CREATE TRIGGER IF NOT EXISTS stock_log_apply AFTER INSERT ON stock_log BEGIN UPDATE product SET stock_qty_milli = NEW.after_qty_milli WHERE sku = NEW.sku; END");
         db.execSQL("DROP TRIGGER IF EXISTS stock_log_no_update");
@@ -40,6 +40,8 @@ public final class DatabaseGuards {
         db.execSQL("DROP TRIGGER IF EXISTS stock_log_no_delete");
         db.execSQL("CREATE TRIGGER IF NOT EXISTS stock_log_no_delete BEFORE DELETE ON stock_log BEGIN SELECT RAISE(ABORT, 'stock_log_append_only'); END");
 
+        db.execSQL("DROP TRIGGER IF EXISTS op_log_insert_guard");
+        db.execSQL("CREATE TRIGGER IF NOT EXISTS op_log_insert_guard BEFORE INSERT ON op_log WHEN length(trim(NEW.id)) = 0 OR length(trim(NEW.action)) = 0 OR length(trim(NEW.entity_type)) = 0 OR length(trim(NEW.created_at_utc)) = 0 BEGIN SELECT RAISE(ABORT, 'op_log_invalid'); END");
         db.execSQL("DROP TRIGGER IF EXISTS op_log_no_update");
         db.execSQL("CREATE TRIGGER IF NOT EXISTS op_log_no_update BEFORE UPDATE ON op_log BEGIN SELECT RAISE(ABORT, 'op_log_append_only'); END");
         db.execSQL("DROP TRIGGER IF EXISTS op_log_no_delete");
@@ -48,7 +50,7 @@ public final class DatabaseGuards {
 
     public static void installBackupJournal(@NonNull SupportSQLiteDatabase db) {
         db.execSQL("DROP TRIGGER IF EXISTS backup_journal_insert_guard");
-        db.execSQL("CREATE TRIGGER IF NOT EXISTS backup_journal_insert_guard BEFORE INSERT ON backup_journal WHEN length(trim(NEW.operation_id)) = 0 OR length(trim(NEW.op)) = 0 OR length(NEW.payload_sha256) != 64 OR NEW.payload_sha256 GLOB '*[^0-9a-fA-F]*' OR NEW.schema_version < 1 OR NEW.uploaded NOT IN (0,1) BEGIN SELECT RAISE(ABORT, 'backup_journal_invalid'); END");
+        db.execSQL("CREATE TRIGGER IF NOT EXISTS backup_journal_insert_guard BEFORE INSERT ON backup_journal WHEN length(trim(NEW.operation_id)) = 0 OR length(trim(NEW.op)) = 0 OR length(NEW.payload) = 0 OR length(NEW.payload_sha256) != 64 OR NEW.payload_sha256 GLOB '*[^0-9a-fA-F]*' OR NEW.schema_version < 1 OR length(trim(NEW.created_at_utc)) = 0 OR NEW.uploaded NOT IN (0,1) BEGIN SELECT RAISE(ABORT, 'backup_journal_invalid'); END");
         db.execSQL("DROP TRIGGER IF EXISTS backup_journal_update_guard");
         db.execSQL("CREATE TRIGGER IF NOT EXISTS backup_journal_update_guard BEFORE UPDATE ON backup_journal WHEN OLD.seq != NEW.seq OR OLD.operation_id != NEW.operation_id OR OLD.op != NEW.op OR OLD.payload != NEW.payload OR OLD.payload_sha256 != NEW.payload_sha256 OR OLD.schema_version != NEW.schema_version OR OLD.created_at_utc != NEW.created_at_utc OR OLD.uploaded != 0 OR NEW.uploaded != 1 BEGIN SELECT RAISE(ABORT, 'backup_journal_immutable'); END");
         db.execSQL("DROP TRIGGER IF EXISTS backup_journal_no_delete");

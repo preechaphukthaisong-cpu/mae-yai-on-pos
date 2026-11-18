@@ -16,6 +16,8 @@ import java.util.UUID;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 
 /** Creates a product and reserves its barcode atomically in one database transaction. */
 public final class ProductRegistrationService {
@@ -44,7 +46,7 @@ public final class ProductRegistrationService {
         validateProduct(sku, name, priceSatang, costSatang, unit,
                 stockLimitQtyMilli, createdAtUtc, updatedAtUtc);
         return transactions.runInTransaction(() -> {
-            ProductEntity replay = findReplay(operationId, "PRODUCT_CREATE_SYSTEM", sku, name,
+            ProductEntity replay = findReplay(operationId, "PRODUCT_CREATE_SYSTEM", null, "SYSTEM", sku, name,
                     priceSatang, costSatang, unit, stockLimitQtyMilli, createdAtUtc, updatedAtUtc);
             if (replay != null) return replay;
             BarcodeRegistryEntity barcode = barcodeAllocator.allocateSystemInTransaction(
@@ -67,7 +69,7 @@ public final class ProductRegistrationService {
         validateProduct(sku, name, priceSatang, costSatang, unit,
                 stockLimitQtyMilli, createdAtUtc, updatedAtUtc);
         return transactions.runInTransaction(() -> {
-            ProductEntity replay = findReplay(operationId, "PRODUCT_CREATE_MANUFACTURER", sku, name,
+            ProductEntity replay = findReplay(operationId, "PRODUCT_CREATE_MANUFACTURER", barcodeValue, "MANUFACTURER", sku, name,
                     priceSatang, costSatang, unit, stockLimitQtyMilli, createdAtUtc, updatedAtUtc);
             if (replay != null) {
                 if (!barcodeValue.equals(replay.barcode)) {
@@ -86,21 +88,34 @@ public final class ProductRegistrationService {
         });
     }
 
-    private ProductEntity findReplay(String operationId, String expectedOperation, String sku, String name,
+    private ProductEntity findReplay(String operationId, String expectedOperation,
+            String expectedBarcode, String expectedSource, String sku, String name,
             long priceSatang, long costSatang, String unit, Long stockLimitQtyMilli,
             String createdAtUtc, String updatedAtUtc) {
         BackupJournalEntity prior = backupJournalDao.findByOperationId(operationId);
         if (prior == null) return null;
         ProductEntity existing = productDao.findBySku(sku);
-        if (!expectedOperation.equals(prior.op) || existing == null
+        if (existing == null) {
+            throw new IllegalStateException("Idempotency journal exists without its product");
+        }
+        com.maeyaion.pos.core.db.BarcodeRegistryEntity registry =
+                barcodeAllocator.findRegistered(existing.barcode);
+        boolean registryMatches = registry != null
+                && expectedSource.equals(registry.sourceType)
+                && name.equals(registry.displayName)
+                && priceSatang == registry.priceSatang
+                && createdAtUtc.equals(registry.createdAtUtc);
+        boolean requestMatches = expectedBarcode == null || expectedBarcode.equals(existing.barcode);
+        if (!expectedOperation.equals(prior.op) || !requestMatches || !registryMatches
                 || !name.equals(existing.name) || priceSatang != existing.priceSatang
                 || costSatang != existing.costSatang || !unit.equals(existing.unit)
                 || !Objects.equals(stockLimitQtyMilli, existing.stockLimitQtyMilli)
                 || !createdAtUtc.equals(existing.createdAtUtc)
                 || !updatedAtUtc.equals(existing.updatedAtUtc)
                 || !prior.payload.equals(canonicalPayload(existing, expectedOperation))
+                || prior.schema_version != 4
                 || !prior.payload_sha256.equals(sha256(prior.payload))) {
-            throw new IllegalStateException("Idempotency key was already used for a different operation");
+            throw new IllegalStateException("Idempotency key was already used for a different or inconsistent operation");
         }
         return existing;
     }
@@ -210,17 +225,33 @@ public final class ProductRegistrationService {
     private static void validateProduct(String sku, String name, long priceSatang,
             long costSatang, String unit, Long stockLimitQtyMilli,
             String createdAtUtc, String updatedAtUtc) {
-        if (sku == null || sku.trim().isEmpty() || name == null || name.trim().isEmpty()
-                || unit == null || unit.trim().isEmpty()) {
+        if (sku == null || sku.trim().isEmpty() || !sku.equals(sku.trim()) || containsControl(sku)
+                || name == null || name.trim().isEmpty() || unit == null || unit.trim().isEmpty()) {
             throw new IllegalArgumentException("SKU, product name and unit are required");
         }
         if (priceSatang < 0 || costSatang < 0
                 || (stockLimitQtyMilli != null && stockLimitQtyMilli < 0)) {
             throw new IllegalArgumentException("Price, cost and stock limit cannot be negative");
         }
-        if (createdAtUtc == null || createdAtUtc.trim().isEmpty()
-                || updatedAtUtc == null || updatedAtUtc.trim().isEmpty()) {
-            throw new IllegalArgumentException("Creation and update timestamps are required");
+        validateUtcTimestamp(createdAtUtc, "Creation");
+        validateUtcTimestamp(updatedAtUtc, "Update");
+    }
+    private static boolean containsControl(String value) {
+        for (int i = 0; i < value.length(); i++) {
+            if (Character.isISOControl(value.charAt(i))) return true;
+        }
+        return false;
+    }
+
+    private static void validateUtcTimestamp(String value, String label) {
+        if (value == null || value.trim().isEmpty()) {
+            throw new IllegalArgumentException(label + " timestamp is required");
+        }
+        try {
+            Instant.parse(value);
+        } catch (DateTimeParseException invalidTimestamp) {
+            throw new IllegalArgumentException(label + " timestamp must be ISO-8601 UTC", invalidTimestamp);
         }
     }
+
 }

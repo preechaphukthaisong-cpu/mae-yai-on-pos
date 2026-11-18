@@ -3,6 +3,7 @@ package com.maeyaion.pos.core.db;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import android.content.Context;
@@ -19,6 +20,17 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 @RunWith(AndroidJUnit4.class)
 public final class ProductRegistrationRoomTest {
@@ -81,4 +93,46 @@ public final class ProductRegistrationRoomTest {
         assertEquals(1L, database.backupJournalDao().pendingCount());
         assertEquals("2000001", database.productDao().findBySku("SKU-ATOMIC").barcode);
     }
+    @Test public void concurrentRegistrationsAllocateUniqueBarcodesAndCommitAllEvidence() throws Exception {
+        final int workers = 8;
+        CountDownLatch ready = new CountDownLatch(workers);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(workers);
+        try {
+            RoomTransactionRunner transactions = new RoomTransactionRunner(database);
+            BarcodeAllocator allocator = new BarcodeAllocator(
+                    database.barcodeRegistryDao(), database.barcodeCounterDao(), transactions);
+            ProductRegistrationService service = new ProductRegistrationService(
+                    allocator, database.productDao(), database.opLogDao(),
+                    database.backupJournalDao(), transactions);
+            List<Future<ProductEntity>> futures = new ArrayList<>();
+            for (int i = 0; i < workers; i++) {
+                final int index = i;
+                futures.add(executor.submit(() -> {
+                    ready.countDown();
+                    if (!start.await(10, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("Concurrent test start timed out");
+                    }
+                    return service.createWithSystemBarcode(UUID.randomUUID().toString(),
+                            "SKU-CONCURRENT-" + index, "Concurrent product " + index,
+                            1000L + index, 500L + index, "piece", null, TIME, TIME);
+                }));
+            }
+            assertTrue("Workers did not become ready", ready.await(10, TimeUnit.SECONDS));
+            start.countDown();
+            Set<String> barcodes = new HashSet<>();
+            for (Future<ProductEntity> future : futures) {
+                barcodes.add(future.get(30, TimeUnit.SECONDS).barcode);
+            }
+            assertEquals(workers, barcodes.size());
+            assertEquals(workers, database.productDao().listActive().size());
+            assertEquals(workers, database.opLogDao().latest(workers + 1).size());
+            assertEquals(workers, database.backupJournalDao().pendingCount());
+            assertEquals(2_000_001L + workers, database.barcodeCounterDao().get().nextValue);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+    }
+
 }

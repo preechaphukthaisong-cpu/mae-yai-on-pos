@@ -8,6 +8,8 @@ import com.maeyaion.pos.core.db.BarcodeRegistryDao;
 import com.maeyaion.pos.core.db.BarcodeRegistryEntity;
 import com.maeyaion.pos.core.tx.TransactionRunner;
 
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.Objects;
 
 /** Allocates permanent barcode identifiers. Callers must execute on a worker thread. */
@@ -81,6 +83,10 @@ public final class BarcodeAllocator {
         }
     }
 
+    /** Returns the immutable registry row so idempotent replay can verify all linked evidence. */
+    public BarcodeRegistryEntity findRegistered(@NonNull String barcode) {
+        return registryDao.findByBarcode(barcode);
+    }
 
     private static void validate(String barcode, String displayName, long priceSatang,
             String createdAtUtc) {
@@ -99,6 +105,11 @@ public final class BarcodeAllocator {
         if (priceSatang < 0) throw new IllegalArgumentException("Price cannot be negative");
         if (createdAtUtc == null || createdAtUtc.trim().isEmpty()) {
             throw new IllegalArgumentException("Creation timestamp is required");
+        }
+        try {
+            Instant.parse(createdAtUtc);
+        } catch (DateTimeParseException invalidTimestamp) {
+            throw new IllegalArgumentException("Creation timestamp must be ISO-8601 UTC", invalidTimestamp);
         }
     }
 }
