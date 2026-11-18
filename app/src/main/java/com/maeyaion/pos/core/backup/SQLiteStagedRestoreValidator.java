@@ -2,6 +2,7 @@ package com.maeyaion.pos.core.backup;
 
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteException;
 
 import java.io.File;
 import java.io.IOException;
@@ -17,36 +18,45 @@ public final class SQLiteStagedRestoreValidator implements EncryptedBackupFileSt
 
     @Override
     public boolean isValid(File stagedDatabase) throws IOException {
-        if (stagedDatabase == null || !stagedDatabase.isFile() || stagedDatabase.length() <= 0) {
+        if (stagedDatabase == null || !stagedDatabase.isFile()
+                || stagedDatabase.length() < 100) {
             return false;
         }
-        final SQLiteDatabase database;
+
+        SQLiteDatabase database = null;
         try {
             database = SQLiteDatabase.openDatabase(
                     stagedDatabase.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
-        } catch (android.database.sqlite.SQLiteException invalidDatabase) {
-            return false;
-        }
-        try {
+
+            // SQLite may successfully open a file header and only discover corruption
+            // when a page is read. Therefore every query below is inside this guard.
             try (Cursor integrity = database.rawQuery("PRAGMA integrity_check", null)) {
                 if (!integrity.moveToFirst() || !"ok".equalsIgnoreCase(integrity.getString(0))) {
                     return false;
                 }
             }
             try (Cursor version = database.rawQuery("PRAGMA user_version", null)) {
-                if (!version.moveToFirst() || version.getInt(0) != expectedSchemaVersion) return false;
+                if (!version.moveToFirst() || version.getInt(0) != expectedSchemaVersion) {
+                    return false;
+                }
             }
             try (Cursor foreignKeys = database.rawQuery("PRAGMA foreign_key_check", null)) {
                 if (foreignKeys.moveToFirst()) return false;
             }
+
             return hasRequiredTable(database, "room_master_table")
                     && hasRequiredTable(database, "app_meta")
                     && hasRequiredTable(database, "backup_journal")
                     && hasRequiredTable(database, "product")
                     && hasRequiredTable(database, "barcode_registry")
                     && hasRequiredTable(database, "stock_log");
+        } catch (SQLiteException | IllegalArgumentException invalidDatabase) {
+            // Malformed, truncated, or corrupt SQLite payloads are rejected, not propagated.
+            return false;
         } finally {
-            database.close();
+            if (database != null && database.isOpen()) {
+                database.close();
+            }
         }
     }
 
