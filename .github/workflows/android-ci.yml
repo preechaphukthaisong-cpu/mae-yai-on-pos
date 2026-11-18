@@ -1,7 +1,9 @@
 name: Android CI
 on:
   push:
-    branches: [main, phase-3-foundation]
+    branches: [main]
+  pull_request:
+    branches: [main]
 permissions:
   contents: read
 concurrency:
