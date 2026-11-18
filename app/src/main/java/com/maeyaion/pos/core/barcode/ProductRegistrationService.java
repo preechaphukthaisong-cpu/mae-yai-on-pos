@@ -36,44 +36,80 @@ public final class ProductRegistrationService {
     }
 
     @NonNull
-    public ProductEntity createWithSystemBarcode(@NonNull String sku, @NonNull String name,
+    public ProductEntity createWithSystemBarcode(@NonNull String operationId,
+            @NonNull String sku, @NonNull String name,
             long priceSatang, long costSatang, @NonNull String unit, Long stockLimitQtyMilli,
             @NonNull String createdAtUtc, @NonNull String updatedAtUtc) {
+        validateOperationId(operationId);
         validateProduct(sku, name, priceSatang, costSatang, unit,
                 stockLimitQtyMilli, createdAtUtc, updatedAtUtc);
         return transactions.runInTransaction(() -> {
+            ProductEntity replay = findReplay(operationId, sku, name, priceSatang,
+                    costSatang, unit, stockLimitQtyMilli, createdAtUtc, updatedAtUtc);
+            if (replay != null) return replay;
             BarcodeRegistryEntity barcode = barcodeAllocator.allocateSystemInTransaction(
                     name, priceSatang, createdAtUtc);
             ProductEntity product = new ProductEntity(sku, barcode.barcode, name,
                     priceSatang, costSatang, unit, stockLimitQtyMilli, 0L, 1,
                     createdAtUtc, updatedAtUtc);
-            persistEvidence(product, createdAtUtc);
+            persistEvidence(product, operationId, createdAtUtc);
             productDao.insert(product);
             return product;
         });
     }
 
     @NonNull
-    public ProductEntity createWithManufacturerBarcode(@NonNull String barcodeValue,
-            @NonNull String sku, @NonNull String name, long priceSatang, long costSatang,
+    public ProductEntity createWithManufacturerBarcode(@NonNull String operationId,
+            @NonNull String barcodeValue, @NonNull String sku, @NonNull String name, long priceSatang, long costSatang,
             @NonNull String unit, Long stockLimitQtyMilli, @NonNull String createdAtUtc,
             @NonNull String updatedAtUtc) {
+        validateOperationId(operationId);
         validateProduct(sku, name, priceSatang, costSatang, unit,
                 stockLimitQtyMilli, createdAtUtc, updatedAtUtc);
         return transactions.runInTransaction(() -> {
+            ProductEntity replay = findReplay(operationId, sku, name, priceSatang,
+                    costSatang, unit, stockLimitQtyMilli, createdAtUtc, updatedAtUtc);
+            if (replay != null) return replay;
             BarcodeRegistryEntity barcode = barcodeAllocator.registerManufacturerInTransaction(
                     barcodeValue, name, priceSatang, createdAtUtc);
             ProductEntity product = new ProductEntity(sku, barcode.barcode, name,
                     priceSatang, costSatang, unit, stockLimitQtyMilli, 0L, 1,
                     createdAtUtc, updatedAtUtc);
-            persistEvidence(product, createdAtUtc);
+            persistEvidence(product, operationId, createdAtUtc);
             productDao.insert(product);
             return product;
         });
     }
 
-    private void persistEvidence(ProductEntity product, String createdAtUtc) {
-        String operationId = UUID.randomUUID().toString();
+    private ProductEntity findReplay(String operationId, String sku, String name,
+            long priceSatang, long costSatang, String unit, Long stockLimitQtyMilli,
+            String createdAtUtc, String updatedAtUtc) {
+        BackupJournalEntity prior = backupJournalDao.findByOperationId(operationId);
+        if (prior == null) return null;
+        ProductEntity existing = productDao.findBySku(sku);
+        if (!"PRODUCT_CREATE".equals(prior.op) || existing == null
+                || !name.equals(existing.name) || priceSatang != existing.priceSatang
+                || costSatang != existing.costSatang || !unit.equals(existing.unit)
+                || !Objects.equals(stockLimitQtyMilli, existing.stockLimitQtyMilli)
+                || !createdAtUtc.equals(existing.createdAtUtc)
+                || !updatedAtUtc.equals(existing.updatedAtUtc)
+                || !prior.payload.equals(canonicalPayload(existing))) {
+            throw new IllegalStateException("Idempotency key was already used for a different operation");
+        }
+        return existing;
+    }
+
+    private static void validateOperationId(String operationId) {
+        try {
+            if (operationId == null || !UUID.fromString(operationId).toString().equals(operationId)) {
+                throw new IllegalArgumentException("A canonical UUID operation id is required");
+            }
+        } catch (IllegalArgumentException invalid) {
+            throw new IllegalArgumentException("A canonical UUID operation id is required", invalid);
+        }
+    }
+
+    private void persistEvidence(ProductEntity product, String operationId, String createdAtUtc) {
         String payload = canonicalPayload(product);
         String digest = sha256(payload);
         opLogDao.append(new OpLogEntity(UUID.randomUUID().toString(), "PRODUCT_CREATE",
@@ -92,7 +128,8 @@ public final class ProductRegistrationService {
                 + "\\"unit\\":\\"" + jsonEscape(product.unit) + "\\","
                 + "\\"stock_limit_qty_milli\\":"
                 + (product.stockLimitQtyMilli == null ? "null" : product.stockLimitQtyMilli) + ","
-                + "\\"created_at_utc\\":\\"" + jsonEscape(product.createdAtUtc) + "\\"}";
+                + "\\"created_at_utc\\":\\"" + jsonEscape(product.createdAtUtc) + "\\","
+                + "\\"updated_at_utc\\":\\"" + jsonEscape(product.updatedAtUtc) + "\\"}";
     }
 
     private static String jsonEscape(String value) {
