@@ -51,6 +51,7 @@ public final class AppDatabaseMigrationTest {
 
         database = Room.databaseBuilder(context, AppDatabase.class, databaseName)
                 .addMigrations(Migration1To2.INSTANCE, Migration2To3.INSTANCE, Migration3To4.INSTANCE)
+                .addCallback(AppDatabase.databaseCallback())
                 .allowMainThreadQueries()
                 .build();
 
@@ -107,6 +108,7 @@ public final class AppDatabaseMigrationTest {
 
         database = Room.databaseBuilder(context, AppDatabase.class, databaseName)
                 .addMigrations(Migration3To4.INSTANCE)
+                .addCallback(AppDatabase.databaseCallback())
                 .allowMainThreadQueries()
                 .build();
         SupportSQLiteDatabase sql = database.getOpenHelper().getWritableDatabase();
@@ -128,6 +130,7 @@ public final class AppDatabaseMigrationTest {
 
     @Test public void freshDatabaseSeedsBarcodeCounter() {
         database = Room.databaseBuilder(context, AppDatabase.class, databaseName)
+                .addCallback(AppDatabase.databaseCallback())
                 .allowMainThreadQueries()
                 .build();
         database.getOpenHelper().getWritableDatabase();
@@ -214,6 +217,7 @@ public final class AppDatabaseMigrationTest {
 
     private void openFreshDatabase() {
         database = Room.databaseBuilder(context, AppDatabase.class, databaseName)
+                .addCallback(AppDatabase.databaseCallback())
                 .allowMainThreadQueries()
                 .build();
         database.getOpenHelper().getWritableDatabase();
