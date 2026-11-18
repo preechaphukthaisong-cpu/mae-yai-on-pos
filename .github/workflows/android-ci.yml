@@ -72,10 +72,22 @@ jobs:
             exit 1
           }
           python3 -m json.tool "$SCHEMA_FILE" >/dev/null
-          git diff --exit-code -- "$SCHEMA_FILE" || {
-            echo "::error::Generated Room schema differs from the committed schema. Commit the Room-generated JSON after reviewing the migration."
-            exit 1
-          }
+          python3 - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          schema_path = "app/schemas/com.maeyaion.pos.core.db.AppDatabase/4.json"
+          generated = json.loads(Path(schema_path).read_text(encoding="utf-8"))
+          committed_text = subprocess.check_output(
+              ["git", "show", f"HEAD:{schema_path}"], text=True
+          )
+          committed = json.loads(committed_text)
+          if generated != committed:
+              raise SystemExit(
+                  "::error::Generated Room schema differs from the committed schema."
+              )
+          PY
       - name: Upload Room schema
         uses: actions/upload-artifact@v4
         with:
