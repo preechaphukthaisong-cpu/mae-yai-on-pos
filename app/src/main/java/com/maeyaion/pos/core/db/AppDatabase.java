@@ -1,6 +1,7 @@
 package com.maeyaion.pos.core.db;
 
 import android.content.Context;
+import android.database.Cursor;
 
 import androidx.annotation.NonNull;
 import androidx.room.Database;
@@ -44,10 +45,23 @@ public abstract class AppDatabase extends RoomDatabase {
             public void onOpen(@NonNull SupportSQLiteDatabase db) {
                 super.onOpen(db);
                 db.setForeignKeyConstraintsEnabled(true);
-                db.execSQL("PRAGMA busy_timeout=5000");
-                db.execSQL("PRAGMA synchronous=FULL");
+                executePragma(db, "PRAGMA busy_timeout=5000");
+                executePragma(db, "PRAGMA synchronous=FULL");
             }
         };
+    }
+
+    /**
+     * PRAGMA statements can return rows. SupportSQLiteDatabase.execSQL is for
+     * statements that do not return a result set; use query and always drain
+     * and close the cursor for assignment PRAGMAs.
+     */
+    private static void executePragma(@NonNull SupportSQLiteDatabase db, @NonNull String sql) {
+        try (Cursor cursor = db.query(sql)) {
+            while (cursor.moveToNext()) {
+                // Drain any result row produced by SQLite.
+            }
+        }
     }
 
     public static AppDatabase getInstance(Context context) {
