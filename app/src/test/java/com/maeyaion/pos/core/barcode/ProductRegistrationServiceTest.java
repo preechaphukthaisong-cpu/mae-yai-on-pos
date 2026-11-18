@@ -24,10 +24,12 @@ import static org.junit.Assert.*;
 
 public final class ProductRegistrationServiceTest {
     private static final String TIME = "2026-11-18T00:00:00Z";
+    private static final String OP_1 = "00000000-0000-0000-0000-000000000001";
+    private static final String OP_2 = "00000000-0000-0000-0000-000000000002";
 
     @Test public void createsProductWithSystemBarcodeAtZeroStock() {
         Store store = new Store();
-        ProductEntity product = service(store).createWithSystemBarcode(
+        ProductEntity product = service(store).createWithSystemBarcode(OP_1,
                 "SKU-1", "Rice", 2500, 1800, "ถุง", 5000L, TIME, TIME);
         assertEquals("2000001", product.barcode);
         assertEquals(0L, product.stockQtyMilli);
@@ -43,7 +45,7 @@ public final class ProductRegistrationServiceTest {
         Store store = new Store();
         store.products.failInsert = true;
         try {
-            service(store).createWithSystemBarcode(
+            service(store).createWithSystemBarcode(OP_2,
                     "SKU-FAIL", "Rice", 2500, 1800, "ถุง", null, TIME, TIME);
             fail("Expected product insert failure");
         } catch (IllegalStateException expected) {
@@ -58,7 +60,7 @@ public final class ProductRegistrationServiceTest {
 
     @Test public void manufacturerBarcodeAndProductAreCreatedTogether() {
         Store store = new Store();
-        ProductEntity product = service(store).createWithManufacturerBarcode(
+        ProductEntity product = service(store).createWithManufacturerBarcode(OP_1,
                 "0001234567890", "SKU-2", "Soap", 9900, 5000,
                 "ก้อน", null, TIME, TIME);
         assertEquals("0001234567890", product.barcode);
@@ -66,6 +68,37 @@ public final class ProductRegistrationServiceTest {
         assertEquals(2000001L, store.counter.value.nextValue);
         assertEquals(1, store.opLogs.entries.size());
         assertEquals(1, store.journal.entries.size());
+    }
+
+    @Test public void retryWithSameOperationIdReturnsExistingProductWithoutDuplicateWrites() {
+        Store store = new Store();
+        ProductRegistrationService service = service(store);
+        ProductEntity first = service.createWithSystemBarcode(OP_1,
+                "SKU-RETRY", "Rice", 2500, 1800, "ถุง", null, TIME, TIME);
+        ProductEntity retry = service.createWithSystemBarcode(OP_1,
+                "SKU-RETRY", "Rice", 2500, 1800, "ถุง", null, TIME, TIME);
+        assertEquals(first.barcode, retry.barcode);
+        assertEquals(1, store.products.values.size());
+        assertEquals(1, store.registry.values.size());
+        assertEquals(1, store.opLogs.entries.size());
+        assertEquals(1, store.journal.entries.size());
+        assertEquals(2000002L, store.counter.value.nextValue);
+    }
+
+    @Test public void reusingOperationIdForDifferentProductIsRejected() {
+        Store store = new Store();
+        ProductRegistrationService service = service(store);
+        service.createWithSystemBarcode(OP_1,
+                "SKU-ORIGINAL", "Rice", 2500, 1800, "ถุง", null, TIME, TIME);
+        try {
+            service.createWithSystemBarcode(OP_1,
+                    "SKU-OTHER", "Soap", 9900, 5000, "ก้อน", null, TIME, TIME);
+            fail("Expected idempotency key collision");
+        } catch (IllegalStateException expected) {
+            assertTrue(expected.getMessage().contains("Idempotency key"));
+        }
+        assertEquals(1, store.products.values.size());
+        assertEquals(1, store.registry.values.size());
     }
 
     private static ProductRegistrationService service(Store store) {
@@ -145,6 +178,12 @@ public final class ProductRegistrationServiceTest {
     private static final class FakeJournal implements BackupJournalDao {
         final List<BackupJournalEntity> entries = new ArrayList<>();
         long nextSeq = 1L;
+        @Override public BackupJournalEntity findByOperationId(String operationId) {
+            for (BackupJournalEntity entry : entries) {
+                if (entry.operation_id.equals(operationId)) return entry;
+            }
+            return null;
+        }
         @Override public long append(BackupJournalEntity entry) {
             entries.add(new BackupJournalEntity(nextSeq, entry.operation_id, entry.op,
                     entry.payload, entry.payload_sha256, entry.schema_version,
