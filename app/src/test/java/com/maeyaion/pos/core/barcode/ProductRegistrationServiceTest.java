@@ -51,8 +51,6 @@ public final class ProductRegistrationServiceTest {
         }
         assertNull(store.registry.findByBarcode("2000001"));
         assertEquals(2000001L, store.counter.value.nextValue);
-        assertEquals(1, store.opLogs.entries.size());
-        assertEquals(1, store.journal.entries.size());
         assertNull(store.products.findBySku("SKU-FAIL"));
         assertTrue(store.opLogs.entries.isEmpty());
         assertTrue(store.journal.entries.isEmpty());
@@ -66,6 +64,8 @@ public final class ProductRegistrationServiceTest {
         assertEquals("0001234567890", product.barcode);
         assertEquals("MANUFACTURER", store.registry.findByBarcode(product.barcode).sourceType);
         assertEquals(2000001L, store.counter.value.nextValue);
+        assertEquals(1, store.opLogs.entries.size());
+        assertEquals(1, store.journal.entries.size());
     }
 
     private static ProductRegistrationService service(Store store) {
@@ -107,6 +107,11 @@ public final class ProductRegistrationServiceTest {
                 registry.values.putAll(oldRegistry);
                 products.values.clear();
                 products.values.putAll(oldProducts);
+                opLogs.entries.clear();
+                opLogs.entries.addAll(oldOpLogs);
+                journal.entries.clear();
+                journal.entries.addAll(oldJournal);
+                journal.nextSeq = oldJournalSeq;
                 counter.value = oldCounter;
                 throw new RuntimeException(error);
             }
