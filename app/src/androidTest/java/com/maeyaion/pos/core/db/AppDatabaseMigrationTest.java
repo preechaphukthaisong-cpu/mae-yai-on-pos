@@ -50,7 +50,7 @@ public final class AppDatabaseMigrationTest {
         old.close();
 
         database = Room.databaseBuilder(context, AppDatabase.class, databaseName)
-                .addMigrations(Migration1To2.INSTANCE, Migration2To3.INSTANCE)
+                .addMigrations(Migration1To2.INSTANCE, Migration2To3.INSTANCE, Migration3To4.INSTANCE)
                 .allowMainThreadQueries()
                 .build();
 
@@ -70,6 +70,50 @@ public final class AppDatabaseMigrationTest {
         assertTriggerExists(sql, "backup_journal_insert_guard");
         assertTriggerExists(sql, "backup_journal_update_guard");
         assertTriggerExists(sql, "backup_journal_no_delete");
+    }
+
+    @Test public void migrationFromVersionThreeRefreshesGuardsAndPreservesData() {
+        File file = context.getDatabasePath(databaseName);
+        File parent = file.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            throw new AssertionError("Could not create database directory");
+        }
+        SQLiteDatabase old = SQLiteDatabase.openOrCreateDatabase(file, null);
+        old.execSQL("CREATE TABLE app_meta (meta_key TEXT NOT NULL, value TEXT NOT NULL, updatedAtUtc TEXT NOT NULL, PRIMARY KEY(meta_key))");
+        old.execSQL("INSERT INTO app_meta(meta_key, value, updatedAtUtc) VALUES('legacy_key', 'v3_value', '2026-11-17T00:00:00Z')");
+        old.execSQL("CREATE TABLE barcode_registry (barcode TEXT NOT NULL, display_name TEXT NOT NULL, price_satang INTEGER NOT NULL, source_type TEXT NOT NULL, created_at_utc TEXT NOT NULL, PRIMARY KEY(barcode))");
+        old.execSQL("CREATE TABLE barcode_counter (id INTEGER NOT NULL PRIMARY KEY, next_value INTEGER NOT NULL)");
+        old.execSQL("INSERT INTO barcode_counter(id, next_value) VALUES(1, 2000001)");
+        old.execSQL("CREATE TABLE product (sku TEXT NOT NULL PRIMARY KEY, barcode TEXT NOT NULL, name TEXT NOT NULL, price_satang INTEGER NOT NULL, cost_satang INTEGER NOT NULL, unit TEXT NOT NULL, stock_limit_qty_milli INTEGER, stock_qty_milli INTEGER NOT NULL DEFAULT 0, is_active INTEGER NOT NULL DEFAULT 1, created_at_utc TEXT NOT NULL, updated_at_utc TEXT NOT NULL, FOREIGN KEY(barcode) REFERENCES barcode_registry(barcode) ON UPDATE RESTRICT ON DELETE RESTRICT)");
+        old.execSQL("CREATE UNIQUE INDEX index_product_barcode ON product(barcode)");
+        old.execSQL("CREATE INDEX index_product_name ON product(name)");
+        old.execSQL("CREATE INDEX index_product_is_active_stock_qty_milli ON product(is_active, stock_qty_milli)");
+        old.execSQL("CREATE TABLE customer (id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL, name_key TEXT NOT NULL, identity_key TEXT NOT NULL, created_at_utc TEXT NOT NULL, updated_at_utc TEXT NOT NULL)");
+        old.execSQL("CREATE UNIQUE INDEX index_customer_name_key_identity_key ON customer(name_key, identity_key)");
+        old.execSQL("CREATE TABLE stock_log (id TEXT NOT NULL PRIMARY KEY, sku TEXT NOT NULL, before_qty_milli INTEGER NOT NULL, after_qty_milli INTEGER NOT NULL, diff_qty_milli INTEGER NOT NULL, reason TEXT NOT NULL, ref_id TEXT, created_at_utc TEXT NOT NULL, FOREIGN KEY(sku) REFERENCES product(sku) ON UPDATE RESTRICT ON DELETE RESTRICT)");
+        old.execSQL("CREATE INDEX index_stock_log_sku_created_at_utc ON stock_log(sku, created_at_utc)");
+        old.execSQL("CREATE INDEX index_stock_log_ref_id ON stock_log(ref_id)");
+        old.execSQL("CREATE TABLE op_log (id TEXT NOT NULL PRIMARY KEY, action TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id TEXT, detail_json TEXT, created_at_utc TEXT NOT NULL)");
+        old.execSQL("CREATE INDEX index_op_log_created_at_utc ON op_log(created_at_utc)");
+        old.execSQL("CREATE INDEX index_op_log_entity_type_entity_id ON op_log(entity_type, entity_id)");
+        old.execSQL("CREATE TABLE backup_journal (seq INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, operation_id TEXT NOT NULL, op TEXT NOT NULL, payload TEXT NOT NULL, payload_sha256 TEXT NOT NULL, schema_version INTEGER NOT NULL, created_at_utc TEXT NOT NULL, uploaded INTEGER NOT NULL DEFAULT 0)");
+        old.execSQL("CREATE UNIQUE INDEX index_backup_journal_operation_id ON backup_journal(operation_id)");
+        old.execSQL("CREATE INDEX index_backup_journal_uploaded_seq ON backup_journal(uploaded, seq)");
+        old.execSQL("CREATE TRIGGER stock_log_validate BEFORE INSERT ON stock_log BEGIN SELECT RAISE(ABORT, 'obsolete_v3_guard'); END");
+        old.setVersion(3);
+        old.close();
+
+        database = Room.databaseBuilder(context, AppDatabase.class, databaseName)
+                .addMigrations(Migration3To4.INSTANCE)
+                .allowMainThreadQueries()
+                .build();
+        SupportSQLiteDatabase sql = database.getOpenHelper().getWritableDatabase();
+        assertEquals(4, sql.getVersion());
+        assertEquals("v3_value", database.appMetaDao().findValue("legacy_key"));
+        assertCoreGuardsExist(sql);
+        insertBarcodeAndProduct(sql);
+        appendStock(sql, "stock-after-v3", 0, 1_000, 1_000);
+        assertEquals(1_000L, database.productDao().findBySku("SKU-1").stockQtyMilli);
     }
 
     @Test public void freshDatabaseSeedsBarcodeCounter() {
