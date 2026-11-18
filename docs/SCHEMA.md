@@ -1,19 +1,21 @@
 # แบบฐานข้อมูล POS ร้านแม่ใหญ่อ่อน (SCHEMA)
 
-- รุ่นเอกสาร: 1.0.6-draft
-- เฟส: 2 — ออกแบบโครงสร้าง (อ้างอิงการนำไปใช้ต่อในเฟส 3 เป็นต้นไป)
-- สถานะ: แบบจำลองเชิงบรรทัดฐานตาม D-001 ถึง D-061; มีเพียงตารางพื้นฐานบางส่วนที่นำไปใช้เป็น Room v2 แล้ว ส่วนตารางธุรกิจอื่นยังไม่ถือว่าพัฒนาเสร็จ
+- รุ่นเอกสาร: 1.0.7
+- เฟส: 3 — Foundation implementation in progress
+- สถานะ: แบบจำลองเชิงบรรทัดฐานตาม D-001 ถึง D-061; ตาราง foundation ที่ implement แล้วอยู่ใน Room v4 ส่วนตารางธุรกิจอื่นยังไม่ถือว่าพัฒนาเสร็จ
 - Database: SQLite ไฟล์เดียวผ่าน Room
 - เงิน: INTEGER หน่วยสตางค์; Java ใช้ long
 - อ้างอิง: docs/SPEC.md, docs/DECISIONS.md, docs/ARCHITECTURE.md
 
 ## 1. กติกากลาง
 
+Room schema ที่ใช้งานจริงใน foundation ปัจจุบันคือ version 4; Migration 3→4 ติดตั้ง/refresh database guards โดยไม่ลบหรือเขียนทับข้อมูลเดิม
+
 1. ชื่อตาราง snake_case; primary key ของเอกสารใช้ UUID เก็บเป็น TEXT เว้นแต่ระบุเป็นอย่างอื่น
 2. เงินทุกคอลัมน์เป็น SQLite INTEGER หน่วยสตางค์; จำนวนเงินของธุรกรรมต้องไม่ติดลบ แต่คอลัมน์ยอดสุทธิ/ผลต่างในตารางสรุปอาจติดลบได้; ห้าม REAL/FLOAT/DOUBLE
 3. เวลาเก็บเป็น ISO-8601 UTC; business_date คำนวณตาม Asia/Bangkok และเปลี่ยนวันเวลา 00:00 น. ตามเวลาไทย (D-041)
 4. Foreign key เปิดทุก connection; ใช้ ON DELETE RESTRICT เป็นค่าเริ่มต้น ห้าม CASCADE ลบประวัติ
-5. ตาราง ledger/audit เป็น append-only; แก้ข้อผิดพลาดด้วย reversal record
+5. ตาราง ledger/audit เป็น append-only; แก้ข้อผิดพลาดด้วย reversal record. การลบตาม retention 90 วันต้องมี archive/reconciliation gate ที่พิสูจน์ได้ก่อน; ยังไม่อนุญาต purge ใน implementation ปัจจุบัน
 6. UI ส่ง identifier และ input เท่านั้น; service ต้องอ่านข้อมูลจริงจาก DB และคำนวณยอดใหม่
 7. quantity เก็บเป็น INTEGER หน่วย milli-unit โดย 1 หน่วย = 1,000; ห้ามใช้ REAL/FLOAT/DOUBLE (D-050)
 8. สถานะการชำระเงินแยกจากสถานะการยกเลิก/คืนสินค้า
@@ -31,12 +33,12 @@
 | cost_satang | INTEGER | NOT NULL, CHECK >= 0 |
 | unit | TEXT | NOT NULL |
 | stock_limit_qty_milli | INTEGER | NULL ได้; NULL = ปิดแจ้งเตือน, 0 เป็นค่าที่ตั้งได้; แจ้งเมื่อ stock_qty_milli <= limit |
-| stock_qty_milli | INTEGER | NOT NULL DEFAULT 0; cache ที่ stock_log trigger ดูแล; 1 หน่วย = 1,000 |
+| stock_qty_milli | INTEGER | NOT NULL DEFAULT 0; ต้องเริ่มที่ 0; เปลี่ยนได้ผ่าน stock_log trigger เท่านั้น; 1 หน่วย = 1,000 |
 | is_active | INTEGER | NOT NULL DEFAULT 1, CHECK IN (0,1) |
 | created_at_utc | TEXT | NOT NULL |
 | updated_at_utc | TEXT | NOT NULL |
 
-ห้ามลบสินค้าเชิงกายภาพเมื่อมีประวัติ; ใช้ is_active=0 เมื่อเลิกขาย การแก้ราคาเพิ่ม price_history ทุกครั้ง ห้ามแก้ stock_qty_milli จาก UI/repository โดยตรง
+ห้ามลบสินค้าเชิงกายภาพ; ใช้ is_active=0 เมื่อเลิกขาย การแก้ราคาเพิ่ม price_history ทุกครั้ง ห้ามสร้างสินค้าด้วยยอดเริ่มต้นที่ไม่ใช่ศูนย์หรือแก้ stock_qty_milli โดยตรง; DatabaseGuards บังคับกฎนี้ทั้ง fresh install และ migration
 
 ### 2.2 barcode_registry
 
