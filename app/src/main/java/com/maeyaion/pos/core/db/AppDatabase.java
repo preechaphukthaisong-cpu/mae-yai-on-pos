@@ -48,6 +48,8 @@ public abstract class AppDatabase extends RoomDatabase {
                                 public void onCreate(@NonNull SupportSQLiteDatabase db) {
                                     super.onCreate(db);
                                     db.execSQL("INSERT OR IGNORE INTO barcode_counter (id, next_value) VALUES (1, 2000001)");
+                                    DatabaseGuards.installCore(db);
+                                    DatabaseGuards.installBackupJournal(db);
                                 }
 
                                 @Override
