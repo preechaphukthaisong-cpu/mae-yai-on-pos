@@ -45,11 +45,9 @@ public abstract class AppDatabase extends RoomDatabase {
             public void onOpen(@NonNull SupportSQLiteDatabase db) {
                 super.onOpen(db);
                 db.setForeignKeyConstraintsEnabled(true);
-                // Android's SQLite connection pool applies its platform busy timeout
-                // (2500 ms on the supported Android runtime). Room does not expose a
-                // portable per-connection override for this setting on minSdk 26.
-                // synchronous is connection-scoped in SQLite. Execute it on each
-                // Room connection instead of issuing it through the query API.
+                // Apply explicit durability settings whenever Room opens the database.
+                // Connection-pool-wide enforcement is separately acceptance-gated below.
+                db.execSQL("PRAGMA busy_timeout=5000");
                 db.execSQL("PRAGMA synchronous=FULL");
             }
         };
