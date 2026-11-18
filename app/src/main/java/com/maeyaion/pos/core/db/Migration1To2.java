@@ -26,14 +26,6 @@ public final class Migration1To2 {
             db.execSQL("CREATE TABLE IF NOT EXISTS op_log (id TEXT NOT NULL, action TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id TEXT, detail_json TEXT, created_at_utc TEXT NOT NULL, PRIMARY KEY(id))");
             db.execSQL("CREATE INDEX IF NOT EXISTS index_op_log_created_at_utc ON op_log(created_at_utc)");
             db.execSQL("CREATE INDEX IF NOT EXISTS index_op_log_entity_type_entity_id ON op_log(entity_type, entity_id)");
-            db.execSQL("CREATE TRIGGER stock_log_validate BEFORE INSERT ON stock_log BEGIN SELECT CASE WHEN NEW.before_qty_milli != (SELECT stock_qty_milli FROM product WHERE sku = NEW.sku) THEN RAISE(ABORT, 'stock_before_mismatch') END; SELECT CASE WHEN NEW.after_qty_milli < 0 THEN RAISE(ABORT, 'stock_negative') END; SELECT CASE WHEN NEW.diff_qty_milli != NEW.after_qty_milli - NEW.before_qty_milli THEN RAISE(ABORT, 'stock_diff_mismatch') END; END");
-            db.execSQL("CREATE TRIGGER stock_log_apply AFTER INSERT ON stock_log BEGIN UPDATE product SET stock_qty_milli = NEW.after_qty_milli WHERE sku = NEW.sku; END");
-            db.execSQL("CREATE TRIGGER stock_log_no_update BEFORE UPDATE ON stock_log BEGIN SELECT RAISE(ABORT, 'stock_log_append_only'); END");
-            db.execSQL("CREATE TRIGGER stock_log_no_delete BEFORE DELETE ON stock_log BEGIN SELECT RAISE(ABORT, 'stock_log_append_only'); END");
-            db.execSQL("CREATE TRIGGER op_log_no_update BEFORE UPDATE ON op_log BEGIN SELECT RAISE(ABORT, 'op_log_append_only'); END");
-            db.execSQL("CREATE TRIGGER op_log_no_delete BEFORE DELETE ON op_log BEGIN SELECT RAISE(ABORT, 'op_log_append_only'); END");
-            db.execSQL("CREATE TRIGGER barcode_registry_no_update BEFORE UPDATE ON barcode_registry BEGIN SELECT RAISE(ABORT, 'barcode_registry_immutable'); END");
-            db.execSQL("CREATE TRIGGER barcode_registry_no_delete BEFORE DELETE ON barcode_registry BEGIN SELECT RAISE(ABORT, 'barcode_registry_immutable'); END");
             DatabaseGuards.installCore(db);
         }
     };
