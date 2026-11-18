@@ -64,11 +64,12 @@ public final class FullBackupCoordinator {
 
         char[] passwordCopy = recoveryPassword.clone();
         RoomDatabaseSnapshotter.Snapshot snapshot = null;
+        byte[] snapshotBytes = null;
         try {
             snapshot = snapshotter.create(app, database, snapshotDirectory);
+            snapshotBytes = readSnapshot(snapshot.file);
             File encryptedBackup = fileStore.writeBackupWithLocalKey(
-                    backupDirectory, readSnapshot(snapshot.file), passwordCopy,
-                    recoveryKey, keyProtector);
+                    backupDirectory, snapshotBytes, passwordCopy, recoveryKey, keyProtector);
 
             // The worker independently checks app-private location, envelope
             // magic/version, KDF parameters, and exact envelope length.
@@ -76,6 +77,7 @@ public final class FullBackupCoordinator {
             return encryptedBackup;
         } finally {
             Arrays.fill(passwordCopy, '\\0');
+            if (snapshotBytes != null) Arrays.fill(snapshotBytes, (byte) 0);
             if (snapshot != null && snapshot.file.exists() && !snapshot.file.delete()) {
                 // A plaintext snapshot is never uploaded; cleanup failure is surfaced.
                 throw new IOException("Encrypted backup created, but plaintext snapshot cleanup failed");
