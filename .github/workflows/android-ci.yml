@@ -60,18 +60,52 @@ jobs:
       - name: Run database instrumentation tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          # API 34 is used for a more stable CI emulator; compile/target SDK remain 36.
+          api-level: 34
           arch: x86_64
           target: google_apis
           profile: pixel_2
           emulator-boot-timeout: 900000
-          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -memory 4096
           disable-animations: true
           script: |
+            set -euo pipefail
+            adb wait-for-device
+            PACKAGE_MANAGER_READY=false
+            for attempt in $(seq 1 24); do
+              if adb shell cmd package list packages >/dev/null 2>&1; then
+                PACKAGE_MANAGER_READY=true
+                break
+              fi
+              echo "Waiting for Android package manager ($attempt/24)..."
+              sleep 5
+            done
+            if [ "$PACKAGE_MANAGER_READY" != "true" ]; then
+              adb logcat -d -b all > "$RUNNER_TEMP/emulator-logcat.txt" || true
+              echo "::error::Android package manager did not become ready"
+              exit 1
+            fi
             adb shell settings put global package_verifier_enable 0 || true
             adb shell settings put global verifier_verify_adb_installs 0 || true
             adb shell settings put global package_verifier_user_consent -1 || true
+            set +e
             gradle --no-daemon :app:connectedDebugAndroidTest
+            TEST_EXIT=$?
+            set -e
+            adb logcat -d -b all > "$RUNNER_TEMP/emulator-logcat.txt" || true
+            if [ "$TEST_EXIT" -ne 0 ]; then
+              echo "::error::Database instrumentation tests failed; emulator logcat captured"
+              tail -n 160 "$RUNNER_TEMP/emulator-logcat.txt" || true
+              exit "$TEST_EXIT"
+            fi
+      - name: Upload emulator logcat
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mae-yai-on-pos-emulator-logcat
+          path: ${{ runner.temp }}/emulator-logcat.txt
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Assemble debug APK
         run: gradle --no-daemon :app:assembleDebug
       - name: Upload Room schema
