@@ -59,7 +59,7 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
         File backup;
         try {
             backup = validatePrivateEncryptedBackup(backupPath);
-        } catch (IOException invalidInput) {
+        } catch (IOException | java.security.GeneralSecurityException invalidInput) {
             return Result.failure();
         }
 
@@ -161,7 +161,8 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
         }
     }
 
-    private File validatePrivateEncryptedBackup(String path) throws IOException {
+    private File validatePrivateEncryptedBackup(String path)
+            throws IOException, java.security.GeneralSecurityException {
         File candidate = new File(path).getCanonicalFile();
         File privateRoot = getApplicationContext().getFilesDir().getCanonicalFile();
         String root = privateRoot.getPath() + File.separator;
