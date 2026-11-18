@@ -16,9 +16,9 @@ public final class DatabaseGuards {
         db.execSQL("CREATE TRIGGER IF NOT EXISTS barcode_registry_no_delete BEFORE DELETE ON barcode_registry BEGIN SELECT RAISE(ABORT, 'barcode_registry_immutable'); END");
 
         db.execSQL("DROP TRIGGER IF EXISTS barcode_counter_insert_guard");
-        db.execSQL("CREATE TRIGGER IF NOT EXISTS barcode_counter_insert_guard BEFORE INSERT ON barcode_counter WHEN NEW.id != 1 OR NEW.next_value < 2000001 OR NEW.next_value < OLD.next_value BEGIN SELECT RAISE(ABORT, 'barcode_counter_invalid'); END");
+        db.execSQL("CREATE TRIGGER IF NOT EXISTS barcode_counter_insert_guard BEFORE INSERT ON barcode_counter WHEN NEW.id != 1 OR NEW.next_value < 2000001 BEGIN SELECT RAISE(ABORT, 'barcode_counter_invalid'); END");
         db.execSQL("DROP TRIGGER IF EXISTS barcode_counter_update_guard");
-        db.execSQL("CREATE TRIGGER IF NOT EXISTS barcode_counter_update_guard BEFORE UPDATE ON barcode_counter WHEN NEW.id != OLD.id OR NEW.id != 1 OR NEW.next_value < 2000001 BEGIN SELECT RAISE(ABORT, 'barcode_counter_invalid'); END");
+        db.execSQL("CREATE TRIGGER IF NOT EXISTS barcode_counter_update_guard BEFORE UPDATE ON barcode_counter WHEN NEW.id != OLD.id OR NEW.id != 1 OR NEW.next_value < 2000001 OR NEW.next_value < OLD.next_value BEGIN SELECT RAISE(ABORT, 'barcode_counter_invalid'); END");
         db.execSQL("DROP TRIGGER IF EXISTS barcode_counter_no_delete");
         db.execSQL("CREATE TRIGGER IF NOT EXISTS barcode_counter_no_delete BEFORE DELETE ON barcode_counter BEGIN SELECT RAISE(ABORT, 'barcode_counter_immutable'); END");
 
