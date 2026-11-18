@@ -6,7 +6,6 @@ import androidx.annotation.NonNull;
 import androidx.room.Database;
 import androidx.room.Room;
 import androidx.room.RoomDatabase;
-import androidx.room.migration.Migration;
 import androidx.sqlite.db.SupportSQLiteDatabase;
 
 @Database(entities = {
@@ -45,8 +44,6 @@ public abstract class AppDatabase extends RoomDatabase {
             public void onOpen(@NonNull SupportSQLiteDatabase db) {
                 super.onOpen(db);
                 db.setForeignKeyConstraintsEnabled(true);
-                // Apply explicit durability settings whenever Room opens the database.
-                // Connection-pool-wide enforcement is separately acceptance-gated below.
                 db.execSQL("PRAGMA busy_timeout=5000");
                 db.execSQL("PRAGMA synchronous=FULL");
             }
@@ -72,5 +69,20 @@ public abstract class AppDatabase extends RoomDatabase {
             }
         }
         return local;
+    }
+
+    /**
+     * Closes and forgets the process singleton before a validated database file
+     * is atomically replaced during restore. Callers must hold the maintenance
+     * gate and synchronize on AppDatabase.class for the full replacement.
+     */
+    public static void closeInstanceForRestore() {
+        synchronized (AppDatabase.class) {
+            AppDatabase current = INSTANCE;
+            INSTANCE = null;
+            if (current != null && !current.isOpen()) {
+                current.close();
+            }
+        }
     }
 }
