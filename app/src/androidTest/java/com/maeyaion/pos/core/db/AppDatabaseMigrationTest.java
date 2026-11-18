@@ -221,7 +221,7 @@ public final class AppDatabaseMigrationTest {
         SupportSQLiteDatabase sql = database.getOpenHelper().getWritableDatabase();
         assertPragmaLong(sql, "PRAGMA foreign_keys", 1L);
         long busyTimeoutMs = readPragmaLong(sql, "PRAGMA busy_timeout");
-        assertTrue("SQLite busy timeout must be positive and bounded", busyTimeoutMs > 0L && busyTimeoutMs <= 5000L);
+        assertEquals("SQLite busy timeout must be exactly five seconds", 5000L, busyTimeoutMs);
         assertPragmaLong(sql, "PRAGMA synchronous", 2L);
         try (Cursor cursor = sql.query("PRAGMA journal_mode")) {
             assertNotNull(cursor);
