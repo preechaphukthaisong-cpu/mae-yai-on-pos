@@ -49,16 +49,23 @@ final class OfflineBarcodeAnalyzer implements ImageAnalysis.Analyzer, AutoClosea
             return;
         }
         InputImage input = InputImage.fromMediaImage(mediaImage, imageProxy.getImageInfo().getRotationDegrees());
-        scanner.process(input)
-                .addOnSuccessListener(callbackExecutor, barcodes -> {
-                    long now = SystemClock.elapsedRealtime();
-                    for (Barcode barcode : barcodes) {
-                        String raw = barcode.getRawValue();
-                        if (emissionGate.shouldEmit(raw, now)) listener.onBarcode(raw, barcode.getFormat());
-                    }
-                })
-                .addOnFailureListener(callbackExecutor, listener::onFailure)
-                .addOnCompleteListener(callbackExecutor, task -> imageProxy.close());
+        try {
+            scanner.process(input)
+                    .addOnSuccessListener(callbackExecutor, barcodes -> {
+                        long now = SystemClock.elapsedRealtime();
+                        for (Barcode barcode : barcodes) {
+                            String raw = barcode.getRawValue();
+                            if (emissionGate.shouldEmit(raw, now)) {
+                                listener.onBarcode(raw, barcode.getFormat());
+                            }
+                        }
+                    })
+                    .addOnFailureListener(callbackExecutor, listener::onFailure)
+                    .addOnCompleteListener(callbackExecutor, task -> imageProxy.close());
+        } catch (RuntimeException processingFailure) {
+            imageProxy.close();
+            listener.onFailure(processingFailure);
+        }
     }
 
     @Override public void close() {
