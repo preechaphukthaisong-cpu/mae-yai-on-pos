@@ -66,6 +66,10 @@ public final class AppDatabaseMigrationTest {
         assertTableExists(sql, "stock_log");
         assertTableExists(sql, "op_log");
         assertTableExists(sql, "backup_journal");
+        assertCoreGuardsExist(sql);
+        assertTriggerExists(sql, "backup_journal_insert_guard");
+        assertTriggerExists(sql, "backup_journal_update_guard");
+        assertTriggerExists(sql, "backup_journal_no_delete");
     }
 
     @Test public void freshDatabaseSeedsBarcodeCounter() {
@@ -74,12 +78,20 @@ public final class AppDatabaseMigrationTest {
                 .build();
         database.getOpenHelper().getWritableDatabase();
         assertEquals(2_000_001L, database.barcodeCounterDao().get().nextValue);
+        SupportSQLiteDatabase sql = database.getOpenHelper().getWritableDatabase();
+        assertCoreGuardsExist(sql);
+        assertTriggerExists(sql, "backup_journal_insert_guard");
+        assertTriggerExists(sql, "backup_journal_update_guard");
+        assertTriggerExists(sql, "backup_journal_no_delete");
     }
 
     @Test public void stockLedgerIsTheOnlyWayToChangeStockAndRejectsInvalidEntries() {
         openFreshDatabase();
         SupportSQLiteDatabase sql = database.getOpenHelper().getWritableDatabase();
         insertBarcodeAndProduct(sql);
+        assertSqlFails(() -> sql.execSQL("UPDATE product SET stock_qty_milli = 500 WHERE sku = 'SKU-1'"));
+        assertSqlFails(() -> sql.execSQL("UPDATE product SET price_satang = -1 WHERE sku = 'SKU-1'"));
+        assertSqlFails(() -> sql.execSQL("DELETE FROM product WHERE sku = 'SKU-1'"));
         appendStock(sql, "stock-1", 0, 2_000, 2_000);
 
         assertEquals(2_000L, database.productDao().findBySku("SKU-1").stockQtyMilli);
@@ -126,7 +138,7 @@ public final class AppDatabaseMigrationTest {
     @Test public void backupJournalIsOrderedAndOnlyUploadFlagCanChange() {
         openFreshDatabase();
         BackupJournalEntity first = new BackupJournalEntity(0, "op-1", "PRODUCT_CREATE",
-                "{\"sku\":\"SKU-1\"}", "sha256-1", 3,
+                "{\"sku\":\"SKU-1\"}", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", 3,
                 "2026-11-17T00:00:00Z", 0);
         long seq = database.backupJournalDao().append(first);
         assertEquals(1L, database.backupJournalDao().pendingCount());
@@ -155,6 +167,27 @@ public final class AppDatabaseMigrationTest {
     private static void appendStock(SupportSQLiteDatabase sql, String id, long before, long after, long diff) {
         sql.execSQL("INSERT INTO stock_log(id, sku, before_qty_milli, after_qty_milli, diff_qty_milli, reason, ref_id, created_at_utc) VALUES(?, 'SKU-1', ?, ?, ?, 'RECEIVE', NULL, '2026-11-17T00:00:00Z')",
                 new Object[]{id, before, after, diff});
+    }
+
+    private static void assertCoreGuardsExist(SupportSQLiteDatabase db) {
+        String[] names = {"barcode_registry_insert_guard", "barcode_registry_no_update",
+                "barcode_registry_no_delete", "barcode_counter_insert_guard",
+                "barcode_counter_update_guard", "barcode_counter_no_delete",
+                "product_insert_guard", "product_update_guard",
+                "product_identity_immutable", "product_no_delete",
+                "stock_log_validate", "stock_log_apply",
+                "stock_log_no_update", "stock_log_no_delete",
+                "op_log_no_update", "op_log_no_delete"};
+        for (String name : names) assertTriggerExists(db, name);
+    }
+
+    private static void assertTriggerExists(SupportSQLiteDatabase db, String trigger) {
+        try (Cursor cursor = db.query(
+                "SELECT name FROM sqlite_master WHERE type='trigger' AND name=?",
+                new Object[]{trigger})) {
+            assertNotNull(cursor);
+            assertEquals("Missing trigger: " + trigger, true, cursor.moveToFirst());
+        }
     }
 
     private static void assertTableExists(SupportSQLiteDatabase db, String table) {
