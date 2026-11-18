@@ -1,6 +1,10 @@
 package com.maeyaion.pos.core.backup;
 
 import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -40,6 +44,50 @@ public final class BackupCrypto {
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private BackupCrypto() {}
+
+    /**
+     * Performs bounded structural validation before a backup is eligible for upload.
+     * This rejects plaintext/renamed files and malformed envelopes without loading
+     * the backup payload into memory. GCM authenticity is verified only when a
+     * recovery credential is supplied during restore.
+     */
+    public static void validateEnvelopeFile(File file)
+            throws IOException, GeneralSecurityException {
+        if (file == null || !file.isFile()) {
+            throw new IOException("Encrypted backup file is missing");
+        }
+        long fileLength = file.length();
+        long minimum = (long) FIXED_HEADER_BYTES + 2L * WRAPPED_KEY_BYTES
+                + DIGEST_BYTES + GCM_TAG_BITS / 8;
+        long maximum = (long) FIXED_HEADER_BYTES + 2L * WRAPPED_KEY_BYTES
+                + MAX_PAYLOAD_BYTES + DIGEST_BYTES + GCM_TAG_BITS / 8;
+        if (fileLength < minimum || fileLength > maximum) {
+            throw new GeneralSecurityException("Backup envelope size is invalid");
+        }
+        try (DataInputStream input = new DataInputStream(new FileInputStream(file))) {
+            byte[] magic = new byte[MAGIC.length];
+            input.readFully(magic);
+            if (!Arrays.equals(MAGIC, magic)) {
+                throw new GeneralSecurityException("Unknown backup format");
+            }
+            int version = input.readInt();
+            int iterations = input.readInt();
+            if (version != VERSION || iterations != PBKDF2_ITERATIONS) {
+                throw new GeneralSecurityException("Unsupported backup version or KDF parameters");
+            }
+            input.skipBytes(NONCE_BYTES + SALT_BYTES + NONCE_BYTES + NONCE_BYTES);
+            int ciphertextLength = input.readInt();
+            long expectedLength = (long) FIXED_HEADER_BYTES + 2L * WRAPPED_KEY_BYTES
+                    + ciphertextLength;
+            if (ciphertextLength < DIGEST_BYTES + GCM_TAG_BITS / 8
+                    || ciphertextLength > MAX_PAYLOAD_BYTES + DIGEST_BYTES + GCM_TAG_BITS / 8
+                    || expectedLength != fileLength) {
+                throw new GeneralSecurityException("Backup envelope length is invalid");
+            }
+        } catch (IOException e) {
+            throw e;
+        }
+    }
 
     public static String generateRecoveryKey() {
         byte[] key = new byte[KEY_BYTES];
