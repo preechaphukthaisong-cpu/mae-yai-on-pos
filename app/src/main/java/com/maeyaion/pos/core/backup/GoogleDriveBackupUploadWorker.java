@@ -15,7 +15,7 @@ import com.google.android.gms.auth.UserRecoverableAuthException;
 
 import com.maeyaion.pos.core.db.AppDatabase;
 import com.maeyaion.pos.core.db.BackupJournalEntity;
-import com.maeyaion.pos.core.tx.DatabaseMaintenanceGate;
+import com.maeyaion.pos.core.tx.RoomTransactionRunner;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -154,9 +154,8 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
         long[] sequences = parseJournalSequences(
                 getInputData().getString(INPUT_JOURNAL_SEQUENCES));
         if (sequences.length == 0) return;
-        DatabaseMaintenanceGate.withExclusiveAccess(() -> {
-            AppDatabase database = AppDatabase.getInstance(getApplicationContext());
-            database.runInTransaction(() -> {
+        AppDatabase database = AppDatabase.getInstance(getApplicationContext());
+        new RoomTransactionRunner(database).runInTransaction(() -> {
                 for (long sequence : sequences) {
                     int changed = database.backupJournalDao().markUploaded(sequence);
                     if (changed == 0) {
@@ -168,7 +167,6 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
                         }
                     }
                 }
-            });
             return null;
         });
     }
