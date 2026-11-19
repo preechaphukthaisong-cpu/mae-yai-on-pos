@@ -11,13 +11,8 @@ import java.security.GeneralSecurityException;
 import java.util.Arrays;
 
 /**
- * Creates a consistent SQLite snapshot, encrypts it with portable recovery
- * credentials plus a device-bound Keystore wrapper, and queues only the
- * authenticated encrypted envelope for Drive appDataFolder upload.
- *
- * The plaintext snapshot is temporary and is deleted after encryption whether
- * encryption or scheduling succeeds. The encrypted backup is retained locally
- * when upload is deferred or fails so WorkManager can retry it.
+ * Creates authenticated encrypted database snapshots. Only the encrypted
+ * envelope is retained; plaintext snapshots are deleted after encryption.
  */
 public final class FullBackupCoordinator {
     private final RoomDatabaseSnapshotter snapshotter;
@@ -40,10 +35,38 @@ public final class FullBackupCoordinator {
         this.keyProtector = keyProtector;
     }
 
-    /**
-     * Returns the durable local encrypted backup. Drive upload is asynchronous;
-     * a returned file does not claim that Google Drive has accepted it.
-     */
+    /** Creates a local encrypted backup without requiring or contacting Google Drive. */
+    @NonNull
+    public File createLocalBackup(@NonNull Context context, @NonNull RoomDatabase database,
+            @NonNull char[] recoveryPassword, @NonNull String recoveryKey)
+            throws IOException, GeneralSecurityException {
+        if (recoveryPassword.length < 12 || recoveryKey.trim().isEmpty()) {
+            throw new GeneralSecurityException("Recovery Password and Recovery Key are required");
+        }
+        Context app = context.getApplicationContext();
+        File root = app.getFilesDir().getCanonicalFile();
+        File backupDirectory = new File(root, "backups");
+        File snapshotDirectory = new File(backupDirectory, "snapshots");
+        ensurePrivateDirectory(root, backupDirectory);
+        ensurePrivateDirectory(root, snapshotDirectory);
+
+        char[] passwordCopy = recoveryPassword.clone();
+        RoomDatabaseSnapshotter.Snapshot snapshot = null;
+        Throwable primaryFailure = null;
+        try {
+            snapshot = snapshotter.create(app, database, snapshotDirectory);
+            return fileStore.writeBackupWithLocalKey(backupDirectory, snapshot.file,
+                    passwordCopy, recoveryKey, keyProtector);
+        } catch (IOException | GeneralSecurityException | RuntimeException | Error failure) {
+            primaryFailure = failure;
+            throw failure;
+        } finally {
+            Arrays.fill(passwordCopy, '\\0');
+            cleanupSnapshot(snapshot == null ? null : snapshot.file, primaryFailure);
+        }
+    }
+
+    /** Queues the encrypted local file for a one-time Drive upload. */
     @NonNull
     public File createAndQueue(@NonNull Context context, @NonNull RoomDatabase database,
             @NonNull String googleAccountName, @NonNull char[] recoveryPassword,
@@ -51,51 +74,18 @@ public final class FullBackupCoordinator {
         if (googleAccountName.trim().isEmpty()) {
             throw new IllegalArgumentException("Google account is required");
         }
-        if (recoveryPassword.length < 12 || recoveryKey.trim().isEmpty()) {
-            throw new GeneralSecurityException("Recovery Password and Recovery Key are required");
-        }
-
-        Context app = context.getApplicationContext();
-        File filesRoot = app.getFilesDir().getCanonicalFile();
-        File backupDirectory = new File(filesRoot, "backups");
-        File snapshotDirectory = new File(backupDirectory, "snapshots");
-        ensurePrivateDirectory(filesRoot, backupDirectory);
-        ensurePrivateDirectory(filesRoot, snapshotDirectory);
-
-        char[] passwordCopy = recoveryPassword.clone();
-        RoomDatabaseSnapshotter.Snapshot snapshot = null;
-        Throwable primaryFailure = null;
-        try {
-            snapshot = snapshotter.create(app, database, snapshotDirectory);
-            File encryptedBackup = fileStore.writeBackupWithLocalKey(
-                    backupDirectory, snapshot.file, passwordCopy, recoveryKey, keyProtector);
-
-            // The worker independently checks app-private location, envelope
-            // magic/version, KDF parameters, and exact envelope length.
-            DriveBackupWorkScheduler.enqueueUpload(app, encryptedBackup, googleAccountName);
-            return encryptedBackup;
-        } catch (IOException | GeneralSecurityException | RuntimeException | Error failure) {
-            primaryFailure = failure;
-            throw failure;
-        } finally {
-            Arrays.fill(passwordCopy, '\0');
-            cleanupSnapshot(snapshot == null ? null : snapshot.file, primaryFailure);
-        }
+        File backup = createLocalBackup(context, database, recoveryPassword, recoveryKey);
+        DriveBackupWorkScheduler.enqueueUpload(context.getApplicationContext(),
+                backup, googleAccountName);
+        return backup;
     }
 
-    /**
-     * Deletes the temporary plaintext snapshot without masking the operation's
-     * original failure. If the main operation succeeded, cleanup failure is fatal.
-     */
     static void cleanupSnapshot(File snapshot, Throwable primaryFailure) throws IOException {
         if (snapshot != null && snapshot.exists() && !snapshot.delete()) {
             IOException cleanupFailure = new IOException(
                     "Encrypted backup created, but plaintext snapshot cleanup failed");
-            if (primaryFailure != null) {
-                primaryFailure.addSuppressed(cleanupFailure);
-            } else {
-                throw cleanupFailure;
-            }
+            if (primaryFailure != null) primaryFailure.addSuppressed(cleanupFailure);
+            else throw cleanupFailure;
         }
     }
 
