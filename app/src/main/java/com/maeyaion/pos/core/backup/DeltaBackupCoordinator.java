@@ -22,6 +22,8 @@ import java.util.List;
  */
 public final class DeltaBackupCoordinator {
     private static final int MAX_BATCH_SIZE = 100;
+    private static final int MAX_ENTRY_PAYLOAD_CHARS = 64 * 1024;
+    private static final int MAX_DELTA_BYTES = 4 * 1024 * 1024;
     private final EncryptedBackupFileStore fileStore;
     private final AndroidKeystoreKeyProtector keyProtector;
 
@@ -99,7 +101,8 @@ public final class DeltaBackupCoordinator {
             if (entry == null || entry.seq <= previous || entry.seq <= 0
                     || entry.uploaded != 0 || entry.schema_version != expectedSchemaVersion
                     || isBlank(entry.operation_id) || isBlank(entry.op)
-                    || entry.payload == null || isBlank(entry.created_at_utc)
+                    || entry.payload == null || entry.payload.length() > MAX_ENTRY_PAYLOAD_CHARS
+                    || isBlank(entry.created_at_utc)
                     || !isValidSha256(entry.payload_sha256)
                     || !MessageDigest.isEqual(hexToBytes(entry.payload_sha256),
                             sha256(entry.payload.getBytes(StandardCharsets.UTF_8)))) {
@@ -116,6 +119,9 @@ public final class DeltaBackupCoordinator {
             previous = entry.seq;
         }
         json.append("]}");
+        if (json.length() > MAX_DELTA_BYTES) {
+            throw new IOException("Encrypted delta batch exceeds the 4 MiB payload limit");
+        }
         return json.toString().getBytes(StandardCharsets.UTF_8);
     }
 
