@@ -50,25 +50,12 @@ public abstract class AppDatabase extends RoomDatabase {
         };
     }
 
-    /**
-     * The database is deliberately opened by Room without WAL connection pooling,
-     * then switched to SQLite WAL mode below. Android's public per-connection SQL
-     * API cannot execute PRAGMAs that return rows (busy_timeout does), and WAL
-     * pooling has no public connection-created callback. Keeping one SQLite
-     * connection makes the D-064 settings deterministic on API 26+ while retaining
-     * WAL journaling and FULL synchronous durability.
-     */
+    /** Apply connection-local durability settings; Room owns WAL lifecycle. */
     private static void applyDurabilityPragmas(@NonNull SupportSQLiteDatabase db) {
-        executePragma(db, "PRAGMA journal_mode=WAL");
         executePragma(db, "PRAGMA busy_timeout=5000");
         executePragma(db, "PRAGMA synchronous=FULL");
     }
 
-    /**
-     * PRAGMA statements can return rows. SupportSQLiteDatabase.execSQL is for
-     * statements that do not return a result set; use query and always drain
-     * and close the cursor for assignment PRAGMAs.
-     */
     private static void executePragma(@NonNull SupportSQLiteDatabase db, @NonNull String sql) {
         try (Cursor cursor = db.query(sql)) {
             while (cursor.moveToNext()) {
@@ -87,7 +74,7 @@ public abstract class AppDatabase extends RoomDatabase {
                                     context.getApplicationContext(),
                                     AppDatabase.class,
                                     "maeyaion_pos.db")
-                            .setJournalMode(JournalMode.TRUNCATE)
+                            .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
                             .addMigrations(Migration1To2.INSTANCE, Migration2To3.INSTANCE, Migration3To4.INSTANCE)
                             .addCallback(databaseCallback())
                             .build();
