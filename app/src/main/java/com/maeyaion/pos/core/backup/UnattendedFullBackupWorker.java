@@ -53,6 +53,20 @@ public final class UnattendedFullBackupWorker extends Worker {
             ensurePrivateDirectory(context.getFilesDir(), snapshotDirectory);
             ensurePrivateDirectory(context.getFilesDir(), fullDirectory);
 
+            // Re-enqueue every prior pending upload after process death, reboot or account change.
+            File[] pendingMarkers = fullDirectory.listFiles(
+                    (directory, name) -> name.endsWith(".myobak.pending"));
+            if (pendingMarkers == null) throw new IOException("Unable to enumerate pending backup files");
+            for (File marker : pendingMarkers) {
+                String backupName = marker.getName().substring(
+                        0, marker.getName().length() - ".pending".length());
+                File pendingBackup = new File(fullDirectory, backupName);
+                if (pendingBackup.isFile() && pendingBackup.length() > 0) {
+                    UnattendedBackupScheduler.enqueueUpload(context, account,
+                            pendingBackup.getAbsolutePath());
+                }
+            }
+
             String stamp = new SimpleDateFormat("yyyyMMdd", Locale.ROOT) {{
                 setTimeZone(TimeZone.getTimeZone("UTC"));
             }}.format(new Date());
