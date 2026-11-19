@@ -259,6 +259,63 @@ public final class BackupSnapshotRestoreTest {
         return out.toString();
     }
 
+
+    @Test public void deltaReplayRollsBackWholeBatchWhenLaterOperationFails() throws Exception {
+        RoomDatabaseSnapshotter.Snapshot baseline = new RoomDatabaseSnapshotter()
+                .create(context, database, backupDirectory);
+        File staging = new File(backupDirectory, "delta-rollback-staging.sqlite");
+        Files.copy(baseline.file.toPath(), staging.toPath());
+
+        java.util.List<BackupJournalEntity> rows = Arrays.asList(
+                createProductRow(1L, "ROLLBACK-SKU", "2000001", "2026-11-19T00:30:00Z"),
+                createProductRow(2L, "ROLLBACK-SKU", "2000002", "2026-11-19T00:31:00Z"));
+        byte[] delta = DeltaBackupCoordinator.buildPayload(rows, 4);
+        byte[] envelope = BackupCrypto.encrypt(delta, PASSWORD, BackupCrypto.generateRecoveryKey());
+        File encryptedDelta = new File(backupDirectory, "delta-rollback.myobak");
+        Files.write(encryptedDelta.toPath(), envelope);
+
+        try {
+            new DeltaReplayCoordinator().applyToStaging(context, staging, encryptedDelta,
+                    PASSWORD, null);
+            fail("A conflicting second operation must abort the complete delta batch");
+        } catch (java.io.IOException expected) {
+            assertTrue(expected.getMessage().contains("already exists"));
+        }
+
+        SQLiteDatabase stagedDb = SQLiteDatabase.openDatabase(
+                staging.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
+        try (Cursor products = stagedDb.rawQuery(
+                    "SELECT COUNT(*) FROM product WHERE sku='ROLLBACK-SKU'", null);
+             Cursor journal = stagedDb.rawQuery(
+                    "SELECT COUNT(*) FROM backup_journal", null);
+             Cursor counter = stagedDb.rawQuery(
+                    "SELECT next_value FROM barcode_counter WHERE id=1", null)) {
+            assertTrue(products.moveToFirst());
+            assertEquals(0, products.getInt(0));
+            assertTrue(journal.moveToFirst());
+            assertEquals(0, journal.getInt(0));
+            assertTrue(counter.moveToFirst());
+            assertEquals(2000001L, counter.getLong(0));
+        } finally {
+            stagedDb.close();
+        }
+        Arrays.fill(delta, (byte) 0);
+        Arrays.fill(envelope, (byte) 0);
+    }
+
+    private static BackupJournalEntity createProductRow(long sequence, String sku,
+            String barcode, String createdAt) throws Exception {
+        String payload = "{\\"v\\":1,\\"op\\":\\"PRODUCT_CREATE_SYSTEM\\","
+                + "\\"sku\\":\\"" + sku + "\\",\\"barcode\\":\\"" + barcode + "\\","
+                + "\\"name\\":\\"Replay product\\",\\"price_satang\\":100,"
+                + "\\"cost_satang\\":50,\\"unit\\":\\"ชิ้น\\","
+                + "\\"stock_limit_qty_milli\\":null,"
+                + "\\"created_at_utc\\":\\"" + createdAt + "\\","
+                + "\\"updated_at_utc\\":\\"" + createdAt + "\\"}";
+        return new BackupJournalEntity(sequence, UUID.randomUUID().toString(),
+                "PRODUCT_CREATE_SYSTEM", payload, hexSha256(payload), 4, createdAt, 0);
+    }
+
     @Test public void snapshotWaitsUntilTransactionRunnerReleasesWriterGate() throws Exception {
         RoomTransactionRunner transactions = new RoomTransactionRunner(database);
         CountDownLatch writerEntered = new CountDownLatch(1);
