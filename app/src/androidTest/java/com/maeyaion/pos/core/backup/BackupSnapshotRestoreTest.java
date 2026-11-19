@@ -208,6 +208,50 @@ public final class BackupSnapshotRestoreTest {
         assertTrue(database.productDao().findBySku("DELTA-SKU-1") != null);
     }
 
+
+    @Test public void duplicateDeltaAcknowledgesPendingRowsAlreadyInFullSnapshot() throws Exception {
+        RoomTransactionRunner transactions = new RoomTransactionRunner(database);
+        BarcodeAllocator allocator = new BarcodeAllocator(database.barcodeRegistryDao(),
+                database.barcodeCounterDao(), transactions);
+        ProductRegistrationService products = new ProductRegistrationService(allocator,
+                database.productDao(), database.opLogDao(), database.backupJournalDao(), transactions);
+        products.createWithSystemBarcode(UUID.randomUUID().toString(), "SNAPSHOT-SKU",
+                "Snapshot product", 500L, 250L, "ชิ้น", null,
+                "2026-11-19T00:40:00Z", "2026-11-19T00:40:00Z");
+
+        java.util.List<BackupJournalEntity> pending = database.backupJournalDao().pendingBatch(10);
+        assertEquals(1, pending.size());
+        assertEquals(0, pending.get(0).uploaded);
+        RoomDatabaseSnapshotter.Snapshot snapshot = new RoomDatabaseSnapshotter()
+                .create(context, database, backupDirectory);
+        File staging = new File(backupDirectory, "delta-existing-snapshot.sqlite");
+        Files.copy(snapshot.file.toPath(), staging.toPath());
+
+        byte[] delta = DeltaBackupCoordinator.buildPayload(pending, 4);
+        byte[] envelope = BackupCrypto.encrypt(delta, PASSWORD, BackupCrypto.generateRecoveryKey());
+        File encryptedDelta = new File(backupDirectory, "delta-existing-snapshot.myobak");
+        Files.write(encryptedDelta.toPath(), envelope);
+
+        DeltaReplayCoordinator.ApplyResult result = new DeltaReplayCoordinator()
+                .applyToStaging(context, staging, encryptedDelta, PASSWORD, null);
+        assertEquals(0, result.appliedCount);
+        assertTrue(result.alreadyApplied);
+
+        SQLiteDatabase stagedDb = SQLiteDatabase.openDatabase(
+                staging.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
+        try (Cursor cursor = stagedDb.rawQuery(
+                "SELECT uploaded FROM backup_journal WHERE seq=1", null)) {
+            assertTrue(cursor.moveToFirst());
+            assertEquals(1, cursor.getInt(0));
+        } finally {
+            stagedDb.close();
+        }
+        // The source database is unchanged; only the restored staging copy is acknowledged.
+        assertEquals(0, database.backupJournalDao().findBySequence(1L).uploaded);
+        Arrays.fill(delta, (byte) 0);
+        Arrays.fill(envelope, (byte) 0);
+    }
+
     @Test public void deltaReplayRejectsSequenceGapWithoutApplyingRows() throws Exception {
         RoomDatabaseSnapshotter.Snapshot baseline = new RoomDatabaseSnapshotter()
                 .create(context, database, backupDirectory);
