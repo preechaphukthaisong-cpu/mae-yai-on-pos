@@ -325,7 +325,8 @@ public final class BackupCrypto {
         byte[] recoveryBytes = null, recoveryWrapKey = null, dataKey = null;
         byte[] header = null, base = null;
         boolean success = false;
-        try (DataInputStream input = new DataInputStream(new FileInputStream(envelopeFile))) {
+        try {
+            try (DataInputStream input = new DataInputStream(new FileInputStream(envelopeFile))) {
             byte[] magic = new byte[MAGIC.length];
             input.readFully(magic);
             if (!Arrays.equals(MAGIC, magic)) throw new GeneralSecurityException("Unknown backup format");
@@ -394,6 +395,7 @@ public final class BackupCrypto {
                 verifier.finish();
             } finally {
                 verifier.close();
+            }
             }
             success = true;
         } catch (IOException | GeneralSecurityException | RuntimeException failure) {
