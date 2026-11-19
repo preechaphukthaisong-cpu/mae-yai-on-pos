@@ -27,6 +27,7 @@ import com.maeyaion.pos.core.tx.RoomTransactionRunner;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.math.BigInteger;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -200,7 +201,7 @@ public final class PosWorkflowActivity extends Activity {
             for (Map.Entry<String, Long> item : cart.entrySet()) {
                 ProductEntity p = database.productDao().findBySku(item.getKey());
                 if (p == null) continue;
-                long line = Math.round((double) p.priceSatang * item.getValue() / 1000.0d);
+                long line = calculateLineTotal(p.priceSatang, item.getValue());
                 total = Math.addExact(total, line);
                 out.append(p.name).append(" x ").append(formatMilli(item.getValue()))
                         .append(" = ").append(formatBaht(line)).append(" บาท\n");
@@ -252,16 +253,12 @@ public final class PosWorkflowActivity extends Activity {
     }
 
     private LinearLayout base(String title) {
-        ScrollView scroll = new ScrollView(this);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(16), dp(16), dp(16), dp(16));
         TextView heading = text(title);
         heading.setTextSize(22);
         root.addView(heading);
-        scroll.addView(root);
-        scroll.setFillViewport(true);
-        setContentView(scroll);
         return root;
     }
 
@@ -298,6 +295,14 @@ public final class PosWorkflowActivity extends Activity {
     private static long toMilli(String quantity) {
         return new BigDecimal(quantity.trim()).setScale(3, RoundingMode.UNNECESSARY)
                 .movePointRight(3).longValueExact();
+    }
+    private static long calculateLineTotal(long priceSatang, long quantityMilli) {
+        BigInteger numerator = BigInteger.valueOf(priceSatang).multiply(BigInteger.valueOf(quantityMilli));
+        BigInteger[] parts = numerator.divideAndRemainder(BigInteger.valueOf(1000L));
+        if (parts[1].multiply(BigInteger.valueOf(2L)).compareTo(BigInteger.valueOf(1000L)) >= 0) {
+            parts[0] = parts[0].add(BigInteger.ONE);
+        }
+        return parts[0].longValueExact();
     }
     private static String formatBaht(long satang) {
         return BigDecimal.valueOf(satang, 2).setScale(2).toPlainString();
