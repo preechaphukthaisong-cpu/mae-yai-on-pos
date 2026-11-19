@@ -42,7 +42,6 @@ public final class DeltaBackupCoordinator {
      * Creates one encrypted delta from pending journal rows and queues its upload.
      * Recovery credentials are transient inputs; they are never put in WorkManager.
      */
-    @NonNull
     public File createAndQueue(@NonNull Context context, @NonNull RoomDatabase database,
             @NonNull String googleAccountName, @NonNull char[] recoveryPassword,
             @NonNull String recoveryKey) throws IOException, GeneralSecurityException {
