@@ -88,6 +88,9 @@ public final class DeltaBackupCoordinator {
                 || expectedSchemaVersion <= 0) {
             throw new IOException("Delta journal batch is empty or outside supported bounds");
         }
+        if (entries.get(0) == null || entries.get(entries.size() - 1) == null) {
+            throw new IOException("Backup journal batch contains a null row");
+        }
         StringBuilder json = new StringBuilder(256 + entries.size() * 256);
         json.append("{\"format\":\"MAEYAI_DELTA_V1\",\"schema_version\":")
                 .append(expectedSchemaVersion).append(",\"first_seq\":");
@@ -119,10 +122,11 @@ public final class DeltaBackupCoordinator {
             previous = entry.seq;
         }
         json.append("]}");
-        if (json.length() > MAX_DELTA_BYTES) {
+        byte[] encoded = json.toString().getBytes(StandardCharsets.UTF_8);
+        if (encoded.length > MAX_DELTA_BYTES) {
             throw new IOException("Encrypted delta batch exceeds the 4 MiB payload limit");
         }
-        return json.toString().getBytes(StandardCharsets.UTF_8);
+        return encoded;
     }
 
     private static String quote(String value) throws IOException {
