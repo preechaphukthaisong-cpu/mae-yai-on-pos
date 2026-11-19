@@ -27,6 +27,7 @@ import com.maeyaion.pos.core.backup.FullBackupCoordinator;
 import com.maeyaion.pos.core.backup.DriveBackupWorkScheduler;
 import com.maeyaion.pos.core.backup.GoogleDriveBackupListWorker;
 import com.maeyaion.pos.core.backup.GoogleDriveBackupDownloadWorker;
+import androidx.lifecycle.LiveData;
 import androidx.lifecycle.Observer;
 import androidx.work.WorkInfo;
 import androidx.work.WorkManager;
@@ -279,12 +280,11 @@ public final class MainActivity extends Activity {
             return;
         }
         Toast.makeText(this, "กำลังค้นหาข้อมูลสำรองใน Google Drive…", Toast.LENGTH_SHORT).show();
-        WorkManager.getInstance(this).getWorkInfoByIdLiveData(workId)
-                .observe(this, new Observer<WorkInfo>() {
+        LiveData<WorkInfo> workInfo = WorkManager.getInstance(this).getWorkInfoByIdLiveData(workId);
+        workInfo.observe(this, new Observer<WorkInfo>() {
                     @Override public void onChanged(WorkInfo info) {
                         if (info == null || !info.getState().isFinished()) return;
-                        WorkManager.getInstance(MainActivity.this).getWorkInfoByIdLiveData(workId)
-                                .removeObserver(this);
+                        workInfo.removeObserver(this);
                         if (info.getState() != WorkInfo.State.SUCCEEDED) {
                             Arrays.fill(password, '\0');
                             boolean auth = info.getOutputData().getBoolean(
@@ -352,12 +352,11 @@ public final class MainActivity extends Activity {
             return;
         }
         Toast.makeText(this, "กำลังดาวน์โหลดไฟล์สำรองแบบเข้ารหัส…", Toast.LENGTH_SHORT).show();
-        WorkManager.getInstance(this).getWorkInfoByIdLiveData(workId)
-                .observe(this, new Observer<WorkInfo>() {
+        LiveData<WorkInfo> workInfo = WorkManager.getInstance(this).getWorkInfoByIdLiveData(workId);
+        workInfo.observe(this, new Observer<WorkInfo>() {
                     @Override public void onChanged(WorkInfo info) {
                         if (info == null || !info.getState().isFinished()) return;
-                        WorkManager.getInstance(MainActivity.this).getWorkInfoByIdLiveData(workId)
-                                .removeObserver(this);
+                        workInfo.removeObserver(this);
                         if (info.getState() != WorkInfo.State.SUCCEEDED) {
                             Arrays.fill(password, '\0');
                             boolean auth = info.getOutputData().getBoolean(
