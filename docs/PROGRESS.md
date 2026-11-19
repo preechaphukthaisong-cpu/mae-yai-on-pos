@@ -4,7 +4,7 @@
 - Active branch: `phase-3-release-gates`
 - Base implementation branch: `phase-3-foundation` (merged)
 - Latest code commit: `db1baa947608b96546845bcbd39274699962acb2` (Drive lookup now fails closed; CI pending).
-- Latest completed CI evidence: [Run #358](https://github.com/preechaphukthaisong-cpu/mae-yai-on-pos/actions/runs/44467806488) — success on the prior code commit. CI for the current Drive reconciliation fix is pending.
+- Latest completed CI evidence: [Run #361](https://github.com/preechaphukthaisong-cpu/mae-yai-on-pos/actions/runs/44471430760) — success on `805c4cba7291229aaad445e22a00654d58b349c5`; unit tests, debug APK, Room schema verification and database instrumentation passed.
 - Phase 4 status: **BLOCKED** until every Phase 3 acceptance criterion in v2.1 is met.
 
 ## Acceptance status
@@ -43,3 +43,5 @@
 - 2026-11-19: Fixed `GoogleDriveBackupUploadWorker.findExistingDriveFile`: clear expired token and fail closed on 401, fail closed on every non-2xx, request up to 1000 results, reject paginated/incomplete lookup, and use `DriveUploadReconciliation` for exact-name/duplicate detection. Commit `db1baa947608b96546845bcbd39274699962acb2`; CI Run #361 passed (unit tests, APK build, Room schema verification, database instrumentation).
 
 - 2026-11-19: CI Run #361 completed successfully for `805c4cba7291229aaad445e22a00654d58b349c5`: unit tests, debug APK assembly, Room schema verification/export, and database instrumentation passed. This does not satisfy real-device/Google-account acceptance gates.
+
+- 2026-11-19: Added `docs/PHASE_3_TEST_PLAN.md` with ordered manual/automated test procedures and exact source/test file matrix for G1–G6, migration, and target-device qualification. Document commit `1988fb8702a2822376eb7fcb5f39ee22f01eff1e`.
