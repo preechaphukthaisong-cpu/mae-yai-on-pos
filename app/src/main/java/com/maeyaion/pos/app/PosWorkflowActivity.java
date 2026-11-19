@@ -89,15 +89,15 @@ public final class PosWorkflowActivity extends Activity {
                         database.productDao(), database.opLogDao(), database.backupJournalDao(), tx);
                 try {
                     String sku = "SKU-" + UUID.randomUUID().toString();
-                    ProductEntity product = service.createWithSystemBarcode(UUID.randomUUID().toString(),
-                            sku, productName, priceSatang, costSatang, productUnit, null, now, now);
-                    if (stockMilli > 0) {
-                        tx.runInTransaction(() -> {
+                    ProductEntity product = tx.runInTransaction(() -> {
+                        ProductEntity created = service.createWithSystemBarcode(UUID.randomUUID().toString(),
+                                sku, productName, priceSatang, costSatang, productUnit, null, now, now);
+                        if (stockMilli > 0) {
                             database.stockLogDao().append(new StockLogEntity(UUID.randomUUID().toString(),
-                                    product.sku, 0L, stockMilli, stockMilli, "RECEIVE", null, now));
-                            return null;
-                        });
-                    }
+                                    created.sku, 0L, stockMilli, stockMilli, "RECEIVE", null, now));
+                        }
+                        return created;
+                    });
                     runOnUiThread(() -> {
                         save.setEnabled(true);
                         status.setText("บันทึกแล้ว\nสินค้า: " + product.name + "\nบาร์โค้ด: " + product.barcode
