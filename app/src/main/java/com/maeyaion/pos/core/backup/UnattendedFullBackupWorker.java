@@ -32,7 +32,10 @@ public final class UnattendedFullBackupWorker extends Worker {
         if (!UnattendedBackupScheduler.isEnabled(context)) return Result.success();
         String account = context.getSharedPreferences(UnattendedBackupScheduler.PREFS,
                 Context.MODE_PRIVATE).getString(UnattendedBackupScheduler.KEY_ACCOUNT, null);
-        if (account == null || account.trim().isEmpty()) return Result.failure();
+        if (account == null || account.trim().isEmpty()) {
+            BackupNotifications.showFailure(context, "ยังไม่ได้เลือกบัญชี Google Drive");
+            return Result.failure();
+        }
 
         File snapshot = null;
         File encrypted = null;
@@ -40,7 +43,10 @@ public final class UnattendedFullBackupWorker extends Worker {
         boolean pendingPublished = false;
         try {
             AndroidKeystoreCredentialVault vault = new AndroidKeystoreCredentialVault(context);
-            if (!vault.exists()) return Result.failure();
+            if (!vault.exists()) {
+                BackupNotifications.showFailure(context, "ไม่พบข้อมูลกู้คืน กรุณาเปิดแอปและตั้งค่าการสำรองใหม่");
+                return Result.failure();
+            }
             File backupRoot = new File(context.getFilesDir(), "backups");
             File snapshotDirectory = new File(backupRoot, "snapshots");
             File fullDirectory = new File(backupRoot, "full");
@@ -77,8 +83,11 @@ public final class UnattendedFullBackupWorker extends Worker {
             BackupLocalRetention.prune(fullDirectory, System.currentTimeMillis());
             return Result.success();
         } catch (java.security.GeneralSecurityException invalidVaultOrEncryption) {
+            BackupNotifications.showFailure(context,
+                    "ข้อมูลกู้คืนหรือกุญแจของอุปกรณ์ใช้ไม่ได้ ต้องป้อนข้อมูลกู้คืนใหม่");
             return Result.failure();
         } catch (IOException storageFailure) {
+            BackupNotifications.showFailure(context, "พื้นที่จัดเก็บหรือการสร้างไฟล์สำรองมีปัญหา ระบบจะลองใหม่");
             return Result.retry();
         } catch (RuntimeException databaseOrWorkerFailure) {
             return Result.retry();
