@@ -120,16 +120,21 @@ public final class EncryptedBackupFileStore {
         if (!localKey.isFile() || localKey.length() != 60) {
             throw new IOException("Local Keystore key sidecar is missing or invalid; use Recovery Password or Recovery Key");
         }
-        byte[] envelope = readBounded(encryptedBackup);
         byte[] protectedKey = readBounded(localKey);
-        byte[] plaintext = null;
+        File temporary = new File(privateStagingDirectory, "." + UUID.randomUUID() + TEMP_SUFFIX);
+        File staged = new File(privateStagingDirectory, UUID.randomUUID() + ".restore.db");
         try {
-            plaintext = BackupCrypto.decryptWithLocalKey(envelope, protectedKey, protector);
-            return publishStagedPlaintext(privateStagingDirectory, plaintext, validator);
+            BackupCrypto.decryptFileToLocalKey(encryptedBackup, temporary, protectedKey, protector);
+            if (validator == null || !validator.isValid(temporary)) {
+                throw new IOException("Staged database failed integrity/schema validation");
+            }
+            if (!temporary.renameTo(staged)) {
+                throw new IOException("Unable to publish staged restore file");
+            }
+            return staged;
         } finally {
-            wipe(envelope);
             wipe(protectedKey);
-            wipe(plaintext);
+            if (temporary.exists()) temporary.delete();
         }
     }
 
