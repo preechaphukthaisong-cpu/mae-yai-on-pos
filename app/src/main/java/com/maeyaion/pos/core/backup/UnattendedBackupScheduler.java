@@ -22,6 +22,7 @@ public final class UnattendedBackupScheduler {
     public static final String KEY_ENABLED = "enabled";
     public static final String KEY_ACCOUNT = "account_name";
     public static final String KEY_LAST_SUCCESS = "last_success_epoch_ms";
+    public static final String UPLOAD_WORK_TAG = "maeyaion-pos.unattended-full-backup-upload.v1";
     private static final String KEY_LAST_FAILURE = "last_failure_epoch_ms";
 
     private UnattendedBackupScheduler() {}
@@ -55,6 +56,9 @@ public final class UnattendedBackupScheduler {
             boolean explicitlyConfirmed) {
         if (!explicitlyConfirmed) throw new IllegalArgumentException("Account change was not confirmed");
         if (TextUtils.isEmpty(accountName)) throw new IllegalArgumentException("Account name is required");
+        if (isEnabled(context)) {
+            WorkManager.getInstance(context).cancelAllWorkByTag(UPLOAD_WORK_TAG);
+        }
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .putString(KEY_ACCOUNT, accountName).apply();
         if (isEnabled(context)) schedule(context);
@@ -62,6 +66,7 @@ public final class UnattendedBackupScheduler {
 
     public static void disable(@NonNull Context context) throws Exception {
         WorkManager.getInstance(context).cancelUniqueWork(UNIQUE_PERIODIC_WORK);
+        WorkManager.getInstance(context).cancelAllWorkByTag(UPLOAD_WORK_TAG);
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .putBoolean(KEY_ENABLED, false).remove(KEY_ACCOUNT).apply();
         new AndroidKeystoreCredentialVault(context.getApplicationContext()).clear();
@@ -89,10 +94,13 @@ public final class UnattendedBackupScheduler {
         OneTimeWorkRequest upload = new OneTimeWorkRequest.Builder(GoogleDriveBackupUploadWorker.class)
                 .setConstraints(constraints)
                 .setInputData(input)
+                .addTag(UPLOAD_WORK_TAG)
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL,
                         WorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS)
                 .build();
-        WorkManager.getInstance(context).enqueue(upload);
+        String uniqueName = UPLOAD_WORK_TAG + "." + new java.io.File(encryptedBackupPath).getName();
+        WorkManager.getInstance(context).enqueueUniqueWork(
+                uniqueName, ExistingPeriodicWorkPolicy.KEEP, upload);
     }
 
     private static void schedule(Context context) {
