@@ -55,9 +55,13 @@ public final class DeltaReplayCoordinator {
         }
         BackupCrypto.validateEnvelopeFile(envelope);
 
+        if (staging.equals(envelope)) {
+            throw new IOException("Staging database cannot be the encrypted delta file");
+        }
         File plaintext = new File(envelope.getParentFile(),
                 "." + UUID.randomUUID() + ".delta-replay.tmp");
         char[] passwordCopy = hasPassword ? recoveryPassword.clone() : null;
+        Throwable primaryFailure = null;
         try {
             BackupCrypto.decryptFileTo(envelope, plaintext, passwordCopy,
                     hasPassword ? null : recoveryKey);
