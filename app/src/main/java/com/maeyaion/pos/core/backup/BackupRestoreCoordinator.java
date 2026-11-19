@@ -74,6 +74,8 @@ public final class BackupRestoreCoordinator {
                 RoomDatabaseSnapshotter.Snapshot safety = null;
                 File staged = null;
                 Throwable primaryFailure = null;
+                boolean activationAttempted = false;
+                boolean activationSucceeded = false;
                 try {
                     int expectedVersion = database.getOpenHelper()
                             .getWritableDatabase().getVersion();
@@ -84,14 +86,20 @@ public final class BackupRestoreCoordinator {
                     staged = fileStore.restoreToStaging(stagingDirectory, backup,
                             passwordCopy, hasPassword ? null : recoveryKey,
                             new SQLiteStagedRestoreValidator(expectedVersion));
+                    activationAttempted = true;
                     restorer.activate(app, staged, safety.file, expectedVersion);
+                    activationSucceeded = true;
                     return null;
                 } catch (IOException | GeneralSecurityException | RuntimeException | Error failure) {
                     primaryFailure = failure;
                     throw failure;
                 } finally {
-                    cleanupTemporaryFiles(staged, safety == null ? null : safety.file,
-                            primaryFailure);
+                    cleanupStagedFile(staged, primaryFailure);
+                    // Keep the plaintext safety snapshot if activation/rollback failed.
+                    // It is the last recovery path if the live DB and rollback copy are both damaged.
+                    if (safety != null && (!activationAttempted || activationSucceeded)) {
+                        cleanupStagedFile(safety.file, primaryFailure);
+                    }
                 }
             });
         } catch (IOException | GeneralSecurityException e) {
@@ -113,18 +121,10 @@ public final class BackupRestoreCoordinator {
         }
     }
 
-    private static void cleanupTemporaryFiles(File staged, File safetySnapshot,
-            Throwable primaryFailure) throws IOException {
-        IOException cleanupFailure = null;
-        for (File file : new File[]{staged, safetySnapshot}) {
-            if (file != null && file.exists() && !file.delete()) {
-                IOException failure = new IOException(
-                        "Unable to remove temporary plaintext restore file: " + file.getName());
-                if (cleanupFailure == null) cleanupFailure = failure;
-                else cleanupFailure.addSuppressed(failure);
-            }
-        }
-        if (cleanupFailure != null) {
+    private static void cleanupStagedFile(File file, Throwable primaryFailure) throws IOException {
+        if (file != null && file.exists() && !file.delete()) {
+            IOException cleanupFailure = new IOException(
+                    "Unable to remove temporary plaintext restore file: " + file.getName());
             if (primaryFailure != null) primaryFailure.addSuppressed(cleanupFailure);
             else throw cleanupFailure;
         }
