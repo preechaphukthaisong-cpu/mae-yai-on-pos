@@ -102,6 +102,7 @@ public final class DeltaBackupCoordinator {
         for (int i = 0; i < entries.size(); i++) {
             BackupJournalEntity entry = entries.get(i);
             if (entry == null || entry.seq <= previous || entry.seq <= 0
+                    || (i > 0 && (previous == Long.MAX_VALUE || entry.seq != previous + 1))
                     || entry.uploaded != 0 || entry.schema_version != expectedSchemaVersion
                     || isBlank(entry.operation_id) || isBlank(entry.op)
                     || entry.payload == null || entry.payload.length() > MAX_ENTRY_PAYLOAD_CHARS
