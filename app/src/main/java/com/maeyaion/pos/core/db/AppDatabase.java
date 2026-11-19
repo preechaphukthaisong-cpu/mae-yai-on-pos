@@ -51,25 +51,17 @@ public abstract class AppDatabase extends RoomDatabase {
     }
 
     /**
-     * busy_timeout and synchronous are connection-scoped PRAGMAs. On API 30+
-     * AndroidX delegates this to SQLiteDatabase.execPerConnectionSQL, which
-     * configures every existing and future WAL connection. API 26-29 retain
-     * the primary-connection fallback; those releases lack a public pool-wide
-     * SQLite API and therefore cannot satisfy strict pool-wide enforcement.
+     * The database is deliberately opened by Room without WAL connection pooling,
+     * then switched to SQLite WAL mode below. Android's public per-connection SQL
+     * API cannot execute PRAGMAs that return rows (busy_timeout does), and WAL
+     * pooling has no public connection-created callback. Keeping one SQLite
+     * connection makes the D-064 settings deterministic on API 26+ while retaining
+     * WAL journaling and FULL synchronous durability.
      */
     private static void applyDurabilityPragmas(@NonNull SupportSQLiteDatabase db) {
-        if (db.isExecPerConnectionSQLSupported()) {
-            db.execPerConnectionSQL("PRAGMA busy_timeout=5000", null);
-            db.execPerConnectionSQL("PRAGMA synchronous=FULL", null);
-        } else {
-            executePragma(db, "PRAGMA busy_timeout=5000");
-            executePragma(db, "PRAGMA synchronous=FULL");
-        }
-    }
-
-    public static boolean supportsPoolWideDurabilityPragmas(
-            @NonNull SupportSQLiteDatabase db) {
-        return db.isExecPerConnectionSQLSupported();
+        executePragma(db, "PRAGMA journal_mode=WAL");
+        executePragma(db, "PRAGMA busy_timeout=5000");
+        executePragma(db, "PRAGMA synchronous=FULL");
     }
 
     /**
@@ -95,7 +87,7 @@ public abstract class AppDatabase extends RoomDatabase {
                                     context.getApplicationContext(),
                                     AppDatabase.class,
                                     "maeyaion_pos.db")
-                            .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
+                            .setJournalMode(JournalMode.TRUNCATE)
                             .addMigrations(Migration1To2.INSTANCE, Migration2To3.INSTANCE, Migration3To4.INSTANCE)
                             .addCallback(databaseCallback())
                             .build();
