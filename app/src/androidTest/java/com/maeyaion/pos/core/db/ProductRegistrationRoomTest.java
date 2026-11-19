@@ -9,6 +9,7 @@ import static org.junit.Assert.fail;
 import android.content.Context;
 
 import androidx.room.Room;
+import androidx.room.RoomDatabase;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 
@@ -45,6 +46,7 @@ public final class ProductRegistrationRoomTest {
         context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         databaseName = "product-registration-" + System.nanoTime() + ".db";
         database = Room.databaseBuilder(context, AppDatabase.class, databaseName)
+                .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
                 .addCallback(AppDatabase.databaseCallback())
                 .allowMainThreadQueries()
                 .build();
