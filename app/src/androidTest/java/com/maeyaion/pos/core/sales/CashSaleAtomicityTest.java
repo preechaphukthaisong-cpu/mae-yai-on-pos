@@ -120,6 +120,25 @@ public final class CashSaleAtomicityTest {
         assertSqlCount("stock_log", 1L);
     }
 
+    @Test public void journalFailureRollsBackSaleLinesStockAndAuditWrites() {
+        SupportSQLiteDatabase sql = database.getOpenHelper().getWritableDatabase();
+        sql.execSQL("CREATE TRIGGER force_sale_journal_failure BEFORE INSERT ON backup_journal "
+                + "WHEN NEW.op = 'SALE_CASH_CREATE' BEGIN SELECT RAISE(ABORT, 'forced_failure'); END");
+        try {
+            service().createCashSale(UUID.randomUUID().toString(),
+                    Collections.singletonList(new CashSaleService.LineInput("SKU-1", 1_000L)),
+                    2_000L, TIME);
+            fail("Expected journal failure");
+        } catch (android.database.sqlite.SQLiteException expected) {
+            assertEquals(2_000L, database.productDao().findBySku("SKU-1").stockQtyMilli);
+        }
+        assertSqlCount("sale", 0L);
+        assertSqlCount("sale_line", 0L);
+        assertSqlCount("stock_log", 1L);
+        assertSqlCount("op_log", 0L);
+        assertSqlCount("backup_journal", 0L);
+    }
+
     @Test public void lineAmountUsesIntegerHalfUpRounding() {
         assertEquals(51L, CashSaleService.calculateLineTotal(101L, 500L));
         assertEquals(50L, CashSaleService.calculateLineTotal(100L, 500L));
