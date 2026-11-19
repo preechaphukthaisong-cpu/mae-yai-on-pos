@@ -76,10 +76,15 @@ public final class DeltaReplayCoordinator {
             } finally {
                 Arrays.fill(encoded, (byte) 0);
             }
+        } catch (IOException | GeneralSecurityException | RuntimeException | Error failure) {
+            primaryFailure = failure;
+            throw failure;
         } finally {
             if (passwordCopy != null) Arrays.fill(passwordCopy, '\0');
             if (plaintext.exists() && !plaintext.delete()) {
-                throw new IOException("Unable to remove temporary plaintext delta file");
+                IOException cleanupFailure = new IOException("Unable to remove temporary plaintext delta file");
+                if (primaryFailure != null) primaryFailure.addSuppressed(cleanupFailure);
+                else throw cleanupFailure;
             }
         }
     }
