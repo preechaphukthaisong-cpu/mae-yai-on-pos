@@ -72,7 +72,7 @@ Baseline ที่ตรวจ: branch `phase-3-foundation`, commit `e44e3e9293e
 
 ## สถานะปัจจุบัน
 
-Phase 0 DONE. Phase 1 IN PROGRESS; CI run 44507036329 ผ่านครบทั้งสอง jobs และสร้าง APK debug artifact แล้ว; workflow local backup/restore และ Drive basic ถูกเชื่อมใน UI แล้ว แต่ยังไม่มีหลักฐานทดสอบบนโทรศัพท์จริงและบัญชี Google จริง จึงยังห้ามเริ่ม Phase 2
+Phase 0 DONE. Phase 1 IN PROGRESS; CI run 44548409370 ผ่านทั้ง Unit tests/APK build และ Database instrumentation; ผู้ใช้ยืนยันผลทดสอบบนโทรศัพท์จริงสำหรับ Offline POS และ Local Backup/Restore แล้ว; Google Drive ยังรอ OAuth Sign-In และการทดสอบรับส่งไฟล์จริง จึงยังห้ามเริ่ม Phase 2
 
 ## ผลทดสอบบนเครื่องจริงและการแก้ไขหลัง QA (2026-11-19)
 
@@ -87,8 +87,8 @@ Phase 0 DONE. Phase 1 IN PROGRESS; CI run 44507036329 ผ่านครบท�
 - เพิ่ม Recovery Key เป็นทางเลือกในการกู้คืนทั้ง Local และ Google Drive; ต้องกรอก Recovery Password หรือ Recovery Key เพียงอย่างเดียว
 - เพิ่ม BackupErrorMessages แปลง BAD_DECRYPT / authentication failure เป็นข้อความภาษาไทย และเพิ่ม unit tests
 - เพิ่ม CI debug keystore แบบ cache และกำหนด signing config ของ build job ให้ใช้ไฟล์เดียวกัน; CI ตรวจเทียบ SHA-1 ของ Keystore กับ APK ก่อนอัปโหลด artifact; instrumentation runner ที่แยกเครื่องยังใช้ default debug signing ได้
-- CI run 44546086532: Unit tests และ APK build ผ่าน; Database instrumentation กำลังทำงาน ณ เวลาบันทึกนี้
-- SHA-1 ของ APK จาก CI run 44546086532: `c26d4b95eb4c212668b8baece2c36e9059e4c043`
+- CI run 44548409370: Unit tests, APK build และ Database instrumentation tests ผ่านทั้งหมด
+- SHA-1 ของ APK จาก CI run 44548409370: `19efb04f164f90871e6c7d8d5373b54f0d52ad59`; CI ยืนยันว่า SHA-1 ของ Keystore และ APK ตรงกัน
 - ต้องเพิ่ม SHA-1 นี้ใน OAuth 2.0 Android Client ของ Google Cloud Console โดยใช้ package `com.maeyaion.pos`; หากล้าง/หมดอายุ GitHub Actions cache แล้ว debug keystore ถูกสร้างใหม่ SHA-1 จะเปลี่ยนและต้องปรับ OAuth client อีกครั้ง
 
 Phase 1 ยังคง IN PROGRESS จนกว่า OAuth Sign-In จะผ่านและมีหลักฐาน Drive upload + download + restore บนเครื่องจริง
