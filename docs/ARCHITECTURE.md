@@ -1,8 +1,8 @@
 # สถาปัตยกรรมระบบ POS ร้านแม่ใหญ่อ่อน (ARCHITECTURE)
 
-- รุ่นเอกสาร: 1.0.5-draft
-- เฟส: 2 — ออกแบบโครงสร้าง
-- สถานะ: ออกแบบตาม D-001 ถึง D-061; การตัดสินใจ O-001 ถึง O-030 ได้รับการยืนยันครบแล้ว
+- รุ่นเอกสาร: 1.0.6
+- เฟส: 3 — Foundation implementation in progress
+- สถานะ: สถาปัตยกรรมอ้างอิงตาม D-001 ถึง D-061; มี Android Java source และ Room schema v4 foundation แล้ว แต่ business features และ device acceptance ยังไม่เสร็จ
 - อ้างอิงหลัก: docs/SPEC.md, docs/DECISIONS.md
 - Package หลัก: com.maeyaion.pos
 
@@ -18,7 +18,7 @@
 - จำนวนสินค้าเก็บเป็น integer milli-unit (1 หน่วย = 1,000); ห้ามใช้ floating point
 - วันธุรกิจใช้ Asia/Bangkok ตัดวัน 00:00 น.; timestamp เก็บ UTC
 
-เอกสารนี้เป็นแบบออกแบบ ไม่ใช่หลักฐานว่ามี Android source, Gradle project หรือ feature runtime อยู่แล้ว
+เอกสารนี้เป็นสถาปัตยกรรมอ้างอิง; การมี source code หรือ CI ผ่านไม่ถือเป็นหลักฐานว่า feature runtime หรือการยอมรับบนอุปกรณ์จริงเสร็จสมบูรณ์
 
 ## 2. ภาพรวมสถาปัตยกรรม
 
@@ -105,7 +105,8 @@ app/src/androidTest/
 - ทุก DAO ต้องมาจาก AppDatabase instance เดียวกัน
 - เปิด WAL ตอน initialize และตรวจค่าที่ SQLite คืนกลับ
 - เปิด foreign keys และ busy timeout ทุก connection; ห้ามใช้ allowMainThreadQueries
-- export Room schema ทุก version และเก็บ migration ใน source control
+- export Room schema ทุก version และเก็บ migration ใน source control; schema v4 ใช้ migration 1→2→3→4 แบบไม่ทำลายข้อมูล
+- ใช้ DatabaseGuards installer ชุดเดียวกันทั้ง fresh install และ migration; Migration 3→4 refreshes guards สำหรับฐานข้อมูลที่อยู่ v3
 - ห้าม destructive migration หรือแก้ปัญหาด้วยการลบฐานข้อมูล
 - Entity/DAO เป็น persistence boundary; UI ห้าม query ฐานข้อมูลโดยตรง
 
@@ -181,7 +182,7 @@ User action
 - ใช้ parameterized queries; ห้ามต่อ SQL จาก input
 - ตรวจสิทธิ์/กฎธุรกิจใน use case ไม่ใช่ซ่อนปุ่มอย่างเดียว
 - ไม่บันทึกรหัสผ่าน, token หรือข้อมูลส่วนบุคคลเกินจำเป็นลง log
-- ห้ามเริ่ม implementation ของ app lock/SQLCipher/backup encryption ก่อนเฟส 10; เมื่อถึงเฟส 10 ต้องทำตาม D-060 และห้ามเก็บ key/password แบบ plaintext
+- Backup encryption + Recovery Password/Recovery Key ต้อง implement และผ่าน security tests ใน Phase 3 ก่อนเปิด Drive upload ตาม D-062; App Lock และ SQLCipher database-at-rest encryption ยังคงอยู่ Phase 10 ตาม D-060
 - ห้าม hard-delete ข้อมูลการเงิน/สต๊อกเพื่อแก้รายการผิด; ใช้ reversal/audit records
 - ข้อผิดพลาด DB ต้องไม่ถูกกลืนเงียบ; rollback และแจ้งข้อความที่ผู้ใช้แก้ไขได้
 
@@ -201,7 +202,7 @@ CI ผ่านไม่เท่ากับ device acceptance; ต้องท
 
 ## 11. สถานะการตัดสินใจและการจัดเฟส
 
-O-001 ถึง O-030 ปิดครบแล้วตาม docs/DECISIONS.md (D-033 ถึง D-061). O-023 Google Drive authentication และ O-024 Thai TTS fallback ทำในเฟส 3; O-026 restore entry point/flow ทำในเฟส 3/4; O-025 app lock, SQLCipher และ backup encryption ทำในเฟส 10. การปิดประเด็นหมายถึงข้อกำหนดได้รับการอนุมัติ ไม่ได้หมายความว่า implementation เสร็จแล้ว.
+O-001 ถึง O-030 ปิดครบแล้วตาม docs/DECISIONS.md (D-033 ถึง D-061). O-023 Google Drive authentication และ O-024 Thai TTS fallback ทำในเฟส 3; O-026 restore entry point/flow ทำในเฟส 3/4; O-025 app lock และ SQLCipher ทำในเฟส 10; backup encryption/Recovery Password/Recovery Key ทำในเฟส 3 ตาม D-062. การปิดประเด็นหมายถึงข้อกำหนดได้รับการอนุมัติ ไม่ได้หมายความว่า implementation เสร็จแล้ว.
 
 ## 12. เกณฑ์ผ่านเฟส 2
 

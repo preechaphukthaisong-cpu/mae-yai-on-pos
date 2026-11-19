@@ -1,35 +1,30 @@
 # ร้านแม่ใหญ่อ่อน POS
 
-## สถานะ: รีเซ็ตโค้ดเพื่อเริ่มพัฒนาใหม่
+Android native application written in Java. Single-device, offline-first POS.
 
-Repository นี้เก็บข้อกำหนดทางธุรกิจ เอกสารสถาปัตยกรรม และเอกสารอ้างอิงของระบบ POS ร้านแม่ใหญ่อ่อน โดยเริ่มต้นซอร์สโค้ดแอปใหม่ทั้งหมด
+## Current status
+- Phase 2 design and business decisions O-001 through O-030 were approved and merged to `main` in PR #2 on 17 November 2026.
+- Phase 3 foundation is in progress on branch `phase-3-foundation`.
+- Android source and Gradle build project are being reconstructed incrementally.
+- The current launcher is a foundation-status screen, not a usable POS. No production-ready APK is available until implementation, CI, backup/recovery gates and physical-device acceptance pass.
 
-**สถานะปัจจุบัน:** ยังไม่มี Android application source, Gradle build project หรือ GitHub Actions workflow จึงยังไม่สามารถ Build APK จาก branch `main` ได้
+## Project rules
+- One Room/SQLite database is the single source of truth for all screens.
+- All financial values use integer satang (`long`); never use floating point for money.
+- Product quantities use integer milli-units.
+- Business writes go through use cases and atomic transactions.
+- Financial and inventory history is auditable; no destructive migrations.
+- Google Drive is backup storage only, never a live database or sync backend.
+- v1 has no in-app printer implementation.
+- Plaintext database or backup payloads must never be uploaded to Google Drive.
 
-## เอกสารที่เก็บรักษาไว้
+## Documents
+- `docs/SPEC.md` — approved requirements and phase plan.
+- `docs/DECISIONS.md` — approved business and technical decisions.
+- `docs/ARCHITECTURE.md` — dependency boundaries and runtime architecture.
+- `docs/SCHEMA.md` — authoritative database design.
+- `docs/MENU_LOCK.json` — locked navigation contract.
+- `docs/phase-3-progress.md` — implementation progress and security gates.
 
-- `docs/` — สถาปัตยกรรม ขอบเขตระบบ ความปลอดภัย และสถานะโครงการ
-- `database/README.md` — ข้อกำหนดฐานข้อมูลกลาง กฎธุรกรรม และความถูกต้องของข้อมูล
-- `database/seeds/README.md` — นโยบายข้อมูลตั้งต้น
-- `api/` — ขอบเขต API และ OpenAPI contract (เอกสารอ้างอิงเท่านั้น ไม่ใช่ API ที่เปิดใช้งาน)
-- `frontend/README.md` และ `backend/README.md` — ขอบเขตโมดูลและข้อจำกัดการออกแบบ
-- `tests/database-validation.md` — รายการตรวจสอบฐานข้อมูล
-
-## การเก็บรักษาโค้ดเดิม
-
-ซอร์สโค้ดและ SQL implementation ก่อนรีเซ็ตยังอยู่ใน Git history และใน branch:
-
-`archive/pre-code-reset-2026-11-17`
-
-ห้ามลบ branch สำรองหรือเขียนทับประวัติเดิมโดยไม่จำเป็น
-
-## หลักการพัฒนารอบใหม่
-
-- ยืนยันข้อกำหนดก่อนลงมือพัฒนาแต่ละโมดูล
-- ใช้ฐานข้อมูลกลางเพียงชุดเดียวสำหรับทุกหน้าจอ
-- แยก UI, domain/business rules, data access และ database migrations
-- งานขาย การรับชำระ และการเคลื่อนไหวสต็อกต้องทำแบบ transaction
-- เก็บเงินเป็นจำนวนเต็มหน่วยสตางค์
-- บันทึกประวัติทางการเงินและสต็อกแบบตรวจสอบย้อนหลังได้
-- เพิ่ม automated tests และ CI ก่อนถือว่าแต่ละระยะเสร็จ
-- CI ผ่านไม่ถือเป็นการยอมรับบนอุปกรณ์จริง ต้องทดสอบบนมือถือก่อนใช้งานร้าน
+## CI
+Pull requests targeting `main` run unit tests, Android emulator instrumentation tests and a debug APK build. The emulator test script is a single command because android-emulator-runner executes script lines independently. CI verifies and uploads the generated Room v4 schema JSON and debug APK as artifacts. A green CI run does not replace physical-device acceptance.

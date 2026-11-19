@@ -1,8 +1,8 @@
 # บันทึกการตัดสินใจระบบ POS ร้านแม่ใหญ่อ่อน (DECISIONS)
 
 - เอกสาร: DECISIONS.md
-- รุ่น: v1.0.6
-- สถานะ: ผู้ใช้ยืนยัน O-023 ถึง O-026 เพิ่มเติมเมื่อ 17 พฤศจิกายน 2026; ประเด็นเปิด O-001 ถึง O-030 ปิดครบแล้ว
+- รุ่น: v1.0.7
+- สถานะ: O-001 ถึง O-030 ปิดครบ; ผู้ใช้ยืนยันเพิ่มเติมเมื่อ 18 พฤศจิกายน 2026 ให้ backup encryption อยู่ใน Phase 3, Recovery Key, Room schema versioning และ SQLite durability
 - วันที่รวบรวม: 17 พฤศจิกายน 2026
 - หลักการ: บันทึกเฉพาะสิ่งที่ผู้ใช้ระบุหรือตัดสินใจไว้แล้ว ไม่สร้างข้อสรุปแทนผู้ใช้
 
@@ -540,11 +540,36 @@
 
 เหตุผล: ผู้ใช้ยืนยันให้เข้าถึงการสำรอง/กู้คืนจากส่วนจัดการร้านค้า โดยคงเมนูที่ล็อกไว้เดิมทั้งหมด
 
+### D-062 — ย้าย Backup Encryption และ Recovery Key มา Phase 3 (ยืนยัน 18 พฤศจิกายน 2026)
+
+- ก่อนเปิดการอัปโหลด Google Drive ต้องทำ authenticated backup encryption และทดสอบความปลอดภัยให้ผ่านใน Phase 3; ห้ามอัปโหลด plaintext database, snapshot, journal หรือ manifest ที่มีข้อมูลลับ
+- ใช้ AES-256-GCM พร้อม salt และ nonce สุ่มใหม่ต่อ backup envelope; ใช้ PBKDF2-HMAC-SHA-256 ตามพารามิเตอร์ที่ผ่าน security review และบันทึก algorithm/version/KDF parameters ใน header
+- สร้าง Data Encryption Key แบบสุ่ม; ปกป้อง key ในเครื่องด้วย Android Keystore และห่อ key แยกด้วย Recovery Password และ Recovery Key เพื่อให้กู้คืนข้ามเครื่องได้
+- Recovery Key ต้องมี entropy สูง แสดงให้ผู้ใช้บันทึกอย่างปลอดภัย และห้ามเก็บ plaintext ในฐานข้อมูล, log หรือ Google Drive; รองรับการหมุน/เปลี่ยน key ด้วยการ re-wrap โดยไม่ต้องถอดรหัส payload ทั้งหมดเมื่อทำได้
+- Restore ต้องตรวจ format/version, authentication tag, checksum และ schema compatibility ใน staging ก่อนสลับฐานข้อมูลจริง; ความล้มเหลวต้องคงฐานข้อมูลเดิมไว้
+- Backup encryption, Recovery Password และ Recovery Key เป็น Phase 3; App Lock และ SQLCipher database-at-rest encryption ตาม D-060 ยังคงเป็น Phase 10. ไม่อัปโหลด backup จนกว่า backup encryption/restore gate จะผ่าน
+
+เหตุผล: ผู้ใช้เลือกทำระบบเข้ารหัส Backup ตั้งแต่ Phase 3 และยืนยันแนวทาง Recovery Password + Recovery Key เมื่อ 18 พฤศจิกายน 2026
+
+### D-063 — เก็บ Room Schema JSON ใน Git (ยืนยัน 18 พฤศจิกายน 2026)
+
+- Export Room schema JSON ทุกเวอร์ชันและ commit ไว้ใน source control
+- Migration tests ต้องใช้ schema history ที่ export จาก Room จริง; CI ต้องตรวจว่า schema ที่ generate ตรงกับไฟล์ที่ commit
+- ห้ามพึ่ง CI Artifact เป็นที่เก็บประวัติ schema เพียงแห่งเดียว
+
+### D-064 — SQLite durability configuration (ยืนยัน 18 พฤศจิกายน 2026)
+
+- ทุก SQLite connection ที่ Room ใช้งานต้องเปิด/ตรวจ foreign_keys = ON และ busy_timeout = 5000 ms
+- journal_mode = WAL ต้องตั้งตอน initialize และตรวจค่าที่ SQLite คืน
+- synchronous = FULL ต้องกำหนดและตรวจใน connection ที่เกี่ยวข้อง; ห้ามอ้างว่า onOpen ของ connection เดียวพิสูจน์ connection pool ทั้งหมด
+- Implementation เลือกปิด Android WAL connection pool โดยเปิด Room helper แบบ single-connection แล้วตั้ง SQLite journal_mode=WAL โดยตรง เพื่อให้ `busy_timeout` (PRAGMA ที่คืน result row และใช้กับ execPerConnectionSQL ไม่ได้) ถูกตั้งบน connection ทุกตัวที่มีจริง; ต้องมี instrumentation ยืนยัน WAL mode, ค่า PRAGMA, concurrent access และ lock contention/reopen behavior
+- หากภายหลังเปิด connection pool อีกครั้ง ต้องเพิ่มกลไกกำหนด `busy_timeout` ทุก connection ที่เกิดใหม่ได้จริงก่อนยอมรับการเปลี่ยนแปลง
+
 ---
 
 ## 2. สถานะประเด็นที่เคยเปิด
 
-O-001 ถึง O-030 ได้รับการตัดสินใจครบแล้วตาม D-033 ถึง D-061; ไม่มีประเด็นเปิดค้างสำหรับการออกแบบเฟส 2. การ implementation ต้องยึดรายละเอียดและเฟสที่กำหนดในแต่ละ D-xxx
+O-001 ถึง O-030 ได้รับการตัดสินใจครบแล้วตาม D-033 ถึง D-064; ไม่มีประเด็นเปิดค้างสำหรับการออกแบบเฟส 2. การ implementation ต้องยึดรายละเอียดและเฟสที่กำหนดในแต่ละ D-xxx
 
 | ID | ประเด็น | เหตุผลที่ต้องยืนยัน | เฟสที่ต้องได้คำตอบ |
 |---|---|---|---|
@@ -568,11 +593,11 @@ O-001 ถึง O-030 ได้รับการตัดสินใจคร�
 | O-018 | RESOLVED — normalize NFC/ช่องว่าง/case-fold; ชื่อซ้ำต่างคนต้องมี identity discriminator | D-049 | ปิดแล้ว |
 | O-019 | RESOLVED — รองรับทศนิยมสูงสุด 3 ตำแหน่ง; จัดเก็บ integer milli-unit | D-050 | ปิดแล้ว |
 | O-020 | RESOLVED — NULL คือปิดแจ้งเตือน; 0 ใช้ได้; แจ้งเมื่อ stock <= limit | D-051 | ปิดแล้ว |
-| O-021 | RESOLVED — ZIP snapshot พร้อม manifest, SHA-256, sequenced JSON journal และ replay ตามลำดับ; encryption เพิ่มเติมตาม D-060 | D-052, D-060 | ปิดแล้ว |
+| O-021 | RESOLVED — ZIP snapshot พร้อม manifest, SHA-256, sequenced JSON journal และ replay ตามลำดับ; backup encryption ตาม D-062 | D-052, D-062 | ปิดแล้ว |
 | O-022 | RESOLVED — แจ้งเตือนเมื่อ backup ค้างส่งเกิน 24 ชั่วโมง | D-053 | ปิดแล้ว |
 | O-023 | RESOLVED — ใช้บัญชี Google ที่ผู้ใช้เลือกและ scope drive.appdata; เปลี่ยนบัญชี/หมดสิทธิ์ต้องยืนยันใหม่โดยไม่กระทบการขาย | D-058 | ปิดแล้ว; implementation ตามเฟส 3 |
 | O-024 | RESOLVED — เลือกเสียงผู้หญิงไทยเมื่อมี; fallback เสียงไทยเริ่มต้น; หากไม่มีเสียงไทยให้แสดงข้อความ | D-059 | ปิดแล้ว; implementation ตามเฟส 3 |
-| O-025 | RESOLVED — ล็อกแอป, SQLCipher + Android Keystore, backup encryption ด้วยรหัสผ่านผู้ใช้ | D-060 | ปิดแล้ว; implementation ตามเฟส 10 |
+| O-025 | RESOLVED — ล็อกแอปและ SQLCipher + Android Keystore ตาม D-060; backup encryption ถูกแยกมาทำก่อนอัปโหลดใน Phase 3 ตาม D-062 | D-060, D-062 | ปิดแล้ว; app lock/SQLCipher Phase 10, backup encryption Phase 3 |
 | O-026 | RESOLVED — action สำรองและกู้คืนอยู่ภายในหน้าจอจัดการร้านค้า ไม่เพิ่มเมนูใหม่ | D-061 | ปิดแล้ว; implementation ตามเฟส 3/4 |
 | O-027 | RESOLVED — เก็บ reconciliation proof แบบไม่มี PII ใช้ SHA-256 และเก็บ 15 เดือน | D-054 | ปิดแล้ว |
 | O-028 | RESOLVED — เงินรับต้องไม่น้อยกว่ายอดบิล; คำนวณเงินทอนอัตโนมัติ | D-055 | ปิดแล้ว |
@@ -603,3 +628,12 @@ O-001 ถึง O-030 ได้รับการตัดสินใจคร�
 | v1.0.4 | 17 พฤศจิกายน 2026 | บันทึก D-035 คิดค่าบริการ 5% จากยอดรวมค่าสินค้าทั้งบิลและปิด O-004; O-005 ยังเปิดเรื่องการคืน fee |
 | v1.0.5 | 17 พฤศจิกายน 2026 | บันทึก D-036 ถึง D-057 และปิด O-005 ถึง O-022, O-027 ถึง O-030; เหลือ O-023 ถึง O-026 สำหรับเฟส 3/4/10 |
 | v1.0.6 | 17 พฤศจิกายน 2026 | บันทึก D-058 ถึง D-061; ปิด O-023 ถึง O-026 ครบทุกประเด็น |
+| v1.0.7 | 18 พฤศจิกายน 2026 | บันทึก D-062 ถึง D-064: backup encryption/Recovery Key ใน Phase 3, Room schema JSON ใน Git และ SQLite durability tests; แยก app lock/SQLCipher ไว้ Phase 10 |
+
+### D-065 — ปิด Phase 3 Foundation โดยแยก Device Qualification ออกจากการปิดงานพัฒนา (ยืนยัน 19 พฤศจิกายน 2026)
+
+- Phase 3 หมายถึงการส่งมอบ Android foundation, Room/SQLite durability, migrations, transaction boundary, backup encryption/recovery primitives, Drive workers, scanner/TTS integration source และ automated CI tests
+- การทดสอบที่ต้องใช้บัญชี Google ของร้านและมือถือจริง (OAuth consent, Drive round-trip, scanner/TTS บนอุปกรณ์, process/power-loss) เป็น **Device Qualification / Release Gate** ก่อนนำแอปไปใช้งานจริง ไม่ใช่เหตุให้ค้าง branch พัฒนา foundation ต่อไปโดยไม่มีอุปกรณ์หรือ credential
+- D-063 ใช้กับ schema ที่ Room export ได้จริงตั้งแต่เริ่มเก็บ schema ใน repository; v4 เป็น schema export ที่มีอยู่และ CI ตรวจ drift. ไม่สร้าง schema v1–v3 ย้อนหลังจากการคาดเดา. Migration 1→2→3→4 ต้องถูกตรวจด้วย migration tests และ SQL fixtures ที่มีอยู่
+- Delta journal packaging/upload/reconciliation เป็น foundation capability; replay/apply แบบ end-to-end และ daily full backup policy ยังคงเป็น release qualification items จนกว่าจะมี replay semantics และ credential lifecycle ที่ผ่าน security review. ห้ามอ้างว่าผ่านแล้วหรือเปิดใช้ retention purge ก่อนมีหลักฐาน
+- การปิด Phase 3 ไม่ได้อนุญาตให้ใช้แอปขายจริงหรือเริ่ม Phase 4 feature implementation หาก release gates ด้าน backup/recovery และ device qualification ยังไม่ผ่าน
