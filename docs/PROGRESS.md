@@ -7,6 +7,16 @@
 - Latest completed CI evidence: [Run #361](https://github.com/preechaphukthaisong-cpu/mae-yai-on-pos/actions/runs/44471430760) — success on `805c4cba7291229aaad445e22a00654d58b349c5`; unit tests, debug APK, Room schema verification and database instrumentation passed.
 - Phase 4 status: **BLOCKED** until every Phase 3 acceptance criterion in v2.1 is met.
 
+
+## Product direction — Multi-Store Ready (D-066, 19 พฤศจิกายน 2026)
+
+- เป้าหมายผลิตภัณฑ์: แอปชุดเดียวสำหรับร้านค้าทั่วไปหลายราย ไม่ hard-code ชื่อหรือข้อมูลเฉพาะร้านแม่ใหญ่อ่อน
+- ขอบเขต v1: หนึ่ง installation / หนึ่งอุปกรณ์ / หนึ่งร้าน; ไม่ใช่ multi-tenant ในแอปเดียว และไม่มี cloud transaction database หรือ account ของผู้พัฒนาเป็นศูนย์กลาง
+- ผู้ใช้ตั้งค่าโปรไฟล์ร้านเอง; การขายและงานหลักยัง offline-first และไม่ต้อง Google login
+- Google Sign-In เป็น optional เฉพาะ backup/restore; ร้านใช้ Google account ของตนเอง ภายใต้ OAuth app configuration ชุดเดียว
+- D-058 และ `drive.appdata` ยังคงเดิมในรอบนี้; ต้องสื่อสารว่าพื้นที่ appDataFolder ซ่อนจากมุมมองไฟล์ปกติใน Drive การเปลี่ยน scope/ปลายทางต้องขออนุมัติใหม่
+- งานเตรียมเผยแพร่ทั่วไป (stable release signing, OAuth consent/configuration, privacy disclosure และ qualification) ยังต้องทำตามเฟสและ release gates; การอนุมัติ D-066 ไม่ได้ปิด G1–G6 หรืออนุญาตเริ่ม Phase 3.1/4
+
 ## Acceptance status
 
 | Gate | Status | Evidence / remaining work |
@@ -47,3 +57,5 @@
 - 2026-11-19: CI Run #361 completed successfully for `805c4cba7291229aaad445e22a00654d58b349c5`: unit tests, debug APK assembly, Room schema verification/export, and database instrumentation passed. This does not satisfy real-device/Google-account acceptance gates.
 
 - 2026-11-19: Added `docs/PHASE_3_TEST_PLAN.md` with ordered manual/automated test procedures and exact source/test file matrix for G1–G6, migration, and target-device qualification. Document commit `1988fb8702a2822376eb7fcb5f39ee22f01eff1e`.
+
+- 2026-11-19: ผู้ใช้อนุมัติ Multi-Store Ready; บันทึก D-066 ใน `docs/DECISIONS.md` และเพิ่ม product direction ใน `docs/PROGRESS.md`. ไม่เปลี่ยน schema, OAuth scope, เมนู, หรือสถานะ G1–G6. Decisions commit: `4d5a044783fcd3d9176f95d776e74507bfeeca71`.
