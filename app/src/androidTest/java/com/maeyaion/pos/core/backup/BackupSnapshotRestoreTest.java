@@ -26,6 +26,11 @@ import java.io.File;
 import java.nio.file.Files;
 import java.security.GeneralSecurityException;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 @RunWith(AndroidJUnit4.class)
 public final class BackupSnapshotRestoreTest {
@@ -142,6 +147,45 @@ public final class BackupSnapshotRestoreTest {
             fail("Invalid SQLite content must not be staged");
         } catch (java.io.IOException expected) {
             // The validator rejects non-database plaintext before publication.
+        }
+    }
+
+
+    @Test public void snapshotWaitsUntilTransactionRunnerReleasesWriterGate() throws Exception {
+        RoomTransactionRunner transactions = new RoomTransactionRunner(database);
+        CountDownLatch writerEntered = new CountDownLatch(1);
+        CountDownLatch releaseWriter = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        Future<?> writer = null;
+        Future<RoomDatabaseSnapshotter.Snapshot> snapshot = null;
+        try {
+            writer = executor.submit(() -> transactions.runInTransaction(() -> {
+                database.appMetaDao().put(new AppMetaEntity(
+                        "serialized_probe", "committed", "2026-11-19T00:00:00Z"));
+                writerEntered.countDown();
+                if (!releaseWriter.await(10, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Timed out waiting to release writer");
+                }
+                return null;
+            }));
+            assertTrue("Writer did not enter transaction", writerEntered.await(5, TimeUnit.SECONDS));
+
+            snapshot = executor.submit(() -> new RoomDatabaseSnapshotter()
+                    .create(context, database, backupDirectory));
+            Thread.sleep(150);
+            assertTrue("Snapshot must wait while a writer owns the maintenance gate",
+                    !snapshot.isDone());
+
+            releaseWriter.countDown();
+            writer.get(10, TimeUnit.SECONDS);
+            RoomDatabaseSnapshotter.Snapshot completed = snapshot.get(10, TimeUnit.SECONDS);
+            assertTrue(completed.file.isFile());
+            assertEquals(4, completed.schemaVersion);
+            assertTrue(completed.sizeBytes > 0);
+        } finally {
+            releaseWriter.countDown();
+            executor.shutdownNow();
+            executor.awaitTermination(5, TimeUnit.SECONDS);
         }
     }
 
