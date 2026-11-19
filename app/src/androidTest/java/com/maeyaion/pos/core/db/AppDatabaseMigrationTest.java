@@ -282,18 +282,20 @@ public final class AppDatabaseMigrationTest {
             blocker.execSQL("INSERT INTO app_meta(meta_key, value, updatedAtUtc) "
                     + "VALUES('external_lock', 'held', '2026-11-19T00:00:00Z')");
             CountDownLatch attemptingWrite = new CountDownLatch(1);
+            java.util.concurrent.atomic.AtomicLong completedAt = new java.util.concurrent.atomic.AtomicLong();
             long startedAt = System.nanoTime();
             Future<?> pendingWrite = executor.submit(() -> {
                 attemptingWrite.countDown();
                 database.appMetaDao().put(new AppMetaEntity(
                         "after_external_lock", "committed", "2026-11-19T00:00:01Z"));
+                completedAt.set(System.nanoTime());
             });
             assertTrue("Room write did not start", attemptingWrite.await(5, TimeUnit.SECONDS));
             Thread.sleep(3_000L);
             blocker.setTransactionSuccessful();
             blocker.endTransaction();
             pendingWrite.get(8, TimeUnit.SECONDS);
-            long waitedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
+            long waitedMs = TimeUnit.NANOSECONDS.toMillis(completedAt.get() - startedAt);
             assertTrue("Room writer should have waited for the external SQLite lock",
                     waitedMs >= 2_500L);
             assertEquals("committed", database.appMetaDao().findValue("after_external_lock"));
