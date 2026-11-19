@@ -26,13 +26,13 @@
 
 ## Outstanding Phase 3 acceptance blockers
 
-- [ ] Latest CI run must finish successfully on the latest PR head, including unit tests, APK build, schema verification and instrumentation tests. A cancelled or compile-only run is not acceptance.
+- [x] Latest CI run #321 passed on PR head `2ca4e01a911ec4d0680b5d015659a888910fbf6f`: unit tests, APK build, Room schema verification and database instrumentation tests all succeeded. A cancelled or compile-only run is not acceptance.
 - [ ] Commit reproducible Room schema history for every supported historical version, or formally revise D-063 with evidence that older schemas were never Room-generated. Do not fabricate historical JSON.
 - [ ] Verify `busy_timeout=5000` and `synchronous=FULL` on the single effective Room connection; Android WAL connection pooling is deliberately disabled because the public pool-wide API cannot apply the row-returning `busy_timeout` PRAGMA. Confirm WAL mode remains enabled and exercise concurrent Room access in instrumentation tests.
 - [ ] Complete Google OAuth app registration/consent on the target handset and execute a real upload→list→download→decrypt→staged-restore round trip. Source workers and account-selection entry point exist; runtime Google credentials/device evidence do not.
 - [ ] Complete daily full-snapshot scheduling and verify delta recovery/replay semantics after interrupted uploads. Delta packaging and post-confirmation journal acknowledgement are implemented in source, but the full remote replay chain is not yet accepted.
-- [ ] Add restore activation rollback tests, including failure after the candidate database has been opened.
-- [ ] Finish memory audit for every backup path: full portable snapshot encryption/decryption is now streaming, but the legacy local-Keystore restore helper still uses byte arrays and requires conversion or a strict safe size bound.
+- [x] Restore activation rollback test covers a structurally valid SQLite candidate with an invalid Room identity hash; CI instrumentation verifies the original database is restored after candidate activation fails.
+- [x] Full portable and local-Keystore restore paths use streaming AES-GCM file operations; bounded byte-array reads remain only for small key-envelope sidecars, not database payloads.
 - [ ] Audit every production write path so snapshot/restore maintenance cannot be bypassed by direct DAO/database writes.
 - [ ] Resolve append-only ledger retention through a verifiable archive/reconciliation design before any purge implementation.
 - [ ] Physical-device acceptance: migration, process death, power loss, scanner behavior, TTS voice/lifecycle, encrypted backup and recovery.
