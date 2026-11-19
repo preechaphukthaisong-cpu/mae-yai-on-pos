@@ -214,17 +214,8 @@ public final class BackupSnapshotRestoreTest {
         File staging = new File(backupDirectory, "delta-gap-staging.sqlite");
         Files.copy(baseline.file.toPath(), staging.toPath());
 
-        String payload = "{\\"v\\":1,\\"op\\":\\"PRODUCT_CREATE_SYSTEM\\","
-                + "\\"sku\\":\\"GAP-SKU\\",\\"barcode\\":\\"2000001\\","
-                + "\\"name\\":\\"Gap product\\",\\"price_satang\\":100,"
-                + "\\"cost_satang\\":50,\\"unit\\":\\"ชิ้น\\","
-                + "\\"stock_limit_qty_milli\\":null,"
-                + "\\"created_at_utc\\":\\"2026-11-19T00:20:00Z\\","
-                + "\\"updated_at_utc\\":\\"2026-11-19T00:20:00Z\\"}";
-        String hash = hexSha256(payload);
-        BackupJournalEntity gap = new BackupJournalEntity(2L, UUID.randomUUID().toString(),
-                "PRODUCT_CREATE_SYSTEM", payload, hash, 4,
-                "2026-11-19T00:20:00Z", 0);
+        BackupJournalEntity gap = createProductRow(2L, "GAP-SKU", "2000001",
+                "2026-11-19T00:20:00Z");
         byte[] delta = DeltaBackupCoordinator.buildPayload(
                 java.util.Collections.singletonList(gap), 4);
         byte[] envelope = BackupCrypto.encrypt(delta, PASSWORD, BackupCrypto.generateRecoveryKey());
