@@ -125,9 +125,9 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
             if (status < 200 || status >= 300) return Result.failure();
 
             String response = readLimited(connection.getInputStream(), 32 * 1024);
-            Matcher matcher = Pattern.compile("\"id\"\\s*:\\s*\"([^\"]+)\"").matcher(response);
+            String driveFileId = extractDriveFileId(response);
             Data output = new Data.Builder()
-                    .putString(OUTPUT_DRIVE_FILE_ID, matcher.find() ? matcher.group(1) : "")
+                    .putString(OUTPUT_DRIVE_FILE_ID, driveFileId)
                     .build();
             return Result.success(output);
         } catch (IOException networkFailure) {
@@ -135,6 +135,18 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
         } finally {
             if (connection != null) connection.disconnect();
         }
+    }
+
+    /** A 2xx upload without a Drive file ID is ambiguous; retry and reconcile by name. */
+    static String extractDriveFileId(String response) throws IOException {
+        if (response == null || response.length() > 32 * 1024) {
+            throw new IOException("Drive upload response is missing or too large");
+        }
+        Matcher matcher = Pattern.compile("\\\"id\\\"\\\\s*:\\\\s*\\\"([^\\\"]+)\\\"").matcher(response);
+        if (!matcher.find() || matcher.group(1).isEmpty()) {
+            throw new IOException("Drive upload response did not contain a file ID");
+        }
+        return matcher.group(1);
     }
 
     /** Reconciles a prior successful upload whose response may have been lost. */
