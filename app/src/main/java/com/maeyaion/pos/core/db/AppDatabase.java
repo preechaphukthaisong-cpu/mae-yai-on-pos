@@ -54,8 +54,12 @@ public abstract class AppDatabase extends RoomDatabase {
         };
     }
 
-    /** Apply connection-local durability settings; Room owns WAL lifecycle. */
+    /**
+     * Keep Room on one SQLite connection so every connection-local durability
+     * pragma is applied consistently. WAL itself is enabled directly at open.
+     */
     private static void applyDurabilityPragmas(@NonNull SupportSQLiteDatabase db) {
+        executePragma(db, "PRAGMA journal_mode=WAL");
         executePragma(db, "PRAGMA busy_timeout=5000");
         executePragma(db, "PRAGMA synchronous=FULL");
     }
@@ -78,7 +82,7 @@ public abstract class AppDatabase extends RoomDatabase {
                                     context.getApplicationContext(),
                                     AppDatabase.class,
                                     "maeyaion_pos.db")
-                            .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
+                            .setJournalMode(JournalMode.TRUNCATE)
                             .addMigrations(Migration1To2.INSTANCE, Migration2To3.INSTANCE, Migration3To4.INSTANCE, Migration4To5.INSTANCE)
                             .addCallback(databaseCallback())
                             .build();
