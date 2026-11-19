@@ -369,10 +369,10 @@ public final class BackupCrypto {
                     wipe(finalClear);
                 }
                 verifier.finish();
-                success = true;
             } finally {
                 verifier.close();
             }
+            success = true;
         } catch (IOException | GeneralSecurityException | RuntimeException failure) {
             throw failure;
         } finally {
