@@ -215,12 +215,17 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
             lookup.setReadTimeout(30_000);
             lookup.setRequestProperty("Authorization", "Bearer " + token);
             int status = lookup.getResponseCode();
-            if (status == HttpURLConnection.HTTP_UNAUTHORIZED) return null;
-            if (status == 429 || status >= 500) throw new IOException("Drive lookup temporarily unavailable");
-            if (status < 200 || status >= 300) return null;
+            if (status == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                try { GoogleAuthUtil.clearToken(getApplicationContext(), token); }
+                catch (GoogleAuthException | IOException ignored) { }
+                throw new IOException("Drive lookup authorization expired; retry required");
+            }
+            if (status < 200 || status >= 300) {
+                throw new IOException("Drive lookup failed with HTTP " + status
+                        + "; refusing upload without reconciliation");
+            }
             String response = readLimited(lookup.getInputStream(), 32 * 1024);
-            Matcher matcher = Pattern.compile("\"id\"\\s*:\\s*\"([^\"]+)\"").matcher(response);
-            return matcher.find() ? matcher.group(1) : null;
+            return DriveUploadReconciliation.findMatchingFileId(response, fileName);
         } finally {
             lookup.disconnect();
         }
