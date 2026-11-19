@@ -7,6 +7,7 @@ import androidx.annotation.NonNull;
 import androidx.work.BackoffPolicy;
 import androidx.work.Constraints;
 import androidx.work.ExistingPeriodicWorkPolicy;
+import androidx.work.ExistingWorkPolicy;
 import androidx.work.NetworkType;
 import androidx.work.OneTimeWorkRequest;
 import androidx.work.PeriodicWorkRequest;
@@ -100,7 +101,7 @@ public final class UnattendedBackupScheduler {
                 .build();
         String uniqueName = UPLOAD_WORK_TAG + "." + new java.io.File(encryptedBackupPath).getName();
         WorkManager.getInstance(context).enqueueUniqueWork(
-                uniqueName, ExistingPeriodicWorkPolicy.KEEP, upload);
+                uniqueName, ExistingWorkPolicy.KEEP, upload);
     }
 
     private static void schedule(Context context) {
