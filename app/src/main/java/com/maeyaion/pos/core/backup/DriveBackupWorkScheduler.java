@@ -21,13 +21,37 @@ public final class DriveBackupWorkScheduler {
 
     public static void enqueueUpload(@NonNull Context context, @NonNull File encryptedBackup,
                                      @NonNull String googleAccountName) {
-        if (!encryptedBackup.getName().endsWith(".myobak")) {
-            throw new IllegalArgumentException("Only encrypted .myobak backups can be queued");
+        enqueueUpload(context, encryptedBackup, googleAccountName, new long[0]);
+    }
+
+    /** Journal sequence acknowledgements are sent only as bounded numeric IDs, never payloads or secrets. */
+    public static void enqueueUpload(@NonNull Context context, @NonNull File encryptedBackup,
+                                     @NonNull String googleAccountName, long[] journalSequences) {
+        if (encryptedBackup == null || !encryptedBackup.getName().endsWith(".myobak")
+                || googleAccountName.trim().isEmpty()) {
+            throw new IllegalArgumentException("Encrypted backup and Google account are required");
+        }
+        StringBuilder sequenceCsv = new StringBuilder();
+        if (journalSequences != null) {
+            if (journalSequences.length > 100) {
+                throw new IllegalArgumentException("A delta upload may acknowledge at most 100 rows");
+            }
+            long previous = 0;
+            for (long sequence : journalSequences) {
+                if (sequence <= previous) {
+                    throw new IllegalArgumentException("Journal sequences must be positive and strictly increasing");
+                }
+                if (sequenceCsv.length() > 0) sequenceCsv.append(',');
+                sequenceCsv.append(sequence);
+                previous = sequence;
+            }
         }
         Data input = new Data.Builder()
                 .putString(GoogleDriveBackupUploadWorker.INPUT_ACCOUNT_NAME, googleAccountName)
                 .putString(GoogleDriveBackupUploadWorker.INPUT_ENCRYPTED_BACKUP_PATH,
                         encryptedBackup.getAbsolutePath())
+                .putString(GoogleDriveBackupUploadWorker.INPUT_JOURNAL_SEQUENCES,
+                        sequenceCsv.toString())
                 .build();
         Constraints constraints = new Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
