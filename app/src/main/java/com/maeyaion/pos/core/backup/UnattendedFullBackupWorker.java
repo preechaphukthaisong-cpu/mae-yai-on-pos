@@ -37,6 +37,7 @@ public final class UnattendedFullBackupWorker extends Worker {
         File snapshot = null;
         File encrypted = null;
         byte[] localWrappedKey = null;
+        boolean pendingPublished = false;
         try {
             AndroidKeystoreCredentialVault vault = new AndroidKeystoreCredentialVault(context);
             if (!vault.exists()) return Result.failure();
@@ -82,6 +83,12 @@ public final class UnattendedFullBackupWorker extends Worker {
         } catch (RuntimeException databaseOrWorkerFailure) {
             return Result.retry();
         } finally {
+            if (!pendingPublished && encrypted != null) {
+                // Never leave an untracked partial envelope that could block the next daily run.
+                deleteQuietly(encrypted);
+                deleteQuietly(new File(encrypted.getAbsolutePath() + ".localkey"));
+                deleteQuietly(new File(encrypted.getAbsolutePath() + ".pending"));
+            }
             if (snapshot != null && snapshot.exists()) {
                 //noinspection ResultOfMethodCallIgnored
                 snapshot.delete();
@@ -97,6 +104,13 @@ public final class UnattendedFullBackupWorker extends Worker {
         String canonicalRoot = root.getCanonicalPath() + File.separator;
         if (!directory.getCanonicalPath().startsWith(canonicalRoot) || !directory.canWrite()) {
             throw new IOException("Backup directory is outside app-private storage");
+        }
+    }
+
+    private static void deleteQuietly(File file) {
+        if (file.exists()) {
+            //noinspection ResultOfMethodCallIgnored
+            file.delete();
         }
     }
 
