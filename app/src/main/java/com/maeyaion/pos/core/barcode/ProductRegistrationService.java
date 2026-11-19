@@ -113,7 +113,7 @@ public final class ProductRegistrationService {
                 || !createdAtUtc.equals(existing.createdAtUtc)
                 || !updatedAtUtc.equals(existing.updatedAtUtc)
                 || !prior.payload.equals(canonicalPayload(existing, expectedOperation))
-                || prior.schema_version != 4
+                || prior.schema_version != 5
                 || !prior.payload_sha256.equals(sha256(prior.payload))) {
             throw new IllegalStateException("Idempotency key was already used for a different or inconsistent operation");
         }
@@ -137,7 +137,7 @@ public final class ProductRegistrationService {
         opLogDao.append(new OpLogEntity(UUID.randomUUID().toString(), operation,
                 "PRODUCT", product.sku, payload, createdAtUtc));
         backupJournalDao.append(new BackupJournalEntity(0L, operationId, operation,
-                payload, digest, 4, createdAtUtc, 0));
+                payload, digest, 5, createdAtUtc, 0));
     }
 
     private static String canonicalPayload(ProductEntity product, String operation) {
