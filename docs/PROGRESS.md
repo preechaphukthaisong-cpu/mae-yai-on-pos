@@ -20,8 +20,8 @@
 | เฟส | สถานะ | หมายเหตุ |
 |---|---|---|
 | 0 — ล็อกกฎ | DONE | อ่าน DECISIONS.md และ SPEC.md; ยืนยันข้อกำหนดหลักและเมนู 6 รายการ; บันทึกแผนปัจจุบันในไฟล์นี้ |
-| 1 — Foundation ที่ใช้งานได้ | IN PROGRESS | ปรับ Room เป็น WAL และเพิ่มหน้าหลัก 6 เมนูแล้ว; ยังต้องทำ cash-sale ขั้นต่ำ, ทดสอบ local/Drive backup และผ่านอุปกรณ์จริง |
-| 2 — ขายและคลัง | NOT STARTED | ยังไม่มี sales ledger/atomic cash-sale flow ที่ผ่านเกณฑ์ |
+| 1 — Foundation ที่ใช้งานได้ | IN PROGRESS | คง single-connection WAL durability ตาม D-064, เพิ่มหน้าหลัก 6 เมนู และเพิ่ม cash-sale ledger/service ขั้นต่ำ; ยังต้องผ่าน CI, ทดสอบ backup และอุปกรณ์จริง |
+| 2 — ขายและคลัง | NOT STARTED | เพิ่ม sales ledger v5 และ atomic cash-sale service แล้ว; รอ CI/instrumentation ยืนยัน |
 | 3 — ขายเชื่อ คืนสินค้า และรายงาน | NOT STARTED | รอ Phase 2 ผ่าน |
 | 4 — ติดตั้งทับและเสถียรภาพ | NOT STARTED | รอ Phase 3 ผ่าน |
 | 5 — ใช้จริงและปล่อย | NOT STARTED | รอ Phase 4 ผ่าน |
@@ -57,10 +57,11 @@ Baseline ที่ตรวจ: branch `phase-3-foundation`, commit `e44e3e9293e
 
 ## งาน Phase 1 ที่ทำแล้ว
 
-- เปลี่ยน Room journal mode เป็น WAL โดยให้ Room จัดการ WAL lifecycle; คง busy timeout 5 วินาทีและ synchronous FULL ใน callback
+- คง single-connection design ตาม D-064; ตั้ง SQLite `journal_mode=WAL`, `busy_timeout=5000`, `synchronous=FULL` บน connection เดียว เพื่อให้ค่าความทนทานไม่หลุดไป connection pool
 - เพิ่มหน้าหลัก 6 เมนูตามลำดับที่กำหนด; Google Sign-In อยู่ในส่วนสำรองข้อมูลและไม่บังคับใช้งาน POS
 - ปรับ instrumentation database builders ให้ใช้ WAL
-- ยังไม่มีผล CI หลังการเปลี่ยนแปลงนี้ และยังไม่ได้ทดสอบบนมือถือจริง
+- CI รอบแรกพบว่าเปิด WAL connection pool ทำให้ secondary connection ใช้ synchronous=NORMAL (1) แทน FULL (2); แก้กลับเป็น single-connection ตาม D-064 และเพิ่ม cash-sale tests แล้ว; รอ CI รอบใหม่
+- เพิ่ม Room schema v5 สำหรับ sale/sale_line; CI จะ export schema artifact เพื่อนำไป commit เป็น source of truth
 
 ## สถานะปัจจุบัน
 
