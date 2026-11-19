@@ -75,10 +75,14 @@ public final class AppDatabaseMigrationTest {
         assertTableExists(sql, "stock_log");
         assertTableExists(sql, "op_log");
         assertTableExists(sql, "backup_journal");
+        assertTableExists(sql, "sale");
+        assertTableExists(sql, "sale_line");
         assertCoreGuardsExist(sql);
         assertTriggerExists(sql, "backup_journal_insert_guard");
         assertTriggerExists(sql, "backup_journal_update_guard");
         assertTriggerExists(sql, "backup_journal_no_delete");
+        assertTriggerExists(sql, "sale_no_update");
+        assertTriggerExists(sql, "sale_line_no_delete");
     }
 
     @Test public void migrationFromVersionThreeRefreshesGuardsAndPreservesData() {
@@ -116,12 +120,12 @@ public final class AppDatabaseMigrationTest {
 
         database = Room.databaseBuilder(context, AppDatabase.class, databaseName)
                 .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
-                .addMigrations(Migration3To4.INSTANCE)
+                .addMigrations(Migration3To4.INSTANCE, Migration4To5.INSTANCE)
                 .addCallback(AppDatabase.databaseCallback())
                 .allowMainThreadQueries()
                 .build();
         SupportSQLiteDatabase sql = database.getOpenHelper().getWritableDatabase();
-        assertEquals(4, sql.getVersion());
+        assertEquals(5, sql.getVersion());
         assertEquals("v3_value", database.appMetaDao().findValue("legacy_key"));
         assertCoreGuardsExist(sql);
         assertEquals(2500L, database.productDao().findBySku("SKU-LEGACY").stockQtyMilli);
