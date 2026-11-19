@@ -162,7 +162,7 @@ public final class CashSaleService {
         if (parts[0].compareTo(BigInteger.valueOf(Long.MAX_VALUE)) > 0) {
             throw new ArithmeticException("Sale line total exceeds supported satang range");
         }
-        return parts[0].longValueExact();
+        return parts[0].longValue();
     }
 
     private static String hashRequest(List<LineInput> lines, long cashReceived) {
