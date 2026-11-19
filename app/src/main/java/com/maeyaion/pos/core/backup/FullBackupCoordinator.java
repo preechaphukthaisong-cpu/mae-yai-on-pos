@@ -64,13 +64,11 @@ public final class FullBackupCoordinator {
 
         char[] passwordCopy = recoveryPassword.clone();
         RoomDatabaseSnapshotter.Snapshot snapshot = null;
-        byte[] snapshotBytes = null;
         Throwable primaryFailure = null;
         try {
             snapshot = snapshotter.create(app, database, snapshotDirectory);
-            snapshotBytes = readSnapshot(snapshot.file);
             File encryptedBackup = fileStore.writeBackupWithLocalKey(
-                    backupDirectory, snapshotBytes, passwordCopy, recoveryKey, keyProtector);
+                    backupDirectory, snapshot.file, passwordCopy, recoveryKey, keyProtector);
 
             // The worker independently checks app-private location, envelope
             // magic/version, KDF parameters, and exact envelope length.
@@ -81,7 +79,6 @@ public final class FullBackupCoordinator {
             throw failure;
         } finally {
             Arrays.fill(passwordCopy, '\0');
-            if (snapshotBytes != null) Arrays.fill(snapshotBytes, (byte) 0);
             cleanupSnapshot(snapshot == null ? null : snapshot.file, primaryFailure);
         }
     }
@@ -100,14 +97,6 @@ public final class FullBackupCoordinator {
                 throw cleanupFailure;
             }
         }
-    }
-
-    private static byte[] readSnapshot(File snapshot) throws IOException {
-        if (snapshot == null || !snapshot.isFile() || snapshot.length() <= 0
-                || snapshot.length() > 512L * 1024L * 1024L) {
-            throw new IOException("Snapshot is missing or exceeds the supported size");
-        }
-        return java.nio.file.Files.readAllBytes(snapshot.toPath());
     }
 
     private static void ensurePrivateDirectory(File root, File directory) throws IOException {
