@@ -79,12 +79,21 @@ jobs:
       - name: Run unit tests
         run: gradle --no-daemon :app:testDebugUnitTest
       - name: Assemble debug APK
-        run: gradle --no-daemon :app:assembleDebug
+        run: gradle --no-daemon --no-build-cache :app:assembleDebug
       - name: Report debug APK signing certificate SHA-1
         shell: bash
         run: |
           set -euo pipefail
+          KEYSTORE="$HOME/.android/debug.keystore"
           APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          KEYSTORE_SHA1="$(keytool -list -v -keystore "$KEYSTORE" -storepass android -alias androiddebugkey | awk -F': ' '/SHA1:/{gsub(":","",$2); print tolower($2)}')"
+          APK_SHA1="$("$APKSIGNER" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | awk '/certificate SHA-1 digest:/{print $NF}')"
+          echo "Debug keystore SHA-1: $KEYSTORE_SHA1"
+          echo "Debug APK SHA-1:      $APK_SHA1"
+          if [[ -z "$KEYSTORE_SHA1" || "$KEYSTORE_SHA1" != "$APK_SHA1" ]]; then
+            echo "::error::APK signing certificate does not match the cached CI debug keystore."
+            exit 1
+          fi
           "$APKSIGNER" verify --print-certs app/build/outputs/apk/debug/app-debug.apk
       - name: Verify Room schema export
         shell: bash
