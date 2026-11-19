@@ -1,7 +1,7 @@
 package com.maeyaion.pos.app;
 
 import android.Manifest;
-import android.app.Activity;
+import androidx.activity.ComponentActivity;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.view.Gravity;
@@ -37,7 +37,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public final class PosWorkflowActivity extends Activity {
+public final class PosWorkflowActivity extends ComponentActivity {
     private static final int CAMERA_PERMISSION = 7101;
     private final ExecutorService databaseExecutor = Executors.newSingleThreadExecutor();
     private final Map<String, Long> cart = new LinkedHashMap<>();
