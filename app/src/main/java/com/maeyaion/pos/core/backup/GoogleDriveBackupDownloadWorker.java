@@ -5,7 +5,6 @@ import android.text.TextUtils;
 
 import androidx.annotation.NonNull;
 import androidx.work.Data;
-import androidx.work.Result;
 import androidx.work.Worker;
 import androidx.work.WorkerParameters;
 
