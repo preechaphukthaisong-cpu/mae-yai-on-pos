@@ -13,6 +13,10 @@ import com.google.android.gms.auth.GoogleAuthException;
 import com.google.android.gms.auth.GoogleAuthUtil;
 import com.google.android.gms.auth.UserRecoverableAuthException;
 
+import com.maeyaion.pos.core.db.AppDatabase;
+import com.maeyaion.pos.core.db.BackupJournalEntity;
+import com.maeyaion.pos.core.tx.DatabaseMaintenanceGate;
+
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
@@ -35,6 +39,7 @@ import java.util.regex.Pattern;
 public final class GoogleDriveBackupUploadWorker extends Worker {
     public static final String INPUT_ACCOUNT_NAME = "google_account_name";
     public static final String INPUT_ENCRYPTED_BACKUP_PATH = "encrypted_backup_path";
+    public static final String INPUT_JOURNAL_SEQUENCES = "journal_sequences";
     public static final String OUTPUT_AUTH_REQUIRED = "auth_required";
     public static final String OUTPUT_DRIVE_FILE_ID = "drive_file_id";
     private static final String DRIVE_APPDATA_SCOPE = "https://www.googleapis.com/auth/drive.appdata";
@@ -76,8 +81,7 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
         try {
             String existingDriveId = findExistingDriveFile(token, backup.getName());
             if (existingDriveId != null) {
-                return Result.success(new Data.Builder()
-                        .putString(OUTPUT_DRIVE_FILE_ID, existingDriveId).build());
+                return completeUpload(existingDriveId);
             }
             connection = (HttpURLConnection) new URL(
                     "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,size")
@@ -126,15 +130,66 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
 
             String response = readLimited(connection.getInputStream(), 32 * 1024);
             String driveFileId = extractDriveFileId(response);
-            Data output = new Data.Builder()
-                    .putString(OUTPUT_DRIVE_FILE_ID, driveFileId)
-                    .build();
-            return Result.success(output);
+            return completeUpload(driveFileId);
         } catch (IOException networkFailure) {
             return Result.retry();
         } finally {
             if (connection != null) connection.disconnect();
         }
+    }
+
+    private Result completeUpload(String driveFileId) {
+        try {
+            acknowledgeJournalRows();
+            return Result.success(new Data.Builder()
+                    .putString(OUTPUT_DRIVE_FILE_ID, driveFileId).build());
+        } catch (Exception acknowledgementFailure) {
+            // The remote file may already exist. Retry reconciles by deterministic local filename,
+            // then repeats this idempotent local acknowledgement.
+            return Result.retry();
+        }
+    }
+
+    private void acknowledgeJournalRows() throws Exception {
+        long[] sequences = parseJournalSequences(
+                getInputData().getString(INPUT_JOURNAL_SEQUENCES));
+        if (sequences.length == 0) return;
+        DatabaseMaintenanceGate.withExclusiveAccess(() -> {
+            AppDatabase database = AppDatabase.getInstance(getApplicationContext());
+            database.runInTransaction(() -> {
+                for (long sequence : sequences) {
+                    int changed = database.backupJournalDao().markUploaded(sequence);
+                    if (changed == 0) {
+                        BackupJournalEntity existing = database.backupJournalDao()
+                                .findBySequence(sequence);
+                        if (existing == null || existing.uploaded != 1) {
+                            throw new IllegalStateException(
+                                    "Backup journal acknowledgement did not persist");
+                        }
+                    }
+                }
+            });
+            return null;
+        });
+    }
+
+    static long[] parseJournalSequences(String encoded) throws IOException {
+        if (encoded == null || encoded.isEmpty()) return new long[0];
+        String[] values = encoded.split(",", -1);
+        if (values.length > 100) throw new IOException("Too many journal sequence IDs");
+        long[] result = new long[values.length];
+        long previous = 0;
+        try {
+            for (int i = 0; i < values.length; i++) {
+                long value = Long.parseLong(values[i]);
+                if (value <= previous) throw new IOException("Journal sequence IDs are not strictly increasing");
+                result[i] = value;
+                previous = value;
+            }
+        } catch (NumberFormatException malformed) {
+            throw new IOException("Malformed journal sequence ID list", malformed);
+        }
+        return result;
     }
 
     /** A 2xx upload without a Drive file ID is ambiguous; retry and reconcile by name. */
