@@ -629,3 +629,11 @@ O-001 ถึง O-030 ได้รับการตัดสินใจคร�
 | v1.0.5 | 17 พฤศจิกายน 2026 | บันทึก D-036 ถึง D-057 และปิด O-005 ถึง O-022, O-027 ถึง O-030; เหลือ O-023 ถึง O-026 สำหรับเฟส 3/4/10 |
 | v1.0.6 | 17 พฤศจิกายน 2026 | บันทึก D-058 ถึง D-061; ปิด O-023 ถึง O-026 ครบทุกประเด็น |
 | v1.0.7 | 18 พฤศจิกายน 2026 | บันทึก D-062 ถึง D-064: backup encryption/Recovery Key ใน Phase 3, Room schema JSON ใน Git และ SQLite durability tests; แยก app lock/SQLCipher ไว้ Phase 10 |
+
+### D-065 — ปิด Phase 3 Foundation โดยแยก Device Qualification ออกจากการปิดงานพัฒนา (ยืนยัน 19 พฤศจิกายน 2026)
+
+- Phase 3 หมายถึงการส่งมอบ Android foundation, Room/SQLite durability, migrations, transaction boundary, backup encryption/recovery primitives, Drive workers, scanner/TTS integration source และ automated CI tests
+- การทดสอบที่ต้องใช้บัญชี Google ของร้านและมือถือจริง (OAuth consent, Drive round-trip, scanner/TTS บนอุปกรณ์, process/power-loss) เป็น **Device Qualification / Release Gate** ก่อนนำแอปไปใช้งานจริง ไม่ใช่เหตุให้ค้าง branch พัฒนา foundation ต่อไปโดยไม่มีอุปกรณ์หรือ credential
+- D-063 ใช้กับ schema ที่ Room export ได้จริงตั้งแต่เริ่มเก็บ schema ใน repository; v4 เป็น schema export ที่มีอยู่และ CI ตรวจ drift. ไม่สร้าง schema v1–v3 ย้อนหลังจากการคาดเดา. Migration 1→2→3→4 ต้องถูกตรวจด้วย migration tests และ SQL fixtures ที่มีอยู่
+- Delta journal packaging/upload/reconciliation เป็น foundation capability; replay/apply แบบ end-to-end และ daily full backup policy ยังคงเป็น release qualification items จนกว่าจะมี replay semantics และ credential lifecycle ที่ผ่าน security review. ห้ามอ้างว่าผ่านแล้วหรือเปิดใช้ retention purge ก่อนมีหลักฐาน
+- การปิด Phase 3 ไม่ได้อนุญาตให้ใช้แอปขายจริงหรือเริ่ม Phase 4 feature implementation หาก release gates ด้าน backup/recovery และ device qualification ยังไม่ผ่าน
