@@ -21,7 +21,7 @@
 |---|---|---|
 | 0 — ล็อกกฎ | DONE | อ่าน DECISIONS.md และ SPEC.md; ยืนยันข้อกำหนดหลักและเมนู 6 รายการ; บันทึกแผนปัจจุบันในไฟล์นี้ |
 | 1 — Foundation ที่ใช้งานได้ | IN PROGRESS | คง single-connection WAL durability ตาม D-064, เพิ่มหน้าหลัก 6 เมนู และเพิ่ม cash-sale ledger/service ขั้นต่ำ; ยังต้องผ่าน CI, ทดสอบ backup และอุปกรณ์จริง |
-| 2 — ขายและคลัง | NOT STARTED | เพิ่ม sales ledger v5 และ atomic cash-sale service แล้ว; รอ CI/instrumentation ยืนยัน |
+| 2 — ขายและคลัง | NOT STARTED | รอ Phase 1 ผ่าน; จะทำ workflow ขายเต็มรูปแบบและคลังสินค้าตามแผน |
 | 3 — ขายเชื่อ คืนสินค้า และรายงาน | NOT STARTED | รอ Phase 2 ผ่าน |
 | 4 — ติดตั้งทับและเสถียรภาพ | NOT STARTED | รอ Phase 3 ผ่าน |
 | 5 — ใช้จริงและปล่อย | NOT STARTED | รอ Phase 4 ผ่าน |
@@ -32,7 +32,7 @@ Baseline ที่ตรวจ: branch `phase-3-foundation`, commit `e44e3e9293e
 
 มีอยู่แล้ว:
 - Android Java, package `com.maeyaion.pos`, minSdk 26
-- Room schema version 4 และ migration 1→2→3→4
+- Baseline เดิมเป็น Room schema v4; branch Phase 1 นี้เพิ่ม migration 4→5 และตาราง sale/sale_line
 - `TransactionRunner` และ `RoomTransactionRunner`
 - backup journal, local snapshot/restore coordinator และ encrypted backup primitives
 - Google Drive upload/download worker
@@ -41,9 +41,9 @@ Baseline ที่ตรวจ: branch `phase-3-foundation`, commit `e44e3e9293e
 - Product registration/barcode allocation service และ unit/instrumentation tests บางส่วน
 
 ช่องว่างที่ขวางการผ่าน Phase 1:
-- แก้แล้วใน branch `phase-0-lock-rules`: `AppDatabase` ใช้ `JournalMode.WRITE_AHEAD_LOGGING`; ปรับ database instrumentation builders ให้ใช้ WAL
+- แก้แล้วใน branch `phase-0-lock-rules`: ใช้ single-connection ตาม D-064 พร้อม `PRAGMA journal_mode=WAL`, `busy_timeout=5000`, `synchronous=FULL`; ไม่เปิด Android WAL connection pool
 - แก้แล้วใน branch `phase-0-lock-rules`: `MainActivity` แสดงเมนู 6 รายการตามลำดับล็อก; แต่ทั้ง 6 เมนูยังเป็น placeholder
-- Room schema v4 ยังไม่มี sales/receipt ledger และยังไม่มี atomic cash-sale implementation
+- แก้แล้วใน branch `phase-0-lock-rules`: Room schema v5 มี `sale`/`sale_line`, Migration4To5 และ `CashSaleService` แบบ atomic
 - ต้องตรวจและทดสอบการสร้างสินค้า + สแกน + ขายเงินสด atomic, local backup/restore และ Drive upload/download บนเครื่องจริงตามเกณฑ์ Phase 1
 - การมี source code หรือ unit tests ยังไม่เท่ากับผ่านการทดสอบบนมือถือจริง
 
@@ -59,9 +59,10 @@ Baseline ที่ตรวจ: branch `phase-3-foundation`, commit `e44e3e9293e
 
 - คง single-connection design ตาม D-064; ตั้ง SQLite `journal_mode=WAL`, `busy_timeout=5000`, `synchronous=FULL` บน connection เดียว เพื่อให้ค่าความทนทานไม่หลุดไป connection pool
 - เพิ่มหน้าหลัก 6 เมนูตามลำดับที่กำหนด; Google Sign-In อยู่ในส่วนสำรองข้อมูลและไม่บังคับใช้งาน POS
-- ปรับ instrumentation database builders ให้ใช้ WAL
-- CI รอบแรกพบว่าเปิด WAL connection pool ทำให้ secondary connection ใช้ synchronous=NORMAL (1) แทน FULL (2); แก้กลับเป็น single-connection ตาม D-064 และเพิ่ม cash-sale tests แล้ว; รอ CI รอบใหม่
-- เพิ่ม Room schema v5 สำหรับ sale/sale_line; CI จะ export schema artifact เพื่อนำไป commit เป็น source of truth
+- ปรับ instrumentation database builders ให้ใช้ single-connection และตรวจ WAL / busy_timeout / synchronous
+- CI รอบแรกยืนยันว่า unit tests/APK build ผ่าน แต่ instrumentation พบว่า WAL connection pool ทำให้ synchronous เป็น NORMAL; แก้กลับเป็น single-connection ตาม D-064
+- CI รอบถัดไปพบ API 26 ไม่มี `BigInteger.longValueExact()` และ backup tests ยังตรวจ schema v4; แก้เป็น `longValue()` หลังตรวจช่วงค่า และเปลี่ยน restore validators เป็น v5
+- เพิ่มและ commit Room schema v5 ที่ export จาก Room จริง พร้อม migration 4→5
 
 ## สถานะปัจจุบัน
 
