@@ -32,6 +32,7 @@ public final class AndroidKeystoreKeyProtectorTest {
         File envelope = File.createTempFile("maeyai-stream-envelope-", ".myobak");
         File passwordOutput = File.createTempFile("maeyai-stream-password-", ".db");
         File keyOutput = File.createTempFile("maeyai-stream-key-", ".db");
+        File localOutput = File.createTempFile("maeyai-stream-local-", ".db");
         char[] password = "streaming backup password".toCharArray();
         String recoveryKey = BackupCrypto.generateRecoveryKey();
         byte[] payload = new byte[3 * 1024 * 1024 + 137];
@@ -46,8 +47,10 @@ public final class AndroidKeystoreKeyProtectorTest {
 
             BackupCrypto.decryptFileTo(envelope, passwordOutput, password, null);
             BackupCrypto.decryptFileTo(envelope, keyOutput, null, recoveryKey);
+            BackupCrypto.decryptFileToLocalKey(envelope, localOutput, localKey, protector);
             assertArrayEquals(payload, Files.readAllBytes(passwordOutput.toPath()));
             assertArrayEquals(payload, Files.readAllBytes(keyOutput.toPath()));
+            assertArrayEquals(payload, Files.readAllBytes(localOutput.toPath()));
 
             byte[] damaged = Files.readAllBytes(envelope.toPath());
             damaged[damaged.length - 1] ^= 0x20;
@@ -66,6 +69,7 @@ public final class AndroidKeystoreKeyProtectorTest {
             envelope.delete();
             passwordOutput.delete();
             keyOutput.delete();
+            localOutput.delete();
         }
     }
 
