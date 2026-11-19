@@ -9,21 +9,32 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 public class DriveUploadReconciliationTest {
+    private static String q() { return String.valueOf((char) 34); }
+
     @Test public void matchesOnlyExactDeterministicFilename() throws Exception {
-        assertEquals("right-id", DriveUploadReconciliation.findMatchingFileId(
-                "{\\"files\\":[{\\"id\\":\\"wrong-id\\",\\"name\\":\\"other.myobak\\"},{\\"id\\":\\"right-id\\",\\"name\\":\\"backup-123.myobak\\"}]}",
-                "backup-123.myobak"));
+        String json = "{" + q() + "files" + q() + ":["
+                + "{" + q() + "id" + q() + ":" + q() + "wrong-id" + q()
+                + "," + q() + "name" + q() + ":" + q() + "other.myobak" + q() + "},"
+                + "{" + q() + "id" + q() + ":" + q() + "right-id" + q()
+                + "," + q() + "name" + q() + ":" + q() + "backup-123.myobak" + q() + "}]}";
+        assertEquals("right-id",
+                DriveUploadReconciliation.findMatchingFileId(json, "backup-123.myobak"));
     }
 
     @Test public void returnsNullWhenNoExactNameExists() throws Exception {
-        assertNull(DriveUploadReconciliation.findMatchingFileId(
-                "{\\"files\\":[{\\"id\\":\\"other-id\\",\\"name\\":\\"other.myobak\\"}]}",
-                "backup-123.myobak"));
+        String json = "{" + q() + "files" + q() + ":[{" + q() + "id" + q() + ":"
+                + q() + "other-id" + q() + "," + q() + "name" + q() + ":"
+                + q() + "other.myobak" + q() + "}]}";
+        assertNull(DriveUploadReconciliation.findMatchingFileId(json, "backup-123.myobak"));
     }
 
     @Test public void rejectsDuplicateExactNamesAsAmbiguous() throws Exception {
-        assertInvalid("{\\"files\\":[{\\"id\\":\\"one\\",\\"name\\":\\"backup.myobak\\"},{\\"id\\":\\"two\\",\\"name\\":\\"backup.myobak\\"}]}",
-                "backup.myobak");
+        String json = "{" + q() + "files" + q() + ":["
+                + "{" + q() + "id" + q() + ":" + q() + "one" + q()
+                + "," + q() + "name" + q() + ":" + q() + "backup.myobak" + q() + "},"
+                + "{" + q() + "id" + q() + ":" + q() + "two" + q()
+                + "," + q() + "name" + q() + ":" + q() + "backup.myobak" + q() + "}]}";
+        assertInvalid(json, "backup.myobak");
     }
 
     @Test public void rejectsMalformedOrOversizedLookupResponse() throws Exception {

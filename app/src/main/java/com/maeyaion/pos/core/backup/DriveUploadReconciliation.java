@@ -8,8 +8,8 @@ import java.util.regex.Pattern;
 final class DriveUploadReconciliation {
     private static final int MAX_RESPONSE_CHARS = 32 * 1024;
     private static final Pattern OBJECT = Pattern.compile("\\{([^{}]*)\\}");
-    private static final Pattern ID = Pattern.compile("\\\"id\\\"\\s*:\\s*\\\"([^\\\"\\\\]+)\\\"");
-    private static final Pattern NAME = Pattern.compile("\\\"name\\\"\\s*:\\s*\\\"([^\\\"\\\\]*)\\\"");
+    private static final Pattern ID = Pattern.compile("\"id\"\\s*:\\s*\"([^\"\\\\]+)\"");
+    private static final Pattern NAME = Pattern.compile("\"name\"\\s*:\\s*\"([^\"\\\\]*)\"");
 
     private DriveUploadReconciliation() {}
 
@@ -18,11 +18,10 @@ final class DriveUploadReconciliation {
                 || expectedName == null || expectedName.isEmpty()) {
             throw new IOException("Drive lookup response or expected filename is invalid");
         }
-        int filesKey = response.indexOf("\\"files\\"");
-        if (filesKey < 0 || response.indexOf('[', filesKey) < 0) {
-            throw new IOException("Drive lookup response has no files array");
-        }
+        int filesKey = response.indexOf("files");
+        if (filesKey < 0) throw new IOException("Drive lookup response has no files array");
         int arrayStart = response.indexOf('[', filesKey);
+        if (arrayStart < 0) throw new IOException("Drive lookup response has no files array");
         int arrayEnd = response.indexOf(']', arrayStart);
         if (arrayEnd < 0) throw new IOException("Drive lookup files array is incomplete");
         String files = response.substring(arrayStart + 1, arrayEnd);
