@@ -145,6 +145,11 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
             acknowledgeJournalRows();
             if (getInputData().getBoolean(INPUT_FULL_BACKUP, false)) {
                 confirmLocalFullBackup(backup);
+                getApplicationContext().getSharedPreferences(UnattendedBackupScheduler.PREFS,
+                        Context.MODE_PRIVATE).edit()
+                        .putLong(UnattendedBackupScheduler.KEY_LAST_SUCCESS, System.currentTimeMillis())
+                        .apply();
+                BackupNotifications.showSuccess(getApplicationContext());
             }
             return Result.success(new Data.Builder()
                     .putString(OUTPUT_DRIVE_FILE_ID, driveFileId).build());
