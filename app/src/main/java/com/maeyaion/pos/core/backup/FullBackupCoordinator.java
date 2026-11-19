@@ -65,6 +65,7 @@ public final class FullBackupCoordinator {
         char[] passwordCopy = recoveryPassword.clone();
         RoomDatabaseSnapshotter.Snapshot snapshot = null;
         byte[] snapshotBytes = null;
+        Throwable primaryFailure = null;
         try {
             snapshot = snapshotter.create(app, database, snapshotDirectory);
             snapshotBytes = readSnapshot(snapshot.file);
@@ -75,12 +76,28 @@ public final class FullBackupCoordinator {
             // magic/version, KDF parameters, and exact envelope length.
             DriveBackupWorkScheduler.enqueueUpload(app, encryptedBackup, googleAccountName);
             return encryptedBackup;
+        } catch (IOException | GeneralSecurityException | RuntimeException | Error failure) {
+            primaryFailure = failure;
+            throw failure;
         } finally {
             Arrays.fill(passwordCopy, '\0');
             if (snapshotBytes != null) Arrays.fill(snapshotBytes, (byte) 0);
-            if (snapshot != null && snapshot.file.exists() && !snapshot.file.delete()) {
-                // A plaintext snapshot is never uploaded; cleanup failure is surfaced.
-                throw new IOException("Encrypted backup created, but plaintext snapshot cleanup failed");
+            cleanupSnapshot(snapshot == null ? null : snapshot.file, primaryFailure);
+        }
+    }
+
+    /**
+     * Deletes the temporary plaintext snapshot without masking the operation's
+     * original failure. If the main operation succeeded, cleanup failure is fatal.
+     */
+    static void cleanupSnapshot(File snapshot, Throwable primaryFailure) throws IOException {
+        if (snapshot != null && snapshot.exists() && !snapshot.delete()) {
+            IOException cleanupFailure = new IOException(
+                    "Encrypted backup created, but plaintext snapshot cleanup failed");
+            if (primaryFailure != null) {
+                primaryFailure.addSuppressed(cleanupFailure);
+            } else {
+                throw cleanupFailure;
             }
         }
     }
