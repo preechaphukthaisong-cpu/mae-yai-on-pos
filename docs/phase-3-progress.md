@@ -3,8 +3,8 @@
 - Implementation branch: `phase-3-foundation` (merged)
 - Release-gate follow-up: PR [#4](https://github.com/preechaphukthaisong-cpu/mae-yai-on-pos/pull/4), branch `phase-3-release-gates`
 - Status: **FOUNDATION IMPLEMENTATION COMPLETE — RELEASE GATES STILL APPLY**
-- Latest verified code commit on follow-up branch: `7f51745a7aafbdec3b6348df952813ae7a994916`
-- CI run #350: success; Unit Tests, APK Build, Room schema verification and Database Instrumentation Tests passed.
+- Latest verified code commit on follow-up branch: `0d2ffb55271abf6a11dfaf55e341161805592b87`
+- CI run #350 and #354: success; Unit Tests/APK Build and Database Instrumentation Tests passed. CI #354 executed 29/29 emulator instrumentation tests with 0 failures.
 
 ## Delivered and CI-verified
 
@@ -21,7 +21,7 @@
 - [x] Bounded encrypted delta journal packaging and acknowledgement only after remote upload confirmation.
 - [x] Staging-only delta replay for currently implemented product-create operations; hash/schema/sequence validation, idempotency, atomic rollback and pending-journal acknowledgement tests pass in emulator CI.
 - [x] CameraX + bundled ML Kit scanner source and Thai TTS service/fallback source.
-- [x] CI unit tests, APK build, Room schema check and emulator database instrumentation pass on verified follow-up branch commit.
+- [x] CI unit tests, APK build, Room schema check and emulator database instrumentation pass on verified follow-up branch commit; CI #354 passed all 29 instrumentation tests.
 
 ## Formal scope decisions
 
