@@ -72,6 +72,44 @@ public final class EncryptedBackupFileStore {
         }
     }
 
+    /**
+     * Streaming full-snapshot encryption. Only fixed-size buffers are held in memory,
+     * so database size does not determine peak heap use.
+     */
+    public File writeBackupWithLocalKey(File privateBackupDirectory, File databaseSnapshot,
+            char[] recoveryPassword, String recoveryKey, AndroidKeystoreKeyProtector protector)
+            throws IOException, GeneralSecurityException {
+        requireDirectory(privateBackupDirectory);
+        if (databaseSnapshot == null || !databaseSnapshot.isFile()) {
+            throw new IOException("Database snapshot is missing");
+        }
+        String id = UUID.randomUUID().toString();
+        File backupTemp = new File(privateBackupDirectory, "." + id + TEMP_SUFFIX);
+        File keyTemp = new File(privateBackupDirectory, "." + id + ".key" + TEMP_SUFFIX);
+        File backup = new File(privateBackupDirectory, id + BACKUP_SUFFIX);
+        File localKey = localKeyFile(backup);
+        byte[] protectedKey = null;
+        try {
+            protectedKey = BackupCrypto.encryptFile(databaseSnapshot, backupTemp,
+                    recoveryPassword, recoveryKey, protector);
+            writeAndSync(keyTemp, protectedKey);
+            if (!keyTemp.renameTo(localKey)) {
+                throw new IOException("Unable to publish local Keystore key sidecar");
+            }
+            if (!backupTemp.renameTo(backup)) {
+                // The portable envelope is the publication marker.
+                //noinspection ResultOfMethodCallIgnored
+                localKey.delete();
+                throw new IOException("Atomic backup publication failed");
+            }
+            return backup;
+        } finally {
+            wipe(protectedKey);
+            if (backupTemp.exists()) backupTemp.delete();
+            if (keyTemp.exists()) keyTemp.delete();
+        }
+    }
+
     /** Restores on the originating installation using its Keystore-protected DEK. */
     public File restoreWithLocalKeyToStaging(File privateStagingDirectory, File encryptedBackup,
             AndroidKeystoreKeyProtector protector, StagedRestoreValidator validator)
@@ -101,16 +139,19 @@ public final class EncryptedBackupFileStore {
             throws IOException, GeneralSecurityException {
         requireDirectory(privateStagingDirectory);
         requireBackupFile(encryptedBackup);
-        byte[] envelope = readBounded(encryptedBackup);
-        byte[] plaintext = null;
+        File temporary = new File(privateStagingDirectory, "." + UUID.randomUUID() + TEMP_SUFFIX);
+        File staged = new File(privateStagingDirectory, UUID.randomUUID() + ".restore.db");
         try {
-            plaintext = recoveryPassword != null
-                    ? BackupCrypto.decryptWithPassword(envelope, recoveryPassword)
-                    : BackupCrypto.decryptWithRecoveryKey(envelope, recoveryKey);
-            return publishStagedPlaintext(privateStagingDirectory, plaintext, validator);
+            BackupCrypto.decryptFileTo(encryptedBackup, temporary, recoveryPassword, recoveryKey);
+            if (validator == null || !validator.isValid(temporary)) {
+                throw new IOException("Staged database failed integrity/schema validation");
+            }
+            if (!temporary.renameTo(staged)) {
+                throw new IOException("Unable to publish staged restore file");
+            }
+            return staged;
         } finally {
-            wipe(envelope);
-            wipe(plaintext);
+            if (temporary.exists()) temporary.delete();
         }
     }
 
