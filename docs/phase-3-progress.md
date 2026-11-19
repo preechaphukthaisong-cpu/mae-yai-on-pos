@@ -7,7 +7,7 @@
 ## Implemented in source (runtime/CI acceptance is separate)
 
 - [x] Android Java application scaffold, Java 17, minSdk 26.
-- [x] Room v4 database, WAL mode, explicit non-destructive migrations 1→2→3→4.
+- [x] Room v4 database, SQLite WAL mode on a deliberately single-connection Android helper, explicit non-destructive migrations 1→2→3→4.
 - [x] Foundation entities/DAOs, database guards, stock ledger and append-only operation/backup journals.
 - [x] Product registration and barcode allocation in a Room transaction; generated barcode sequence starts at 2000001.
 - [x] Integer-satang money and bill-level 5% Half Up fee calculator with unit tests.
@@ -28,7 +28,7 @@
 
 - [ ] Latest CI run must finish successfully on the latest PR head, including unit tests, APK build, schema verification and instrumentation tests. A cancelled or compile-only run is not acceptance.
 - [ ] Commit reproducible Room schema history for every supported historical version, or formally revise D-063 with evidence that older schemas were never Room-generated. Do not fabricate historical JSON.
-- [ ] Prove `busy_timeout=5000` and `synchronous=FULL` on every effective Room connection; concurrent pooled-connection instrumentation test has been added and must pass on CI/device.
+- [ ] Verify `busy_timeout=5000` and `synchronous=FULL` on the single effective Room connection; Android WAL connection pooling is deliberately disabled because the public pool-wide API cannot apply the row-returning `busy_timeout` PRAGMA. Confirm WAL mode remains enabled and exercise concurrent Room access in instrumentation tests.
 - [ ] Complete Google OAuth app registration/consent on the target handset and execute a real upload→list→download→decrypt→staged-restore round trip. Source workers and account-selection entry point exist; runtime Google credentials/device evidence do not.
 - [ ] Complete daily full-snapshot scheduling and verify delta recovery/replay semantics after interrupted uploads. Delta packaging and post-confirmation journal acknowledgement are implemented in source, but the full remote replay chain is not yet accepted.
 - [ ] Add restore activation rollback tests, including failure after the candidate database has been opened.
