@@ -92,4 +92,27 @@ public final class DriveBackupWorkScheduler {
                 .enqueueUniqueWork("drive-backup-download-" + driveFileId,
                         ExistingWorkPolicy.KEEP, request);
     }
+
+    /** Lists remote encrypted backup metadata for the selected Google account. */
+    public static void enqueueList(@NonNull Context context, @NonNull String googleAccountName) {
+        if (googleAccountName.trim().isEmpty()) {
+            throw new IllegalArgumentException("Google account is required");
+        }
+        Data input = new Data.Builder()
+                .putString(GoogleDriveBackupListWorker.INPUT_ACCOUNT_NAME, googleAccountName)
+                .build();
+        Constraints constraints = new Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build();
+        OneTimeWorkRequest request = new OneTimeWorkRequest.Builder(
+                GoogleDriveBackupListWorker.class)
+                .setInputData(input)
+                .setConstraints(constraints)
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL,
+                        WorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS)
+                .build();
+        WorkManager.getInstance(context.getApplicationContext())
+                .enqueueUniqueWork("drive-backup-list", ExistingWorkPolicy.REPLACE, request);
+    }
+
 }
