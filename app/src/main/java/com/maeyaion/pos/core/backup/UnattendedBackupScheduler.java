@@ -23,6 +23,8 @@ public final class UnattendedBackupScheduler {
     public static final String KEY_ENABLED = "enabled";
     public static final String KEY_ACCOUNT = "account_name";
     public static final String KEY_LAST_SUCCESS = "last_success_epoch_ms";
+    public static final String KEY_LAST_DRIVE_FILE_ID = "last_drive_file_id";
+    public static final String KEY_LAST_VERIFIED = "last_verified_epoch_ms";
     public static final String UPLOAD_WORK_TAG = "maeyaion-pos.unattended-full-backup-upload.v1";
     private static final String KEY_LAST_FAILURE = "last_failure_epoch_ms";
 
@@ -67,6 +69,7 @@ public final class UnattendedBackupScheduler {
 
     public static void disable(@NonNull Context context) throws Exception {
         WorkManager.getInstance(context).cancelUniqueWork(UNIQUE_PERIODIC_WORK);
+        WorkManager.getInstance(context).cancelUniqueWork(MonthlyBackupVerificationKickoffWorker.UNIQUE_CHAIN);
         WorkManager.getInstance(context).cancelAllWorkByTag(UPLOAD_WORK_TAG);
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .putBoolean(KEY_ENABLED, false).remove(KEY_ACCOUNT).apply();
@@ -116,7 +119,23 @@ public final class UnattendedBackupScheduler {
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL,
                         WorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS)
                 .build();
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+        WorkManager manager = WorkManager.getInstance(context);
+        manager.enqueueUniquePeriodicWork(
                 UNIQUE_PERIODIC_WORK, ExistingPeriodicWorkPolicy.UPDATE, request);
+
+        Constraints monthlyConstraints = new Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .setRequiresBatteryNotLow(true)
+                .setRequiresCharging(true)
+                .build();
+        PeriodicWorkRequest monthly = new PeriodicWorkRequest.Builder(
+                MonthlyBackupVerificationKickoffWorker.class, 30, TimeUnit.DAYS)
+                .setConstraints(monthlyConstraints)
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL,
+                        WorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS)
+                .build();
+        manager.enqueueUniquePeriodicWork(
+                MonthlyBackupVerificationKickoffWorker.UNIQUE_CHAIN,
+                ExistingPeriodicWorkPolicy.UPDATE, monthly);
     }
 }
