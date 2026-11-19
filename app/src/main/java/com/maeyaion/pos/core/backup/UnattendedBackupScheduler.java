@@ -69,6 +69,7 @@ public final class UnattendedBackupScheduler {
 
     public static void disable(@NonNull Context context) throws Exception {
         WorkManager.getInstance(context).cancelUniqueWork(UNIQUE_PERIODIC_WORK);
+        WorkManager.getInstance(context).cancelUniqueWork(MonthlyBackupVerificationKickoffWorker.UNIQUE_PERIODIC);
         WorkManager.getInstance(context).cancelUniqueWork(MonthlyBackupVerificationKickoffWorker.UNIQUE_CHAIN);
         WorkManager.getInstance(context).cancelAllWorkByTag(UPLOAD_WORK_TAG);
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
@@ -135,7 +136,7 @@ public final class UnattendedBackupScheduler {
                         WorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS)
                 .build();
         manager.enqueueUniquePeriodicWork(
-                MonthlyBackupVerificationKickoffWorker.UNIQUE_CHAIN,
+                MonthlyBackupVerificationKickoffWorker.UNIQUE_PERIODIC,
                 ExistingPeriodicWorkPolicy.UPDATE, monthly);
     }
 }
