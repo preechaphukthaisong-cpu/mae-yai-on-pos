@@ -224,6 +224,12 @@ public final class ProductRegistrationServiceTest {
         @Override public List<BackupJournalEntity> pendingBatch(int limit) {
             return new ArrayList<>(entries.subList(0, Math.min(limit, entries.size())));
         }
+        @Override public BackupJournalEntity findBySequence(long seq) {
+            for (BackupJournalEntity entry : entries) {
+                if (entry.seq == seq) return entry;
+            }
+            return null;
+        }
         @Override public int markUploaded(long seq) { return 0; }
         @Override public long pendingCount() { return entries.size(); }
     }
