@@ -9,6 +9,7 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 
 import androidx.room.Room;
+import androidx.room.RoomDatabase;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 
@@ -39,6 +40,7 @@ public final class BackupSnapshotRestoreTest {
         context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         databaseName = "backup-test-" + UUID.randomUUID() + ".db";
         database = Room.databaseBuilder(context, AppDatabase.class, databaseName)
+                .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
                 .addCallback(AppDatabase.databaseCallback())
                 .allowMainThreadQueries()
                 .build();
