@@ -40,6 +40,7 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
     public static final String INPUT_ACCOUNT_NAME = "google_account_name";
     public static final String INPUT_ENCRYPTED_BACKUP_PATH = "encrypted_backup_path";
     public static final String INPUT_JOURNAL_SEQUENCES = "journal_sequences";
+    public static final String INPUT_FULL_BACKUP = "full_backup";
     public static final String OUTPUT_AUTH_REQUIRED = "auth_required";
     public static final String OUTPUT_DRIVE_FILE_ID = "drive_file_id";
     private static final String DRIVE_APPDATA_SCOPE = "https://www.googleapis.com/auth/drive.appdata";
@@ -81,7 +82,7 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
         try {
             String existingDriveId = findExistingDriveFile(token, backup.getName());
             if (existingDriveId != null) {
-                return completeUpload(existingDriveId);
+                return completeUpload(existingDriveId, backup);
             }
             connection = (HttpURLConnection) new URL(
                     "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,size")
@@ -130,7 +131,7 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
 
             String response = readLimited(connection.getInputStream(), 32 * 1024);
             String driveFileId = extractDriveFileId(response);
-            return completeUpload(driveFileId);
+            return completeUpload(driveFileId, backup);
         } catch (IOException networkFailure) {
             return Result.retry();
         } finally {
@@ -138,9 +139,13 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
         }
     }
 
-    private Result completeUpload(String driveFileId) {
+    private Result completeUpload(String driveFileId, File backup) {
+        if (driveFileId == null || driveFileId.trim().isEmpty()) return Result.retry();
         try {
             acknowledgeJournalRows();
+            if (getInputData().getBoolean(INPUT_FULL_BACKUP, false)) {
+                confirmLocalFullBackup(backup);
+            }
             return Result.success(new Data.Builder()
                     .putString(OUTPUT_DRIVE_FILE_ID, driveFileId).build());
         } catch (Exception acknowledgementFailure) {
@@ -148,6 +153,27 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
             // then repeats this idempotent local acknowledgement.
             return Result.retry();
         }
+    }
+
+
+    /** Publish local retention metadata only after Drive has confirmed the remote object. */
+    private static void confirmLocalFullBackup(File backup) throws IOException {
+        if (backup == null || !backup.isFile()) {
+            throw new IOException("Confirmed full backup is no longer present locally");
+        }
+        File pending = new File(backup.getAbsolutePath() + ".pending");
+        File uploaded = new File(backup.getAbsolutePath() + ".uploaded");
+        try (java.io.FileOutputStream output = new java.io.FileOutputStream(uploaded, false)) {
+            output.write(("confirmed=" + System.currentTimeMillis() + "\\n")
+                    .getBytes(StandardCharsets.US_ASCII));
+            output.flush();
+            output.getFD().sync();
+        }
+        if (pending.exists() && !pending.delete()) {
+            // Keep the durable uploaded marker; retention treats a remaining pending marker as protected.
+            throw new IOException("Unable to clear pending full-backup marker");
+        }
+        BackupLocalRetention.prune(backup.getParentFile(), System.currentTimeMillis());
     }
 
     private void acknowledgeJournalRows() throws Exception {
