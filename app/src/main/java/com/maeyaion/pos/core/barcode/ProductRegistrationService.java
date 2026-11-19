@@ -9,6 +9,7 @@ import com.maeyaion.pos.core.db.OpLogDao;
 import com.maeyaion.pos.core.db.OpLogEntity;
 import com.maeyaion.pos.core.db.ProductDao;
 import com.maeyaion.pos.core.db.ProductEntity;
+import com.maeyaion.pos.core.tx.RoomTransactionRunner;
 import com.maeyaion.pos.core.tx.TransactionRunner;
 
 import java.util.Objects;
@@ -27,7 +28,16 @@ public final class ProductRegistrationService {
     private final BackupJournalDao backupJournalDao;
     private final TransactionRunner transactions;
 
+    /** Production construction is restricted to the shared Room transaction/maintenance boundary. */
     public ProductRegistrationService(@NonNull BarcodeAllocator barcodeAllocator,
+            @NonNull ProductDao productDao, @NonNull OpLogDao opLogDao,
+            @NonNull BackupJournalDao backupJournalDao, @NonNull RoomTransactionRunner transactions) {
+        this(barcodeAllocator, productDao, opLogDao, backupJournalDao,
+                (TransactionRunner) transactions);
+    }
+
+    /** Package-private transaction seam for deterministic unit tests only. */
+    ProductRegistrationService(@NonNull BarcodeAllocator barcodeAllocator,
             @NonNull ProductDao productDao, @NonNull OpLogDao opLogDao,
             @NonNull BackupJournalDao backupJournalDao, @NonNull TransactionRunner transactions) {
         this.barcodeAllocator = Objects.requireNonNull(barcodeAllocator, "barcodeAllocator");
