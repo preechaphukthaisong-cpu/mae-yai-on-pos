@@ -14,6 +14,7 @@ import androidx.work.WorkRequest;
 
 import java.io.File;
 import java.util.concurrent.TimeUnit;
+import java.util.UUID;
 
 /** Queues an already-encrypted backup for upload when network connectivity is available. */
 public final class DriveBackupWorkScheduler {
@@ -68,7 +69,7 @@ public final class DriveBackupWorkScheduler {
     }
 
     /** Queues an encrypted Drive object for download into private staging storage. */
-    public static void enqueueDownload(@NonNull Context context, @NonNull String googleAccountName,
+    public static UUID enqueueDownload(@NonNull Context context, @NonNull String googleAccountName,
                                        @NonNull String driveFileId) {
         if (googleAccountName.trim().isEmpty()
                 || !GoogleDriveBackupDownloadWorker.isValidDriveFileId(driveFileId)) {
@@ -91,10 +92,11 @@ public final class DriveBackupWorkScheduler {
         WorkManager.getInstance(context.getApplicationContext())
                 .enqueueUniqueWork("drive-backup-download-" + driveFileId,
                         ExistingWorkPolicy.KEEP, request);
+        return request.getId();
     }
 
     /** Lists remote encrypted backup metadata for the selected Google account. */
-    public static void enqueueList(@NonNull Context context, @NonNull String googleAccountName) {
+    public static UUID enqueueList(@NonNull Context context, @NonNull String googleAccountName) {
         if (googleAccountName.trim().isEmpty()) {
             throw new IllegalArgumentException("Google account is required");
         }
@@ -113,6 +115,7 @@ public final class DriveBackupWorkScheduler {
                 .build();
         WorkManager.getInstance(context.getApplicationContext())
                 .enqueueUniqueWork("drive-backup-list", ExistingWorkPolicy.REPLACE, request);
+        return request.getId();
     }
 
 }
