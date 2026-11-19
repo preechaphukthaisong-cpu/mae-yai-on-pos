@@ -59,6 +59,7 @@ public final class UnattendedFullBackupWorker extends Worker {
             encrypted = new File(fullDirectory, "full-" + stamp + ".myobak");
             File pendingMarker = new File(encrypted.getAbsolutePath() + ".pending");
             if (encrypted.isFile() && encrypted.length() > 0 && pendingMarker.isFile()) {
+                pendingPublished = true;
                 UnattendedBackupScheduler.enqueueUpload(context, account, encrypted.getAbsolutePath());
                 return Result.success();
             }
@@ -78,6 +79,7 @@ public final class UnattendedFullBackupWorker extends Worker {
                 writeAndSync(new File(encrypted.getAbsolutePath() + ".localkey"), localWrappedKey);
                 writeAndSync(pendingMarker, ("created=" + System.currentTimeMillis()
                         + "\nsha256=" + captured.sha256 + "\n").getBytes(StandardCharsets.US_ASCII));
+                pendingPublished = true;
                 UnattendedBackupScheduler.enqueueUpload(context, account, encrypted.getAbsolutePath());
             }
             BackupLocalRetention.prune(fullDirectory, System.currentTimeMillis());
