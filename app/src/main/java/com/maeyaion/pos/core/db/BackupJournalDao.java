@@ -18,6 +18,9 @@ public interface BackupJournalDao {
     @Query("SELECT * FROM backup_journal WHERE uploaded = 0 ORDER BY seq ASC LIMIT :limit")
     List<BackupJournalEntity> pendingBatch(int limit);
 
+    @Query("SELECT * FROM backup_journal WHERE seq = :seq LIMIT 1")
+    BackupJournalEntity findBySequence(long seq);
+
     @Query("UPDATE backup_journal SET uploaded = 1 WHERE seq = :seq AND uploaded = 0")
     int markUploaded(long seq);
 
