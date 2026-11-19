@@ -20,7 +20,7 @@
 | เฟส | สถานะ | หมายเหตุ |
 |---|---|---|
 | 0 — ล็อกกฎ | DONE | อ่าน DECISIONS.md และ SPEC.md; ยืนยันข้อกำหนดหลักและเมนู 6 รายการ; บันทึกแผนปัจจุบันในไฟล์นี้ |
-| 1 — Foundation ที่ใช้งานได้ | IN PROGRESS | CI ล่าสุดผ่านทั้ง unit tests, instrumentation tests และ APK build (run 44504525332); ยังต้องตรวจ/เชื่อม local backup-restore และ Drive basic ให้ใช้งานได้ พร้อมทดสอบบนโทรศัพท์จริง |
+| 1 — Foundation ที่ใช้งานได้ | IN PROGRESS | เพิ่มหน้าสำรอง/กู้คืนแบบเข้ารหัสในเครื่องและ Google Drive แล้ว; CI run 44507036329 ผ่านทั้ง unit tests, APK build และ database instrumentation tests; ยังต้องทดสอบ workflow จริงบนโทรศัพท์และยืนยัน Drive กับบัญชีผู้ใช้ |
 | 2 — ขายและคลัง | NOT STARTED | รอ Phase 1 ผ่าน; จะทำ workflow ขายเต็มรูปแบบและคลังสินค้าตามแผน |
 | 3 — ขายเชื่อ คืนสินค้า และรายงาน | NOT STARTED | รอ Phase 2 ผ่าน |
 | 4 — ติดตั้งทับและเสถียรภาพ | NOT STARTED | รอ Phase 3 ผ่าน |
@@ -47,7 +47,10 @@ Baseline ที่ตรวจ: branch `phase-3-foundation`, commit `e44e3e9293e
 - เพิ่ม `PosWorkflowActivity`: เมนูคลังสินค้าสร้างสินค้า/บาร์โค้ดและบันทึกสต๊อกตั้งต้นใน transaction เดียว; เมนูการขายสแกนด้วย CameraX + bundled ML Kit หรือกรอกบาร์โค้ด และยืนยันขายเงินสดผ่าน `CashSaleService`; เมนูสร้างบาร์โค้ดเชื่อมไปหน้าคลังสินค้า
 - เชื่อมเมนูหลัก 3 รายการเข้าหน้าทดลองใช้งานโดยไม่เปลี่ยนชื่อหรือลำดับเมนู; อีก 3 เมนูยังเป็น placeholder
 - CI ของหน้าทดลองใช้งานใหม่ผ่านแล้ว (run 44504525332; commit 9357afcea6e94bf2f80f0c91ed82d7510ce85ebf): unit tests/APK build และ database instrumentation tests ผ่าน; ได้ artifact APK debug
-- ยังต้องตรวจ/เชื่อม workflow local backup/restore และ Drive basic ให้ครบตามแผน v1 และต้องทดสอบการสร้างสินค้า + สแกน + ขายเงินสด atomic รวมถึง backup/restore บนโทรศัพท์จริง
+- เพิ่มปุ่มสำรองข้อมูลในเครื่องแบบเข้ารหัสและกู้คืนจากไฟล์สำรองในเครื่อง โดยใช้ Recovery Password/Recovery Key; plaintext snapshot ถูกลบหลังเข้ารหัส
+- เพิ่มการสำรองขึ้น Google Drive แบบ manual โดยเข้าคิว WorkManager เฉพาะไฟล์ `.myobak` ที่เข้ารหัสแล้ว และเพิ่ม flow ค้นหา/ดาวน์โหลด/กู้คืนไฟล์จาก Drive; ไม่อัปโหลด `.localkey` หรือข้อมูลลับ
+- CI run 44507036329 ผ่านทั้ง Unit tests and APK build และ Database instrumentation tests; debug APK artifact ถูกสร้างสำเร็จ
+- ยังต้องทดสอบบนโทรศัพท์จริง: สร้างสินค้า, สแกน, ขายเงินสด atomic, สำรอง/กู้คืนในเครื่อง และ Drive upload/download ด้วยบัญชีจริง
 - การมี source code หรือ unit tests ยังไม่เท่ากับผ่านการทดสอบบนมือถือจริง
 
 ## ข้อจำกัดการดำเนินงาน
@@ -69,4 +72,4 @@ Baseline ที่ตรวจ: branch `phase-3-foundation`, commit `e44e3e9293e
 
 ## สถานะปัจจุบัน
 
-Phase 0 DONE. Phase 1 IN PROGRESS; CI run 44504525332 ผ่านครบทั้งสอง jobs และสร้าง APK debug artifact แล้ว; ยังไม่มีหลักฐานทดสอบบนมือถือจริง และยังต้องยืนยัน/เชื่อม local backup-restore กับ Drive basic workflow ให้ใช้งานได้ จึงยังห้ามเริ่ม Phase 2
+Phase 0 DONE. Phase 1 IN PROGRESS; CI run 44507036329 ผ่านครบทั้งสอง jobs และสร้าง APK debug artifact แล้ว; workflow local backup/restore และ Drive basic ถูกเชื่อมใน UI แล้ว แต่ยังไม่มีหลักฐานทดสอบบนโทรศัพท์จริงและบัญชี Google จริง จึงยังห้ามเริ่ม Phase 2
