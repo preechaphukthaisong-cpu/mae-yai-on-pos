@@ -312,9 +312,12 @@ public final class MainActivity extends ComponentActivity {
                                     .setTitle("เลือกไฟล์สำรองจาก Drive")
                                     .setItems(labels, (dialog, selected) ->
                                             downloadDriveBackup(account, ids.get(selected), password, recoveryKey))
-                                    .setNegativeButton("ยกเลิก", (dialog, which) ->
-                                            if (password != null) Arrays.fill(password, '\0'))
-                                    .setOnCancelListener(dialog -> if (password != null) Arrays.fill(password, '\0'))
+                                    .setNegativeButton("ยกเลิก", (dialog, which) -> {
+                                        if (password != null) Arrays.fill(password, '\0');
+                                    })
+                                    .setOnCancelListener(dialog -> {
+                                        if (password != null) Arrays.fill(password, '\0');
+                                    })
                                     .show();
                         } catch (Exception malformed) {
                             if (password != null) Arrays.fill(password, '\0');
