@@ -25,7 +25,9 @@ public final class BackupLocalRetention {
             }
         }
         for (File file : files) {
+            // A file without an uploaded marker is pending or ambiguous: never delete it.
             if (new File(file.getAbsolutePath() + ".pending").exists()) continue;
+            if (!new File(file.getAbsolutePath() + ".uploaded").isFile()) continue;
             if (file.equals(newestConfirmed)) continue;
             if (nowMillis - file.lastModified() > RETENTION_MILLIS) {
                 deleteIfExists(new File(file.getAbsolutePath() + ".localkey"));
