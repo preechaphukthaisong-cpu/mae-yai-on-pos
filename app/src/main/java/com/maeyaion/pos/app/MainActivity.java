@@ -1,6 +1,6 @@
 package com.maeyaion.pos.app;
 
-import android.app.Activity;
+import androidx.activity.ComponentActivity;
 import android.app.AlertDialog;
 import android.content.SharedPreferences;
 import android.content.Intent;
@@ -43,7 +43,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-public final class MainActivity extends Activity {
+public final class MainActivity extends ComponentActivity {
     private static final int REQUEST_DRIVE_ACCOUNT = 4102;
     private static final String DRIVE_SCOPE =
             "https://www.googleapis.com/auth/drive.appdata";
