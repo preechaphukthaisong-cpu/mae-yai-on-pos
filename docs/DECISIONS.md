@@ -562,7 +562,8 @@
 - ทุก SQLite connection ที่ Room ใช้งานต้องเปิด/ตรวจ foreign_keys = ON และ busy_timeout = 5000 ms
 - journal_mode = WAL ต้องตั้งตอน initialize และตรวจค่าที่ SQLite คืน
 - synchronous = FULL ต้องกำหนดและตรวจใน connection ที่เกี่ยวข้อง; ห้ามอ้างว่า onOpen ของ connection เดียวพิสูจน์ connection pool ทั้งหมด
-- ต้องมี instrumentation tests ตรวจทุก connection ที่ pool เปิดได้ และทดสอบ lock contention / reopen behavior บน Android runtime
+- Implementation เลือกปิด Android WAL connection pool โดยเปิด Room helper แบบ single-connection แล้วตั้ง SQLite journal_mode=WAL โดยตรง เพื่อให้ `busy_timeout` (PRAGMA ที่คืน result row และใช้กับ execPerConnectionSQL ไม่ได้) ถูกตั้งบน connection ทุกตัวที่มีจริง; ต้องมี instrumentation ยืนยัน WAL mode, ค่า PRAGMA, concurrent access และ lock contention/reopen behavior
+- หากภายหลังเปิด connection pool อีกครั้ง ต้องเพิ่มกลไกกำหนด `busy_timeout` ทุก connection ที่เกิดใหม่ได้จริงก่อนยอมรับการเปลี่ยนแปลง
 
 ---
 
