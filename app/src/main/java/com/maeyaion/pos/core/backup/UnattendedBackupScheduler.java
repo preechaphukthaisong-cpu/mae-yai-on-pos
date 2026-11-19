@@ -26,7 +26,7 @@ public final class UnattendedBackupScheduler {
     public static final String KEY_LAST_DRIVE_FILE_ID = "last_drive_file_id";
     public static final String KEY_LAST_VERIFIED = "last_verified_epoch_ms";
     public static final String UPLOAD_WORK_TAG = "maeyaion-pos.unattended-full-backup-upload.v1";
-    private static final String KEY_LAST_FAILURE = "last_failure_epoch_ms";
+    public static final String KEY_LAST_FAILURE = "last_failure_epoch_ms";
 
     private UnattendedBackupScheduler() {}
 
