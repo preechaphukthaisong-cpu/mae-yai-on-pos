@@ -30,6 +30,13 @@ public final class UnattendedFullBackupWorker extends Worker {
     @NonNull @Override public Result doWork() {
         Context context = getApplicationContext();
         if (!UnattendedBackupScheduler.isEnabled(context)) return Result.success();
+        long lastSuccess = context.getSharedPreferences(UnattendedBackupScheduler.PREFS,
+                Context.MODE_PRIVATE).getLong(UnattendedBackupScheduler.KEY_LAST_SUCCESS, 0L);
+        if (lastSuccess == 0L || System.currentTimeMillis() - lastSuccess
+                > 24L * 60L * 60L * 1000L) {
+            BackupNotifications.showFailureThrottled(context,
+                    "ยังไม่มีข้อมูลสำรองที่ยืนยันสำเร็จเกิน 24 ชั่วโมง กรุณาตรวจสอบ Google Drive และเครือข่าย");
+        }
         String account = context.getSharedPreferences(UnattendedBackupScheduler.PREFS,
                 Context.MODE_PRIVATE).getString(UnattendedBackupScheduler.KEY_ACCOUNT, null);
         if (account == null || account.trim().isEmpty()) {
