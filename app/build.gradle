@@ -18,10 +18,11 @@ android {
     }
     // Keep CI debug APK signing deterministic for the registered Android OAuth SHA-1.
     // Local builds retain Android Gradle Plugin's normal debug signing behavior.
-    if (System.getenv('CI') == 'true') {
+    def ciDebugKeystore = file("${System.getProperty('user.home')}/.android/debug.keystore")
+    if (System.getenv('CI') == 'true' && ciDebugKeystore.isFile()) {
         signingConfigs {
             debug {
-                storeFile file("${System.getProperty('user.home')}/.android/debug.keystore")
+                storeFile ciDebugKeystore
                 storePassword 'android'
                 keyAlias 'AndroidDebugKey'
                 keyPassword 'android'
