@@ -15,6 +15,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignInClient;
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.common.api.Scope;
+import com.google.android.gms.auth.api.signin.GoogleSignInStatusCodes;
 import com.maeyaion.pos.R;
 
 public final class MainActivity extends Activity {
@@ -79,8 +80,11 @@ public final class MainActivity extends Activity {
             android.content.Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode != REQUEST_DRIVE_ACCOUNT) return;
-        if (resultCode != RESULT_OK || data == null) {
-            Toast.makeText(this, "ยกเลิกการเลือกบัญชี Google", Toast.LENGTH_SHORT).show();
+        // Some Google Sign-In failures return RESULT_CANCELED together with an
+        // Intent containing the actual ApiException. Always inspect that payload first.
+        if (data == null) {
+            Toast.makeText(this, "Google Sign-In ไม่ส่งผลลัพธ์กลับ (resultCode="
+                    + resultCode + ")", Toast.LENGTH_LONG).show();
             return;
         }
         try {
@@ -88,7 +92,7 @@ public final class MainActivity extends Activity {
                     .getResult(ApiException.class);
             if (account == null || account.getEmail() == null
                     || !GoogleSignIn.hasPermissions(account, new Scope(DRIVE_SCOPE))) {
-                Toast.makeText(this, "ยังไม่ได้อนุญาตสิทธิ์สำรองข้อมูล Google Drive",
+                Toast.makeText(this, "บัญชี Google ยังไม่ได้รับสิทธิ์ Google Drive appData",
                         Toast.LENGTH_LONG).show();
                 return;
             }
@@ -96,8 +100,13 @@ public final class MainActivity extends Activity {
             refreshDriveStatus();
             Toast.makeText(this, "เชื่อมต่อบัญชี Google Drive แล้ว", Toast.LENGTH_SHORT).show();
         } catch (ApiException failure) {
-            Toast.makeText(this, "เชื่อมต่อ Google Drive ไม่สำเร็จ: "
-                    + failure.getStatusCode(), Toast.LENGTH_LONG).show();
+            int statusCode = failure.getStatusCode();
+            String statusText = GoogleSignInStatusCodes.getStatusCodeString(statusCode);
+            String message = statusCode == GoogleSignInStatusCodes.SIGN_IN_CANCELLED
+                    ? "ยกเลิกการเลือกบัญชี Google"
+                    : "Google Sign-In ล้มเหลว";
+            Toast.makeText(this, message + " (code=" + statusCode + ": "
+                    + statusText + ")", Toast.LENGTH_LONG).show();
         }
     }
 
