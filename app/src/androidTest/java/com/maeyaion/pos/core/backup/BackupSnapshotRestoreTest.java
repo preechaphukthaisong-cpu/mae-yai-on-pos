@@ -392,6 +392,56 @@ public final class BackupSnapshotRestoreTest {
         Arrays.fill(envelope, (byte) 0);
     }
 
+
+    @Test public void deltaReplayRejectsConflictingOlderSequenceAsOutOfOrder() throws Exception {
+        RoomDatabaseSnapshotter.Snapshot baseline = new RoomDatabaseSnapshotter()
+                .create(context, database, backupDirectory);
+        File staging = new File(backupDirectory, "delta-out-of-order-staging.sqlite");
+        Files.copy(baseline.file.toPath(), staging.toPath());
+
+        BackupJournalEntity existing = createProductRow(1L, "EXISTING-SKU", "2000001",
+                "2026-11-19T00:53:00Z");
+        SQLiteDatabase writable = SQLiteDatabase.openDatabase(
+                staging.getAbsolutePath(), null, SQLiteDatabase.OPEN_READWRITE);
+        try {
+            writable.execSQL("INSERT INTO backup_journal "
+                    + "(seq, operation_id, op, payload, payload_sha256, schema_version, created_at_utc, uploaded) "
+                    + "VALUES(?, ?, ?, ?, ?, ?, ?, 1)",
+                    new Object[]{existing.seq, existing.operation_id, existing.op, existing.payload,
+                            existing.payload_sha256, existing.schema_version, existing.created_at_utc});
+        } finally {
+            writable.close();
+        }
+
+        BackupJournalEntity conflicting = createProductRow(1L, "CONFLICTING-SKU", "2000002",
+                "2026-11-19T00:54:00Z");
+        byte[] delta = DeltaBackupCoordinator.buildPayload(
+                java.util.Collections.singletonList(conflicting), 4);
+        byte[] envelope = BackupCrypto.encrypt(delta, PASSWORD, BackupCrypto.generateRecoveryKey());
+        File encrypted = new File(backupDirectory, "delta-out-of-order.myobak");
+        Files.write(encrypted.toPath(), envelope);
+
+        try {
+            new DeltaReplayCoordinator().applyToStaging(context, staging, encrypted, PASSWORD, null);
+            fail("A conflicting older sequence must be rejected");
+        } catch (java.io.IOException expected) {
+            assertTrue(expected.getMessage().contains("conflicts with delta row"));
+        }
+        SQLiteDatabase stagedDb = SQLiteDatabase.openDatabase(
+                staging.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
+        try (Cursor products = stagedDb.rawQuery("SELECT COUNT(*) FROM product", null);
+             Cursor journal = stagedDb.rawQuery("SELECT COUNT(*) FROM backup_journal", null)) {
+            assertTrue(products.moveToFirst());
+            assertEquals(0, products.getInt(0));
+            assertTrue(journal.moveToFirst());
+            assertEquals(1, journal.getInt(0));
+        } finally {
+            stagedDb.close();
+        }
+        Arrays.fill(delta, (byte) 0);
+        Arrays.fill(envelope, (byte) 0);
+    }
+
     private static String hexSha256(String value) throws Exception {
         byte[] digest = java.security.MessageDigest.getInstance("SHA-256")
                 .digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
