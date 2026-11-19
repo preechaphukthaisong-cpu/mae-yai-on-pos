@@ -286,6 +286,112 @@ public final class BackupSnapshotRestoreTest {
         Arrays.fill(envelope, (byte) 0);
     }
 
+
+    @Test public void deltaReplayRejectsUnsupportedOperationBeforeChangingStaging() throws Exception {
+        RoomDatabaseSnapshotter.Snapshot baseline = new RoomDatabaseSnapshotter()
+                .create(context, database, backupDirectory);
+        File staging = new File(backupDirectory, "delta-unsupported-staging.sqlite");
+        Files.copy(baseline.file.toPath(), staging.toPath());
+
+        String createdAt = "2026-11-19T00:50:00Z";
+        String payload = "{\"v\":1,\"op\":\"PRODUCT_DELETE\",\"created_at_utc\":\"" + createdAt + "\"}";
+        BackupJournalEntity unsupported = new BackupJournalEntity(1L, UUID.randomUUID().toString(),
+                "PRODUCT_DELETE", payload, hexSha256(payload), 4, createdAt, 0);
+        byte[] delta = DeltaBackupCoordinator.buildPayload(
+                java.util.Collections.singletonList(unsupported), 4);
+        byte[] envelope = BackupCrypto.encrypt(delta, PASSWORD, BackupCrypto.generateRecoveryKey());
+        File encrypted = new File(backupDirectory, "delta-unsupported.myobak");
+        Files.write(encrypted.toPath(), envelope);
+
+        try {
+            new DeltaReplayCoordinator().applyToStaging(context, staging, encrypted, PASSWORD, null);
+            fail("Unsupported operation must be rejected");
+        } catch (java.io.IOException expected) {
+            assertTrue(expected.getMessage().contains("unsupported operation"));
+        }
+        SQLiteDatabase stagedDb = SQLiteDatabase.openDatabase(
+                staging.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
+        try (Cursor journal = stagedDb.rawQuery("SELECT COUNT(*) FROM backup_journal", null)) {
+            assertTrue(journal.moveToFirst());
+            assertEquals(0, journal.getInt(0));
+        } finally {
+            stagedDb.close();
+        }
+        Arrays.fill(delta, (byte) 0);
+        Arrays.fill(envelope, (byte) 0);
+    }
+
+    @Test public void deltaReplayRejectsPayloadHashMismatchBeforeOpeningStagingForWrite()
+            throws Exception {
+        RoomDatabaseSnapshotter.Snapshot baseline = new RoomDatabaseSnapshotter()
+                .create(context, database, backupDirectory);
+        File staging = new File(backupDirectory, "delta-hash-staging.sqlite");
+        Files.copy(baseline.file.toPath(), staging.toPath());
+        BackupJournalEntity row = createProductRow(1L, "HASH-SKU", "2000001",
+                "2026-11-19T00:51:00Z");
+        byte[] valid = DeltaBackupCoordinator.buildPayload(
+                java.util.Collections.singletonList(row), 4);
+        String json = new String(valid, java.nio.charset.StandardCharsets.UTF_8);
+        json = json.replace(row.payload_sha256, "0".repeat(64));
+        byte[] tampered = json.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] envelope = BackupCrypto.encrypt(tampered, PASSWORD, BackupCrypto.generateRecoveryKey());
+        File encrypted = new File(backupDirectory, "delta-hash-mismatch.myobak");
+        Files.write(encrypted.toPath(), envelope);
+
+        try {
+            new DeltaReplayCoordinator().applyToStaging(context, staging, encrypted, PASSWORD, null);
+            fail("A payload hash mismatch must be rejected");
+        } catch (java.io.IOException expected) {
+            assertTrue(expected.getMessage().contains("integrity validation"));
+        }
+        SQLiteDatabase stagedDb = SQLiteDatabase.openDatabase(
+                staging.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
+        try (Cursor journal = stagedDb.rawQuery("SELECT COUNT(*) FROM backup_journal", null)) {
+            assertTrue(journal.moveToFirst());
+            assertEquals(0, journal.getInt(0));
+        } finally {
+            stagedDb.close();
+        }
+        Arrays.fill(valid, (byte) 0);
+        Arrays.fill(tampered, (byte) 0);
+        Arrays.fill(envelope, (byte) 0);
+    }
+
+    @Test public void deltaReplayRejectsSchemaMismatchWithoutChangingStaging() throws Exception {
+        RoomDatabaseSnapshotter.Snapshot baseline = new RoomDatabaseSnapshotter()
+                .create(context, database, backupDirectory);
+        File staging = new File(backupDirectory, "delta-schema-staging.sqlite");
+        Files.copy(baseline.file.toPath(), staging.toPath());
+        BackupJournalEntity row = createProductRow(1L, "SCHEMA-SKU", "2000001",
+                "2026-11-19T00:52:00Z");
+        byte[] valid = DeltaBackupCoordinator.buildPayload(
+                java.util.Collections.singletonList(row), 4);
+        String json = new String(valid, java.nio.charset.StandardCharsets.UTF_8)
+                .replace("\"schema_version\":4", "\"schema_version\":99");
+        byte[] tampered = json.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] envelope = BackupCrypto.encrypt(tampered, PASSWORD, BackupCrypto.generateRecoveryKey());
+        File encrypted = new File(backupDirectory, "delta-schema-mismatch.myobak");
+        Files.write(encrypted.toPath(), envelope);
+
+        try {
+            new DeltaReplayCoordinator().applyToStaging(context, staging, encrypted, PASSWORD, null);
+            fail("An unsupported delta schema must be rejected");
+        } catch (java.io.IOException expected) {
+            assertTrue(expected.getMessage().contains("schema version"));
+        }
+        SQLiteDatabase stagedDb = SQLiteDatabase.openDatabase(
+                staging.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
+        try (Cursor journal = stagedDb.rawQuery("SELECT COUNT(*) FROM backup_journal", null)) {
+            assertTrue(journal.moveToFirst());
+            assertEquals(0, journal.getInt(0));
+        } finally {
+            stagedDb.close();
+        }
+        Arrays.fill(valid, (byte) 0);
+        Arrays.fill(tampered, (byte) 0);
+        Arrays.fill(envelope, (byte) 0);
+    }
+
     private static String hexSha256(String value) throws Exception {
         byte[] digest = java.security.MessageDigest.getInstance("SHA-256")
                 .digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
