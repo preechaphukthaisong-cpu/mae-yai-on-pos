@@ -151,7 +151,8 @@ public final class DeltaReplayCoordinator {
             long currentMax = maxJournalSequence(db);
             int duplicates = countMatchingExistingRows(db, batch);
             if (duplicates == batch.rows.length) {
-                return new ApplyResult(0, true, currentMax);
+                long acknowledgedMax = acknowledgeDuplicateRows(db, batch);
+                return new ApplyResult(0, true, acknowledgedMax);
             }
             if (duplicates != 0) {
                 throw new IOException("Delta partially overlaps existing journal history");
@@ -205,6 +206,43 @@ public final class DeltaReplayCoordinator {
             }
         }
         return matches;
+    }
+
+
+    /**
+     * A full snapshot can already contain the operations while their local
+     * uploaded flags are still zero. Since this exact delta was downloaded from
+     * Drive, acknowledge those existing rows in the staging copy to prevent
+     * unnecessary re-upload after restore.
+     */
+    private static long acknowledgeDuplicateRows(SQLiteDatabase db, DeltaBatch batch)
+            throws IOException {
+        db.beginTransaction();
+        try {
+            if (countMatchingExistingRows(db, batch) != batch.rows.length) {
+                throw new IOException("Staging journal changed during duplicate delta acknowledgement");
+            }
+            ContentValues uploaded = new ContentValues();
+            uploaded.put("uploaded", 1);
+            for (DeltaOperation operation : batch.rows) {
+                int changed = db.update("backup_journal", uploaded, "seq=? AND uploaded=0",
+                        new String[]{Long.toString(operation.sequence)});
+                if (changed == 0) {
+                    try (Cursor cursor = db.rawQuery(
+                            "SELECT uploaded FROM backup_journal WHERE seq=?",
+                            new String[]{Long.toString(operation.sequence)})) {
+                        if (!cursor.moveToFirst() || cursor.getInt(0) != 1) {
+                            throw new IOException("Duplicate delta journal acknowledgement failed");
+                        }
+                    }
+                }
+            }
+            verifyIntegrity(db);
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+        return maxJournalSequence(db);
     }
 
     private static boolean operationIdExists(SQLiteDatabase db, String operationId) {
