@@ -21,6 +21,11 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.io.File;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 @RunWith(AndroidJUnit4.class)
 public final class AppDatabaseMigrationTest {
@@ -227,6 +232,47 @@ public final class AppDatabaseMigrationTest {
             assertNotNull(cursor);
             assertEquals(true, cursor.moveToFirst());
             assertEquals("wal", cursor.getString(0).toLowerCase(java.util.Locale.ROOT));
+        }
+    }
+
+    @Test public void durabilityPragmasAreAppliedToConcurrentPooledConnections() throws Exception {
+        openFreshDatabase();
+        SupportSQLiteDatabase sql = database.getOpenHelper().getWritableDatabase();
+        final int connectionCount = 4;
+        ExecutorService executor = Executors.newFixedThreadPool(connectionCount);
+        CountDownLatch opened = new CountDownLatch(connectionCount);
+        CountDownLatch release = new CountDownLatch(1);
+        java.util.List<Future<long[]>> checks = new java.util.ArrayList<>();
+        try {
+            for (int i = 0; i < connectionCount; i++) {
+                checks.add(executor.submit(() -> {
+                    try (Cursor cursor = sql.query(
+                            "SELECT (SELECT timeout FROM pragma_busy_timeout), "
+                                    + "(SELECT synchronous FROM pragma_synchronous)")) {
+                        assertNotNull(cursor);
+                        assertTrue(cursor.moveToFirst());
+                        long busyTimeout = cursor.getLong(0);
+                        long synchronous = cursor.getLong(1);
+                        opened.countDown();
+                        if (!release.await(15, TimeUnit.SECONDS)) {
+                            throw new AssertionError("Timed out holding pooled SQLite connection");
+                        }
+                        return new long[]{busyTimeout, synchronous};
+                    }
+                }));
+            }
+            assertTrue("All concurrent SQLite connections must be acquired",
+                    opened.await(15, TimeUnit.SECONDS));
+            release.countDown();
+            for (Future<long[]> check : checks) {
+                long[] values = check.get(15, TimeUnit.SECONDS);
+                assertEquals("busy_timeout must be set on every pooled connection", 5000L, values[0]);
+                assertEquals("synchronous=FULL must be set on every pooled connection", 2L, values[1]);
+            }
+        } finally {
+            release.countDown();
+            executor.shutdownNow();
+            executor.awaitTermination(5, TimeUnit.SECONDS);
         }
     }
 
