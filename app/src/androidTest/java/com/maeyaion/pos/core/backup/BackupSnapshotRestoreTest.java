@@ -332,7 +332,7 @@ public final class BackupSnapshotRestoreTest {
         byte[] valid = DeltaBackupCoordinator.buildPayload(
                 java.util.Collections.singletonList(row), 4);
         String json = new String(valid, java.nio.charset.StandardCharsets.UTF_8);
-        json = json.replace(row.payload_sha256, "0".repeat(64));
+        json = json.replace(row.payload_sha256, "0000000000000000000000000000000000000000000000000000000000000000");
         byte[] tampered = json.getBytes(java.nio.charset.StandardCharsets.UTF_8);
         byte[] envelope = BackupCrypto.encrypt(tampered, PASSWORD, BackupCrypto.generateRecoveryKey());
         File encrypted = new File(backupDirectory, "delta-hash-mismatch.myobak");
