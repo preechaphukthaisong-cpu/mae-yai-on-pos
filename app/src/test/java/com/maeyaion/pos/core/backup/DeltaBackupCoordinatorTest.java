@@ -40,6 +40,11 @@ public final class DeltaBackupCoordinatorTest {
         expectInvalid(Collections.singletonList(entry(1, "op-1", "{}")), 3);
     }
 
+
+    @Test public void rejectsSequenceGapInPendingBatch() throws Exception {
+        expectInvalid(Arrays.asList(entry(1, "op-1", "{}"), entry(3, "op-3", "{}")));
+    }
+
     @Test public void rejectsAlreadyUploadedRowsAndEmptyBatch() throws Exception {
         BackupJournalEntity valid = entry(1, "op-1", "{}");
         BackupJournalEntity uploaded = new BackupJournalEntity(valid.seq, valid.operation_id,

@@ -1,48 +1,46 @@
 # Phase 3 — Android Foundation Delivery
 
-- Branch: `phase-3-foundation`
-- Status: **FOUNDATION IMPLEMENTATION COMPLETE — DEVICE QUALIFICATION REQUIRED BEFORE STORE USE**
-- Latest verified CI commit before this closure record: `1cc25cd9131d49f2f8fad5bd4b97242160fab9fe`
-- CI run #328 (push) and #329 (pull request): success; Unit Tests, APK Build, Room schema drift verification and Database Instrumentation Tests passed.
+- Implementation branch: `phase-3-foundation` (merged)
+- Release-gate follow-up: PR [#4](https://github.com/preechaphukthaisong-cpu/mae-yai-on-pos/pull/4), branch `phase-3-release-gates`
+- Status: **FOUNDATION IMPLEMENTATION COMPLETE — RELEASE GATES IN PROGRESS**
+- Latest previously CI-verified code commit: `b3e753ee196929860ecf23b0943caa66d9a21df3`
+- CI #354 passed all 29 emulator instrumentation tests; CI #355 passed Unit Tests/APK Build and Database Instrumentation.
 
 ## Delivered and CI-verified
 
 - [x] Android Java / Java 17 application scaffold, minSdk 26.
 - [x] Room v4, SQLite WAL, explicit non-destructive migrations 1→2→3→4.
 - [x] Room schema v4 committed and generated-schema drift checked by CI.
-- [x] SQLite durability settings: busy_timeout=5000, synchronous=FULL, WAL; external writer contention and reopen tests pass.
+- [x] SQLite durability settings: busy_timeout=5000, synchronous=FULL, WAL.
 - [x] Foundation entities, DAOs, stock ledger, operation log and backup journal.
 - [x] Product registration transaction and barcode sequence starting at 2000001.
 - [x] Integer-satang money and bill-level 5% Half Up fee calculator.
 - [x] AES-256-GCM portable backup envelope, independent recovery password/key wrappers and Android Keystore local DEK protection.
 - [x] Streaming full-backup encryption/decryption, SQLite integrity validation, staged restore and rollback tests.
-- [x] Google Drive appDataFolder upload/list/download worker source with encrypted-envelope validation and upload reconciliation.
-- [x] Bounded encrypted delta journal packaging and acknowledgement only after remote upload confirmation.
+- [x] Google Drive appDataFolder upload/list/download worker source.
+- [x] Bounded encrypted delta journal packaging and staging-only replay for current product-create operations.
 - [x] CameraX + bundled ML Kit scanner source and Thai TTS service/fallback source.
-- [x] CI unit tests, APK build, Room schema check and emulator database instrumentation pass on the latest verified source commit.
+- [x] G5 source audit and concurrency/integrity tests.
 
-## Formal scope decisions
+## Owner decisions recorded — 2026-11-19
 
-D-065 separates delivery of the foundation code from Device Qualification. This is necessary because OAuth consent, a real Google account, and physical scanner/TTS/power-loss behavior cannot be honestly certified by a GitHub emulator runner. D-063 is fulfilled prospectively: authentic Room exports are committed from v4 onward; historical v1–v3 JSON is not fabricated. Existing migration tests remain the compatibility evidence for those legacy versions.
+- [x] G3 approved for implementation with mandatory offline Recovery Key acknowledgement, device-bound Keystore vault, fail-closed behavior, backup failure notification, integrity verification, monthly isolated restore verification, and 7–14 day local cache policy. Approval is not implementation evidence.
+- [x] G6 approved for non-destructive implementation: five-year conservative POS evidence-retention baseline, configurable up to seven years, Dry Run, encrypted archive and independent staging-restore verification. **Live purge remains prohibited in Phase 3.**
+- [x] G6 retention is a conservative product policy, not a claim that every record of every unregistered sole proprietor is subject to an identical statutory five-year duty. Applicable tax/accounting status must be checked; longer requirements/legal holds prevail.
 
-## Release gates — must pass before using the POS in the shop
+## Release gates
 
-- [ ] Complete Google OAuth consent on the target handset and prove Drive upload→list→download→decrypt→staged restore.
-- [ ] Implement and verify delta replay/apply into a staging database; prove idempotency, sequence-gap detection, duplicate handling and interrupted-upload recovery.
-- [ ] Define a secure credential lifecycle for unattended daily full snapshots; never place recovery secrets in WorkManager input or plaintext preferences.
-- [ ] Complete physical-device tests: migration, process death, power interruption, scanner lifecycle, Thai TTS lifecycle, backup and restore.
-- [ ] Complete a final audit that every production mutation path is serialized with database maintenance; feature-level write APIs are not yet implemented, and raw DAO access must not be used as an application write API.
-- [ ] Approve a verifiable archive/reconciliation policy before any append-only ledger purge. No purge implementation is permitted until then.
+- [ ] G1 — Real Google OAuth consent and Drive upload/list/download/decrypt/staged-restore qualification on target handset.
+- [ ] G2 — Deterministic interrupted-upload reconciliation tests and real Drive qualification; current operation handlers must cover all mutation types actually introduced.
+- [ ] G3 — Implement approved credential vault, opt-in UI, scheduler, notifications, local retention and monthly restore verification; pass CI and security tests.
+- [ ] G4 — Physical-device migration, process death, force-stop/reboot/power interruption, scanner lifecycle, Thai TTS, backup/restore and rollback.
+- [x] G5 — Database write/maintenance serialization passed. See `docs/DB_WRITE_PATH_AUDIT.md`.
+- [ ] G6 — Implement retention evaluation, Dry Run, proof and archive verification tests. Live purge is explicitly out of scope and prohibited in Phase 3.
 
-## Explicit limitations
+## External dependencies
 
-- The launcher remains a foundation/status screen; this branch is not a finished shop-ready POS UI.
-- Only Room schema v4 has an authentic committed Room export. No historical v1–v3 JSON was found in repository history.
-- Delta replay and unattended daily full-snapshot scheduling are not accepted as complete.
-- Emulator CI is not physical-device or real Google OAuth evidence.
-- No plaintext database or backup payload may be uploaded. Recovery secrets remain transient.
-- D-060 app lock and SQLCipher remain Phase 10.
+G1 requires the owner's Google account consent and target handset. G4 requires the physical target handset and operator execution. These cannot be certified by emulator CI.
 
 ## Closure boundary
 
-The Phase 3 **foundation implementation** is delivered and CI-verified. The release gates above are mandatory before shop use; closing this implementation phase does not waive them, authorize production use, or claim the complete POS application is finished.
+D-065 remains unchanged. Foundation implementation is delivered; release qualification is not complete. No production use is authorized until all required gates pass. No live ledger purge is authorized in Phase 3.

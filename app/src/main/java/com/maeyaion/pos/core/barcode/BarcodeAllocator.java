@@ -6,6 +6,7 @@ import com.maeyaion.pos.core.db.BarcodeCounterDao;
 import com.maeyaion.pos.core.db.BarcodeCounterEntity;
 import com.maeyaion.pos.core.db.BarcodeRegistryDao;
 import com.maeyaion.pos.core.db.BarcodeRegistryEntity;
+import com.maeyaion.pos.core.tx.RoomTransactionRunner;
 import com.maeyaion.pos.core.tx.TransactionRunner;
 
 import java.time.Instant;
@@ -21,7 +22,14 @@ public final class BarcodeAllocator {
     private final BarcodeCounterDao counterDao;
     private final TransactionRunner transactions;
 
+    /** Production construction is restricted to the shared Room transaction/maintenance boundary. */
     public BarcodeAllocator(@NonNull BarcodeRegistryDao registryDao,
+            @NonNull BarcodeCounterDao counterDao, @NonNull RoomTransactionRunner transactions) {
+        this(registryDao, counterDao, (TransactionRunner) transactions);
+    }
+
+    /** Package-private transaction seam for deterministic unit tests only. */
+    BarcodeAllocator(@NonNull BarcodeRegistryDao registryDao,
             @NonNull BarcodeCounterDao counterDao, @NonNull TransactionRunner transactions) {
         this.registryDao = Objects.requireNonNull(registryDao, "registryDao");
         this.counterDao = Objects.requireNonNull(counterDao, "counterDao");

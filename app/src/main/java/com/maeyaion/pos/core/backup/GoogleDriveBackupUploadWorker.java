@@ -15,7 +15,7 @@ import com.google.android.gms.auth.UserRecoverableAuthException;
 
 import com.maeyaion.pos.core.db.AppDatabase;
 import com.maeyaion.pos.core.db.BackupJournalEntity;
-import com.maeyaion.pos.core.tx.DatabaseMaintenanceGate;
+import com.maeyaion.pos.core.tx.RoomTransactionRunner;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -40,6 +40,7 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
     public static final String INPUT_ACCOUNT_NAME = "google_account_name";
     public static final String INPUT_ENCRYPTED_BACKUP_PATH = "encrypted_backup_path";
     public static final String INPUT_JOURNAL_SEQUENCES = "journal_sequences";
+    public static final String INPUT_FULL_BACKUP = "full_backup";
     public static final String OUTPUT_AUTH_REQUIRED = "auth_required";
     public static final String OUTPUT_DRIVE_FILE_ID = "drive_file_id";
     private static final String DRIVE_APPDATA_SCOPE = "https://www.googleapis.com/auth/drive.appdata";
@@ -74,6 +75,8 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
         } catch (UserRecoverableAuthException needsUserConsent) {
             return Result.failure(new Data.Builder().putBoolean(OUTPUT_AUTH_REQUIRED, true).build());
         } catch (GoogleAuthException | IOException authFailure) {
+            BackupNotifications.showFailureThrottled(getApplicationContext(),
+                    "ยืนยันตัวตน Google Drive ไม่สำเร็จ ระบบจะลองใหม่");
             return Result.retry();
         }
 
@@ -81,7 +84,7 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
         try {
             String existingDriveId = findExistingDriveFile(token, backup.getName());
             if (existingDriveId != null) {
-                return completeUpload(existingDriveId);
+                return completeUpload(existingDriveId, backup);
             }
             connection = (HttpURLConnection) new URL(
                     "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,size")
@@ -130,17 +133,29 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
 
             String response = readLimited(connection.getInputStream(), 32 * 1024);
             String driveFileId = extractDriveFileId(response);
-            return completeUpload(driveFileId);
+            return completeUpload(driveFileId, backup);
         } catch (IOException networkFailure) {
+            BackupNotifications.showFailureThrottled(getApplicationContext(),
+                    "อัปโหลดไฟล์สำรองไป Google Drive ไม่สำเร็จ ระบบจะลองใหม่");
             return Result.retry();
         } finally {
             if (connection != null) connection.disconnect();
         }
     }
 
-    private Result completeUpload(String driveFileId) {
+    private Result completeUpload(String driveFileId, File backup) {
+        if (driveFileId == null || driveFileId.trim().isEmpty()) return Result.retry();
         try {
             acknowledgeJournalRows();
+            if (getInputData().getBoolean(INPUT_FULL_BACKUP, false)) {
+                confirmLocalFullBackup(backup);
+                getApplicationContext().getSharedPreferences(UnattendedBackupScheduler.PREFS,
+                        Context.MODE_PRIVATE).edit()
+                        .putLong(UnattendedBackupScheduler.KEY_LAST_SUCCESS, System.currentTimeMillis())
+                        .putString(UnattendedBackupScheduler.KEY_LAST_DRIVE_FILE_ID, driveFileId)
+                        .apply();
+                BackupNotifications.showSuccess(getApplicationContext());
+            }
             return Result.success(new Data.Builder()
                     .putString(OUTPUT_DRIVE_FILE_ID, driveFileId).build());
         } catch (Exception acknowledgementFailure) {
@@ -150,13 +165,33 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
         }
     }
 
+
+    /** Publish local retention metadata only after Drive has confirmed the remote object. */
+    private static void confirmLocalFullBackup(File backup) throws IOException {
+        if (backup == null || !backup.isFile()) {
+            throw new IOException("Confirmed full backup is no longer present locally");
+        }
+        File pending = new File(backup.getAbsolutePath() + ".pending");
+        File uploaded = new File(backup.getAbsolutePath() + ".uploaded");
+        try (java.io.FileOutputStream output = new java.io.FileOutputStream(uploaded, false)) {
+            output.write(("confirmed=" + System.currentTimeMillis() + "\\n")
+                    .getBytes(StandardCharsets.US_ASCII));
+            output.flush();
+            output.getFD().sync();
+        }
+        if (pending.exists() && !pending.delete()) {
+            // Keep the durable uploaded marker; retention treats a remaining pending marker as protected.
+            throw new IOException("Unable to clear pending full-backup marker");
+        }
+        BackupLocalRetention.prune(backup.getParentFile(), System.currentTimeMillis());
+    }
+
     private void acknowledgeJournalRows() throws Exception {
         long[] sequences = parseJournalSequences(
                 getInputData().getString(INPUT_JOURNAL_SEQUENCES));
         if (sequences.length == 0) return;
-        DatabaseMaintenanceGate.withExclusiveAccess(() -> {
-            AppDatabase database = AppDatabase.getInstance(getApplicationContext());
-            database.runInTransaction(() -> {
+        AppDatabase database = AppDatabase.getInstance(getApplicationContext());
+        new RoomTransactionRunner(database).runInTransaction(() -> {
                 for (long sequence : sequences) {
                     int changed = database.backupJournalDao().markUploaded(sequence);
                     if (changed == 0) {
@@ -168,7 +203,6 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
                         }
                     }
                 }
-            });
             return null;
         });
     }
@@ -209,7 +243,7 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
         String query = "name = '" + fileName.replace("'", "\\'") + "' and trashed = false";
         String url = "https://www.googleapis.com/drive/v3/files?q="
                 + URLEncoder.encode(query, "UTF-8")
-                + "&spaces=appDataFolder&pageSize=10&fields=files(id,name)";
+                + "&spaces=appDataFolder&pageSize=1000&fields=files(id,name),nextPageToken";
         HttpURLConnection lookup = (HttpURLConnection) new URL(url).openConnection();
         try {
             lookup.setRequestMethod("GET");
@@ -217,12 +251,23 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
             lookup.setReadTimeout(30_000);
             lookup.setRequestProperty("Authorization", "Bearer " + token);
             int status = lookup.getResponseCode();
-            if (status == HttpURLConnection.HTTP_UNAUTHORIZED) return null;
-            if (status == 429 || status >= 500) throw new IOException("Drive lookup temporarily unavailable");
-            if (status < 200 || status >= 300) return null;
+            if (status == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                try { GoogleAuthUtil.clearToken(getApplicationContext(), token); }
+                catch (GoogleAuthException | IOException ignored) { }
+                throw new IOException("Drive lookup token expired; retry after clearing token");
+            }
+            if (status == 429 || status >= 500) {
+                throw new IOException("Drive lookup temporarily unavailable");
+            }
+            if (status < 200 || status >= 300) {
+                throw new IOException("Drive lookup failed with HTTP " + status);
+            }
             String response = readLimited(lookup.getInputStream(), 32 * 1024);
-            Matcher matcher = Pattern.compile("\"id\"\\s*:\\s*\"([^\"]+)\"").matcher(response);
-            return matcher.find() ? matcher.group(1) : null;
+            // A partial first page cannot prove that the deterministic filename is absent.
+            if (Pattern.compile("\\\"nextPageToken\\\"\\s*:").matcher(response).find()) {
+                throw new IOException("Drive lookup is paginated; refusing an incomplete reconciliation");
+            }
+            return DriveUploadReconciliation.findMatchingFileId(response, fileName);
         } finally {
             lookup.disconnect();
         }
