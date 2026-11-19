@@ -90,8 +90,8 @@ public final class BackupRestoreCoordinator {
                     primaryFailure = failure;
                     throw failure;
                 } finally {
-                    cleanup(staged, primaryFailure);
-                    cleanup(safety == null ? null : safety.file, primaryFailure);
+                    cleanupTemporaryFiles(staged, safety == null ? null : safety.file,
+                            primaryFailure);
                 }
             });
         } catch (IOException | GeneralSecurityException e) {
@@ -113,10 +113,18 @@ public final class BackupRestoreCoordinator {
         }
     }
 
-    private static void cleanup(File file, Throwable primaryFailure) throws IOException {
-        if (file != null && file.exists() && !file.delete()) {
-            IOException cleanupFailure = new IOException(
-                    "Unable to remove temporary plaintext restore file");
+    private static void cleanupTemporaryFiles(File staged, File safetySnapshot,
+            Throwable primaryFailure) throws IOException {
+        IOException cleanupFailure = null;
+        for (File file : new File[]{staged, safetySnapshot}) {
+            if (file != null && file.exists() && !file.delete()) {
+                IOException failure = new IOException(
+                        "Unable to remove temporary plaintext restore file: " + file.getName());
+                if (cleanupFailure == null) cleanupFailure = failure;
+                else cleanupFailure.addSuppressed(failure);
+            }
+        }
+        if (cleanupFailure != null) {
             if (primaryFailure != null) primaryFailure.addSuppressed(cleanupFailure);
             else throw cleanupFailure;
         }
