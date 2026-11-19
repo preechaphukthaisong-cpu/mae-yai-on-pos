@@ -249,32 +249,18 @@ public final class MainActivity extends ComponentActivity {
             launchDriveAccountPicker();
             return;
         }
-        EditText input = new EditText(this);
-        input.setSingleLine(true);
-        input.setHint("Recovery Password");
-        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        new AlertDialog.Builder(this)
-                .setTitle("กู้คืนจาก Google Drive")
-                .setMessage("กรอกรหัสผ่านของข้อมูลสำรอง แล้วเลือกไฟล์ที่จะดาวน์โหลด")
-                .setView(input)
-                .setPositiveButton("ค้นหาข้อมูลสำรอง", (dialog, which) -> {
-                    String value = input.getText().toString();
-                    if (value.isEmpty()) {
-                        Toast.makeText(this, "กรอก Recovery Password", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    loadDriveBackupList(account, value.toCharArray());
-                })
-                .setNegativeButton("ยกเลิก", null)
-                .show();
+        promptRecoveryCredentials("กู้คืนจาก Google Drive",
+                "กรอก Recovery Password หรือ Recovery Key แล้วเลือกไฟล์ที่จะดาวน์โหลด",
+                (password, key) -> loadDriveBackupList(account, password, key));
     }
 
+    private void loadDriveBackupList(String account, char[] password, String recoveryKey) {
     private void loadDriveBackupList(String account, char[] password) {
         final UUID workId;
         try {
             workId = DriveBackupWorkScheduler.enqueueList(this, account);
         } catch (RuntimeException failure) {
-            Arrays.fill(password, '\0');
+            if (password != null) Arrays.fill(password, '\0');
             Toast.makeText(this, "เริ่มค้นหา Drive ไม่สำเร็จ: " + failure.getMessage(),
                     Toast.LENGTH_LONG).show();
             return;
@@ -286,7 +272,7 @@ public final class MainActivity extends ComponentActivity {
                         if (info == null || !info.getState().isFinished()) return;
                         workInfo.removeObserver(this);
                         if (info.getState() != WorkInfo.State.SUCCEEDED) {
-                            Arrays.fill(password, '\0');
+                            if (password != null) Arrays.fill(password, '\0');
                             boolean auth = info.getOutputData().getBoolean(
                                     GoogleDriveBackupListWorker.OUTPUT_AUTH_REQUIRED, false);
                             Toast.makeText(MainActivity.this, auth
@@ -316,7 +302,7 @@ public final class MainActivity extends ComponentActivity {
                                 }
                             }
                             if (ids.isEmpty()) {
-                                Arrays.fill(password, '\0');
+                                if (password != null) Arrays.fill(password, '\0');
                                 Toast.makeText(MainActivity.this,
                                         "ไม่พบไฟล์สำรอง .myobak ใน Google Drive",
                                         Toast.LENGTH_LONG).show();
@@ -326,13 +312,13 @@ public final class MainActivity extends ComponentActivity {
                             new AlertDialog.Builder(MainActivity.this)
                                     .setTitle("เลือกไฟล์สำรองจาก Drive")
                                     .setItems(labels, (dialog, selected) ->
-                                            downloadDriveBackup(account, ids.get(selected), password))
+                                            downloadDriveBackup(account, ids.get(selected), password, recoveryKey))
                                     .setNegativeButton("ยกเลิก", (dialog, which) ->
                                             Arrays.fill(password, '\0'))
                                     .setOnCancelListener(dialog -> Arrays.fill(password, '\0'))
                                     .show();
                         } catch (Exception malformed) {
-                            Arrays.fill(password, '\0');
+                            if (password != null) Arrays.fill(password, '\0');
                             Toast.makeText(MainActivity.this,
                                     "อ่านรายการข้อมูลสำรองจาก Drive ไม่สำเร็จ",
                                     Toast.LENGTH_LONG).show();
@@ -341,99 +327,131 @@ public final class MainActivity extends ComponentActivity {
                 });
     }
 
-    private void downloadDriveBackup(String account, String driveFileId, char[] password) {
+    private void downloadDriveBackup(String account, String driveFileId, char[] password,
+            String recoveryKey) {
         final UUID workId;
         try {
             workId = DriveBackupWorkScheduler.enqueueDownload(this, account, driveFileId);
         } catch (RuntimeException failure) {
-            Arrays.fill(password, '\0');
-            Toast.makeText(this, "เริ่มดาวน์โหลดไม่สำเร็จ: " + failure.getMessage(),
-                    Toast.LENGTH_LONG).show();
+            if (password != null) if (password != null) Arrays.fill(password, '\0');
+            Toast.makeText(this, "เริ่มดาวน์โหลดไม่สำเร็จ", Toast.LENGTH_LONG).show();
             return;
         }
         Toast.makeText(this, "กำลังดาวน์โหลดไฟล์สำรองแบบเข้ารหัส…", Toast.LENGTH_SHORT).show();
         LiveData<WorkInfo> workInfo = WorkManager.getInstance(this).getWorkInfoByIdLiveData(workId);
         workInfo.observe(this, new Observer<WorkInfo>() {
-                    @Override public void onChanged(WorkInfo info) {
-                        if (info == null || !info.getState().isFinished()) return;
-                        workInfo.removeObserver(this);
-                        if (info.getState() != WorkInfo.State.SUCCEEDED) {
-                            Arrays.fill(password, '\0');
-                            boolean auth = info.getOutputData().getBoolean(
-                                    GoogleDriveBackupDownloadWorker.OUTPUT_AUTH_REQUIRED, false);
-                            Toast.makeText(MainActivity.this, auth
-                                    ? "Google ต้องการอนุญาตสิทธิ์ Drive ใหม่"
-                                    : "ดาวน์โหลดข้อมูลสำรองไม่สำเร็จ",
-                                    Toast.LENGTH_LONG).show();
-                            return;
-                        }
-                        String path = info.getOutputData().getString(
-                                GoogleDriveBackupDownloadWorker.OUTPUT_BACKUP_PATH);
-                        if (path == null) {
-                            Arrays.fill(password, '\0');
-                            Toast.makeText(MainActivity.this,
-                                    "Drive ไม่ส่งตำแหน่งไฟล์สำรองกลับมา", Toast.LENGTH_LONG).show();
-                            return;
-                        }
-                        restoreBackupFile(new File(path), password);
-                    }
-                });
+            @Override public void onChanged(WorkInfo info) {
+                if (info == null || !info.getState().isFinished()) return;
+                workInfo.removeObserver(this);
+                if (info.getState() != WorkInfo.State.SUCCEEDED) {
+                    if (password != null) if (password != null) Arrays.fill(password, '\0');
+                    boolean auth = info.getOutputData().getBoolean(
+                            GoogleDriveBackupDownloadWorker.OUTPUT_AUTH_REQUIRED, false);
+                    Toast.makeText(MainActivity.this, auth
+                            ? "Google ต้องอนุญาตสิทธิ์ Drive ใหม่ กรุณาเลือกบัญชีอีกครั้ง"
+                            : "ดาวน์โหลดข้อมูลสำรองไม่สำเร็จ",
+                            Toast.LENGTH_LONG).show();
+                    return;
+                }
+                String path = info.getOutputData().getString(
+                        GoogleDriveBackupDownloadWorker.OUTPUT_BACKUP_PATH);
+                if (path == null) {
+                    if (password != null) if (password != null) Arrays.fill(password, '\0');
+                    Toast.makeText(MainActivity.this,
+                            "Drive ไม่ส่งตำแหน่งไฟล์สำรองกลับมา", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                restoreBackupFile(new File(path), password, recoveryKey);
+            }
+        });
     }
 
-    private void restoreBackupFile(File backup, char[] password) {
+    private void restoreBackupFile(File backup, char[] password, String recoveryKey) {
         restoreButton.setEnabled(false);
         new Thread(() -> {
             try {
                 new BackupRestoreCoordinator().restoreDownloadedBackup(this,
-                        AppDatabase.getInstance(this), backup, password, null);
+                        AppDatabase.getInstance(this), backup, password, recoveryKey);
                 runOnUiThread(() -> Toast.makeText(this,
                         "กู้คืนข้อมูลสำเร็จ กรุณาตรวจสอบสินค้าและยอดขาย",
                         Toast.LENGTH_LONG).show());
             } catch (Exception failure) {
+                String message = BackupErrorMessages.toUserMessage(failure);
                 runOnUiThread(() -> Toast.makeText(this,
-                        "กู้คืนไม่สำเร็จ: " + failure.getMessage(), Toast.LENGTH_LONG).show());
+                        message, Toast.LENGTH_LONG).show());
             } finally {
-                Arrays.fill(password, '\0');
+                if (password != null) if (password != null) Arrays.fill(password, '\0');
                 runOnUiThread(() -> restoreButton.setEnabled(true));
             }
         }, "pos-drive-restore").start();
     }
 
     private void confirmRestore(File backup) {
-        EditText passwordInput = new EditText(this);
-        passwordInput.setSingleLine(true);
-        passwordInput.setHint("Recovery Password");
-        passwordInput.setInputType(InputType.TYPE_CLASS_TEXT
-                | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        new AlertDialog.Builder(this)
-                .setTitle("ยืนยันการกู้คืน")
-                .setMessage("การกู้คืนจะแทนที่ฐานข้อมูลปัจจุบัน: " + backup.getName()
-                        + "\nระบบจะสร้าง safety snapshot ก่อนแทนที่")
-                .setView(passwordInput)
-                .setPositiveButton("กู้คืน", (dialog, which) -> {
-                    String value = passwordInput.getText().toString();
-                    if (value.isEmpty()) {
-                        Toast.makeText(this, "กรอก Recovery Password", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    char[] password = value.toCharArray();
+        promptRecoveryCredentials("ยืนยันการกู้คืน",
+                "การกู้คืนจะแทนที่ฐานข้อมูลปัจจุบัน: " + backup.getName()
+                        + "\nระบบจะสร้าง safety snapshot ก่อนแทนที่",
+                (password, key) -> {
                     restoreButton.setEnabled(false);
                     new Thread(() -> {
                         try {
                             new BackupRestoreCoordinator().restoreDownloadedBackup(this,
-                                    AppDatabase.getInstance(this), backup, password, null);
+                                    AppDatabase.getInstance(this), backup, password, key);
                             runOnUiThread(() -> Toast.makeText(this,
                                     "กู้คืนข้อมูลสำเร็จ กรุณาตรวจสอบสินค้าและยอดขาย",
                                     Toast.LENGTH_LONG).show());
                         } catch (Exception failure) {
+                            String message = BackupErrorMessages.toUserMessage(failure);
                             runOnUiThread(() -> Toast.makeText(this,
-                                    "กู้คืนไม่สำเร็จ: " + failure.getMessage(),
-                                    Toast.LENGTH_LONG).show());
+                                    message, Toast.LENGTH_LONG).show());
                         } finally {
-                            Arrays.fill(password, '\0');
+                            if (password != null) if (password != null) Arrays.fill(password, '\0');
                             runOnUiThread(() -> restoreButton.setEnabled(true));
                         }
                     }, "pos-backup-restore").start();
+                });
+    }
+
+    private interface RecoveryCredentialCallback {
+        void onCredentials(char[] password, String recoveryKey);
+    }
+
+    private void promptRecoveryCredentials(String title, String message,
+            RecoveryCredentialCallback callback) {
+        LinearLayout fields = new LinearLayout(this);
+        fields.setOrientation(LinearLayout.VERTICAL);
+        int horizontal = dp(20);
+        fields.setPadding(horizontal, dp(8), horizontal, 0);
+
+        EditText passwordInput = new EditText(this);
+        passwordInput.setSingleLine(true);
+        passwordInput.setHint("Recovery Password (กรอกอย่างใดอย่างหนึ่ง)");
+        passwordInput.setInputType(InputType.TYPE_CLASS_TEXT
+                | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        fields.addView(passwordInput, matchWrap());
+
+        EditText keyInput = new EditText(this);
+        keyInput.setSingleLine(true);
+        keyInput.setHint("Recovery Key (กรอกอย่างใดอย่างหนึ่ง)");
+        keyInput.setInputType(InputType.TYPE_CLASS_TEXT);
+        fields.addView(keyInput, matchWrap());
+
+        new AlertDialog.Builder(this)
+                .setTitle(title)
+                .setMessage(message)
+                .setView(fields)
+                .setPositiveButton("ดำเนินการ", (dialog, which) -> {
+                    String passwordValue = passwordInput.getText().toString();
+                    String keyValue = keyInput.getText().toString().trim();
+                    boolean hasPassword = !passwordValue.isEmpty();
+                    boolean hasKey = !keyValue.isEmpty();
+                    if (hasPassword == hasKey) {
+                        Toast.makeText(this,
+                                "กรอก Recovery Password หรือ Recovery Key เพียงอย่างเดียว",
+                                Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    callback.onCredentials(hasPassword ? passwordValue.toCharArray() : null,
+                            hasKey ? keyValue : null);
                 })
                 .setNegativeButton("ยกเลิก", null)
                 .show();
@@ -466,8 +484,11 @@ public final class MainActivity extends ComponentActivity {
             android.content.Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode != REQUEST_DRIVE_ACCOUNT) return;
-        if (resultCode != RESULT_OK || data == null) {
-            Toast.makeText(this, "ยกเลิกการเลือกบัญชี Google", Toast.LENGTH_SHORT).show();
+        if (data == null) {
+            Toast.makeText(this, resultCode == RESULT_CANCELED
+                    ? "Google Sign-In ถูกยกเลิกหรือไม่ส่งข้อมูลกลับมา"
+                    : "Google Sign-In ไม่ส่งข้อมูลผลลัพธ์กลับมา",
+                    Toast.LENGTH_LONG).show();
             return;
         }
         try {
@@ -483,8 +504,20 @@ public final class MainActivity extends ComponentActivity {
             refreshDriveStatus();
             Toast.makeText(this, "เลือกบัญชีสำรองข้อมูลแล้ว", Toast.LENGTH_SHORT).show();
         } catch (ApiException failure) {
-            Toast.makeText(this, "เลือกบัญชี Google ไม่สำเร็จ: "
-                    + failure.getStatusCode(), Toast.LENGTH_LONG).show();
+            int status = failure.getStatusCode();
+            String message;
+            if (status == 10) {
+                message = "Google Sign-In ตั้งค่า OAuth ไม่ตรงกับแอป (ตรวจ Package name และ SHA-1 ของ APK)";
+            } else if (status == 12500) {
+                message = "Google Sign-In ไม่สำเร็จ (12500) กรุณาตรวจ OAuth Client และการตั้งค่าบัญชี";
+            } else if (status == 12501 || resultCode == RESULT_CANCELED) {
+                message = "Google Sign-In ถูกยกเลิกโดยระบบ (12501); หากไม่ได้กดยกเลิก ให้ตรวจ OAuth และ Log";
+            } else if (status == 7) {
+                message = "เชื่อมต่อ Google ไม่ได้ กรุณาตรวจอินเทอร์เน็ต";
+            } else {
+                message = "Google Sign-In ไม่สำเร็จ (รหัส " + status + ")";
+            }
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show();
         }
     }
 
