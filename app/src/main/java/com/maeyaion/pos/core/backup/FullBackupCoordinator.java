@@ -61,7 +61,7 @@ public final class FullBackupCoordinator {
             primaryFailure = failure;
             throw failure;
         } finally {
-            Arrays.fill(passwordCopy, '\\0');
+            Arrays.fill(passwordCopy, '\0');
             cleanupSnapshot(snapshot == null ? null : snapshot.file, primaryFailure);
         }
     }
