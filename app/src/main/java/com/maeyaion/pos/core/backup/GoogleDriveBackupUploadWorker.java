@@ -142,7 +142,7 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
         if (response == null || response.length() > 32 * 1024) {
             throw new IOException("Drive upload response is missing or too large");
         }
-        Matcher matcher = Pattern.compile("\\\"id\\\"\\\\s*:\\\\s*\\\"([^\\\"]+)\\\"").matcher(response);
+        Matcher matcher = Pattern.compile("\"id\"\\s*:\\s*\"([^\"]+)\"").matcher(response);
         if (!matcher.find() || matcher.group(1).isEmpty()) {
             throw new IOException("Drive upload response did not contain a file ID");
         }
