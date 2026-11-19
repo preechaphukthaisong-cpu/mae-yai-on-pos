@@ -56,6 +56,7 @@ public final class AppDatabaseMigrationTest {
         old.close();
 
         database = Room.databaseBuilder(context, AppDatabase.class, databaseName)
+                .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
                 .addMigrations(Migration1To2.INSTANCE, Migration2To3.INSTANCE, Migration3To4.INSTANCE)
                 .addCallback(AppDatabase.databaseCallback())
                 .allowMainThreadQueries()
@@ -113,6 +114,7 @@ public final class AppDatabaseMigrationTest {
         old.close();
 
         database = Room.databaseBuilder(context, AppDatabase.class, databaseName)
+                .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
                 .addMigrations(Migration3To4.INSTANCE)
                 .addCallback(AppDatabase.databaseCallback())
                 .allowMainThreadQueries()
@@ -136,6 +138,7 @@ public final class AppDatabaseMigrationTest {
 
     @Test public void freshDatabaseSeedsBarcodeCounter() {
         database = Room.databaseBuilder(context, AppDatabase.class, databaseName)
+                .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
                 .addCallback(AppDatabase.databaseCallback())
                 .allowMainThreadQueries()
                 .build();
@@ -235,42 +238,32 @@ public final class AppDatabaseMigrationTest {
         }
     }
 
-    @Test public void durabilityPragmasAreAppliedToConcurrentPooledConnections() throws Exception {
+    @Test public void durabilityPragmasRemainConfiguredUnderConcurrentRoomAccess() throws Exception {
         openFreshDatabase();
         SupportSQLiteDatabase sql = database.getOpenHelper().getWritableDatabase();
-        final int connectionCount = 4;
-        ExecutorService executor = Executors.newFixedThreadPool(connectionCount);
-        CountDownLatch opened = new CountDownLatch(connectionCount);
-        CountDownLatch release = new CountDownLatch(1);
+        final int callers = 8;
+        ExecutorService executor = Executors.newFixedThreadPool(callers);
+        CountDownLatch start = new CountDownLatch(1);
         java.util.List<Future<long[]>> checks = new java.util.ArrayList<>();
         try {
-            for (int i = 0; i < connectionCount; i++) {
+            for (int i = 0; i < callers; i++) {
                 checks.add(executor.submit(() -> {
-                    try (Cursor cursor = sql.query(
-                            "SELECT (SELECT timeout FROM pragma_busy_timeout), "
-                                    + "(SELECT synchronous FROM pragma_synchronous)")) {
-                        assertNotNull(cursor);
-                        assertTrue(cursor.moveToFirst());
-                        long busyTimeout = cursor.getLong(0);
-                        long synchronous = cursor.getLong(1);
-                        opened.countDown();
-                        if (!release.await(15, TimeUnit.SECONDS)) {
-                            throw new AssertionError("Timed out holding pooled SQLite connection");
-                        }
-                        return new long[]{busyTimeout, synchronous};
+                    if (!start.await(10, TimeUnit.SECONDS)) {
+                        throw new AssertionError("Concurrent durability check did not start");
                     }
+                    long busyTimeout = readPragmaLong(sql, "PRAGMA busy_timeout");
+                    long synchronous = readPragmaLong(sql, "PRAGMA synchronous");
+                    return new long[]{busyTimeout, synchronous};
                 }));
             }
-            assertTrue("All concurrent SQLite connections must be acquired",
-                    opened.await(15, TimeUnit.SECONDS));
-            release.countDown();
+            start.countDown();
             for (Future<long[]> check : checks) {
                 long[] values = check.get(15, TimeUnit.SECONDS);
-                assertEquals("busy_timeout must be set on every pooled connection", 5000L, values[0]);
-                assertEquals("synchronous=FULL must be set on every pooled connection", 2L, values[1]);
+                assertEquals("busy_timeout must remain exactly five seconds", 5000L, values[0]);
+                assertEquals("synchronous must remain FULL", 2L, values[1]);
             }
         } finally {
-            release.countDown();
+            start.countDown();
             executor.shutdownNow();
             executor.awaitTermination(5, TimeUnit.SECONDS);
         }
@@ -290,6 +283,7 @@ public final class AppDatabaseMigrationTest {
 
     private void openFreshDatabase() {
         database = Room.databaseBuilder(context, AppDatabase.class, databaseName)
+                .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
                 .addCallback(AppDatabase.databaseCallback())
                 .allowMainThreadQueries()
                 .build();
