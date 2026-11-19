@@ -15,7 +15,8 @@ import java.util.concurrent.TimeUnit;
 
 /** Starts a monthly remote-download then isolated staging-restore verification chain. */
 public final class MonthlyBackupVerificationKickoffWorker extends Worker {
-    public static final String UNIQUE_CHAIN = "maeyaion-pos.monthly-backup-verification.v1";
+    public static final String UNIQUE_CHAIN = "maeyaion-pos.monthly-backup-verification.run.v1";
+    public static final String UNIQUE_PERIODIC = "maeyaion-pos.monthly-backup-verification.schedule.v1";
     public static final String VERIFY_TAG = "maeyaion-pos.monthly-backup-verification";
 
     public MonthlyBackupVerificationKickoffWorker(@NonNull Context context,
