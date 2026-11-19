@@ -63,7 +63,7 @@ public final class AndroidKeystoreKeyProtectorTest {
                 assertFalse(rejected.exists());
             }
         } finally {
-            Arrays.fill(password, '\\0');
+            Arrays.fill(password, '\0');
             Arrays.fill(payload, (byte) 0);
             source.delete();
             envelope.delete();
