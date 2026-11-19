@@ -15,6 +15,9 @@ import androidx.test.platform.app.InstrumentationRegistry;
 
 import com.maeyaion.pos.core.db.AppDatabase;
 import com.maeyaion.pos.core.db.AppMetaEntity;
+import com.maeyaion.pos.core.db.BackupJournalEntity;
+import com.maeyaion.pos.core.barcode.BarcodeAllocator;
+import com.maeyaion.pos.core.barcode.ProductRegistrationService;
 import com.maeyaion.pos.core.tx.RoomTransactionRunner;
 
 import org.junit.After;
@@ -150,6 +153,110 @@ public final class BackupSnapshotRestoreTest {
         }
     }
 
+
+
+    @Test public void deltaReplayAppliesToStagingAndIsIdempotent() throws Exception {
+        RoomDatabaseSnapshotter.Snapshot baseline = new RoomDatabaseSnapshotter()
+                .create(context, database, backupDirectory);
+        File staging = new File(backupDirectory, "delta-staging.sqlite");
+        Files.copy(baseline.file.toPath(), staging.toPath());
+
+        RoomTransactionRunner transactions = new RoomTransactionRunner(database);
+        BarcodeAllocator allocator = new BarcodeAllocator(database.barcodeRegistryDao(),
+                database.barcodeCounterDao(), transactions);
+        ProductRegistrationService products = new ProductRegistrationService(allocator,
+                database.productDao(), database.opLogDao(), database.backupJournalDao(), transactions);
+        String operationId = UUID.randomUUID().toString();
+        products.createWithSystemBarcode(operationId, "DELTA-SKU-1", "Delta product",
+                1250L, 700L, "ชิ้น", null,
+                "2026-11-19T00:10:00Z", "2026-11-19T00:10:00Z");
+
+        java.util.List<BackupJournalEntity> rows = database.backupJournalDao().pendingBatch(10);
+        byte[] delta = DeltaBackupCoordinator.buildPayload(rows, 4);
+        String recoveryKey = BackupCrypto.generateRecoveryKey();
+        byte[] envelope = BackupCrypto.encrypt(delta, PASSWORD, recoveryKey);
+        File encryptedDelta = new File(backupDirectory, "delta-1.myobak");
+        Files.write(encryptedDelta.toPath(), envelope);
+        Arrays.fill(delta, (byte) 0);
+        Arrays.fill(envelope, (byte) 0);
+
+        DeltaReplayCoordinator replay = new DeltaReplayCoordinator();
+        DeltaReplayCoordinator.ApplyResult first = replay.applyToStaging(context, staging,
+                encryptedDelta, PASSWORD, null);
+        assertEquals(1, first.appliedCount);
+        assertTrue(!first.alreadyApplied);
+        assertEquals(1L, first.lastSequence);
+
+        DeltaReplayCoordinator.ApplyResult duplicate = replay.applyToStaging(context, staging,
+                encryptedDelta, PASSWORD, null);
+        assertEquals(0, duplicate.appliedCount);
+        assertTrue(duplicate.alreadyApplied);
+        assertEquals(1L, duplicate.lastSequence);
+
+        SQLiteDatabase stagedDb = SQLiteDatabase.openDatabase(
+                staging.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
+        try (Cursor cursor = stagedDb.rawQuery(
+                "SELECT barcode, price_satang FROM product WHERE sku='DELTA-SKU-1'", null)) {
+            assertTrue(cursor.moveToFirst());
+            assertEquals("2000001", cursor.getString(0));
+            assertEquals(1250L, cursor.getLong(1));
+        } finally {
+            stagedDb.close();
+        }
+        // Replay operates on the staging file only; it does not mutate the source Room database.
+        assertTrue(database.productDao().findBySku("DELTA-SKU-1") != null);
+    }
+
+    @Test public void deltaReplayRejectsSequenceGapWithoutApplyingRows() throws Exception {
+        RoomDatabaseSnapshotter.Snapshot baseline = new RoomDatabaseSnapshotter()
+                .create(context, database, backupDirectory);
+        File staging = new File(backupDirectory, "delta-gap-staging.sqlite");
+        Files.copy(baseline.file.toPath(), staging.toPath());
+
+        String payload = "{\\"v\\":1,\\"op\\":\\"PRODUCT_CREATE_SYSTEM\\","
+                + "\\"sku\\":\\"GAP-SKU\\",\\"barcode\\":\\"2000001\\","
+                + "\\"name\\":\\"Gap product\\",\\"price_satang\\":100,"
+                + "\\"cost_satang\\":50,\\"unit\\":\\"ชิ้น\\","
+                + "\\"stock_limit_qty_milli\\":null,"
+                + "\\"created_at_utc\\":\\"2026-11-19T00:20:00Z\\","
+                + "\\"updated_at_utc\\":\\"2026-11-19T00:20:00Z\\"}";
+        String hash = hexSha256(payload);
+        BackupJournalEntity gap = new BackupJournalEntity(2L, UUID.randomUUID().toString(),
+                "PRODUCT_CREATE_SYSTEM", payload, hash, 4,
+                "2026-11-19T00:20:00Z", 0);
+        byte[] delta = DeltaBackupCoordinator.buildPayload(
+                java.util.Collections.singletonList(gap), 4);
+        byte[] envelope = BackupCrypto.encrypt(delta, PASSWORD, BackupCrypto.generateRecoveryKey());
+        File encryptedDelta = new File(backupDirectory, "delta-gap.myobak");
+        Files.write(encryptedDelta.toPath(), envelope);
+
+        try {
+            new DeltaReplayCoordinator().applyToStaging(context, staging, encryptedDelta,
+                    PASSWORD, null);
+            fail("A delta starting at sequence 2 must be rejected when the staging journal is empty");
+        } catch (java.io.IOException expected) {
+            assertTrue(expected.getMessage().contains("sequence gap"));
+        }
+        SQLiteDatabase stagedDb = SQLiteDatabase.openDatabase(
+                staging.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
+        try (Cursor cursor = stagedDb.rawQuery(
+                "SELECT COUNT(*) FROM product WHERE sku='GAP-SKU'", null)) {
+            assertTrue(cursor.moveToFirst());
+            assertEquals(0, cursor.getInt(0));
+        } finally {
+            stagedDb.close();
+        }
+        Arrays.fill(delta, (byte) 0);
+        Arrays.fill(envelope, (byte) 0);
+    }
+
+    private static String hexSha256(String value) throws Exception {
+        byte[] digest = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        StringBuilder out = new StringBuilder(64);
+        for (byte item : digest) out.append(String.format(java.util.Locale.ROOT, "%02x", item & 0xff));
+        return out.toString();
+    }
 
     @Test public void snapshotWaitsUntilTransactionRunnerReleasesWriterGate() throws Exception {
         RoomTransactionRunner transactions = new RoomTransactionRunner(database);
