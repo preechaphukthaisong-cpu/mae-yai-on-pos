@@ -42,4 +42,30 @@ public final class DriveBackupWorkScheduler {
         WorkManager.getInstance(context.getApplicationContext())
                 .enqueueUniqueWork(uniqueName, ExistingWorkPolicy.KEEP, request);
     }
+
+    /** Queues an encrypted Drive object for download into private staging storage. */
+    public static void enqueueDownload(@NonNull Context context, @NonNull String googleAccountName,
+                                       @NonNull String driveFileId) {
+        if (googleAccountName.trim().isEmpty()
+                || !GoogleDriveBackupDownloadWorker.isValidDriveFileId(driveFileId)) {
+            throw new IllegalArgumentException("Google account and valid Drive file ID are required");
+        }
+        Data input = new Data.Builder()
+                .putString(GoogleDriveBackupDownloadWorker.INPUT_ACCOUNT_NAME, googleAccountName)
+                .putString(GoogleDriveBackupDownloadWorker.INPUT_DRIVE_FILE_ID, driveFileId)
+                .build();
+        Constraints constraints = new Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build();
+        OneTimeWorkRequest request = new OneTimeWorkRequest.Builder(
+                GoogleDriveBackupDownloadWorker.class)
+                .setInputData(input)
+                .setConstraints(constraints)
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL,
+                        WorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS)
+                .build();
+        WorkManager.getInstance(context.getApplicationContext())
+                .enqueueUniqueWork("drive-backup-download-" + driveFileId,
+                        ExistingWorkPolicy.KEEP, request);
+    }
 }
