@@ -270,6 +270,55 @@ public final class AppDatabaseMigrationTest {
         }
     }
 
+    @Test public void busyTimeoutWaitsForExternalWriterAndDurabilityIsReappliedAfterReopen()
+            throws Exception {
+        openFreshDatabase();
+        File databaseFile = context.getDatabasePath(databaseName);
+        SQLiteDatabase blocker = SQLiteDatabase.openDatabase(databaseFile.getAbsolutePath(),
+                null, SQLiteDatabase.OPEN_READWRITE);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            blocker.beginTransaction();
+            blocker.execSQL("INSERT INTO app_meta(meta_key, value, updatedAtUtc) "
+                    + "VALUES('external_lock', 'held', '2026-11-19T00:00:00Z')");
+            CountDownLatch attemptingWrite = new CountDownLatch(1);
+            long startedAt = System.nanoTime();
+            Future<?> pendingWrite = executor.submit(() -> {
+                attemptingWrite.countDown();
+                database.appMetaDao().put(new AppMetaEntity(
+                        "after_external_lock", "committed", "2026-11-19T00:00:01Z"));
+            });
+            assertTrue("Room write did not start", attemptingWrite.await(5, TimeUnit.SECONDS));
+            Thread.sleep(3_000L);
+            blocker.setTransactionSuccessful();
+            blocker.endTransaction();
+            pendingWrite.get(8, TimeUnit.SECONDS);
+            long waitedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
+            assertTrue("Room writer should have waited for the external SQLite lock",
+                    waitedMs >= 2_500L);
+            assertEquals("committed", database.appMetaDao().findValue("after_external_lock"));
+        } finally {
+            if (blocker.inTransaction()) blocker.endTransaction();
+            blocker.close();
+            executor.shutdownNow();
+            executor.awaitTermination(5, TimeUnit.SECONDS);
+        }
+
+        database.close();
+        database = Room.databaseBuilder(context, AppDatabase.class, databaseName)
+                .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
+                .addCallback(AppDatabase.databaseCallback())
+                .allowMainThreadQueries()
+                .build();
+        SupportSQLiteDatabase reopened = database.getOpenHelper().getWritableDatabase();
+        assertPragmaLong(reopened, "PRAGMA busy_timeout", 5_000L);
+        assertPragmaLong(reopened, "PRAGMA synchronous", 2L);
+        try (Cursor cursor = reopened.query("PRAGMA journal_mode")) {
+            assertTrue(cursor.moveToFirst());
+            assertEquals("wal", cursor.getString(0).toLowerCase(java.util.Locale.ROOT));
+        }
+    }
+
     private static void assertPragmaLong(SupportSQLiteDatabase db, String pragma, long expected) {
         assertEquals(expected, readPragmaLong(db, pragma));
     }
