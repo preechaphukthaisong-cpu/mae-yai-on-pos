@@ -46,4 +46,4 @@
 
 | Date (UTC) | Gate | Change / test | Result | Evidence |
 |---|---|---|---|---|
-| 2026-11-19 | G5 | Initial source review: `DatabaseMaintenanceGate` and `RoomTransactionRunner` exist; full mutation and maintenance call-site inventory is pending. | IN_PROGRESS | `app/src/main/java/com/maeyaion/pos/core/tx/DatabaseMaintenanceGate.java`; `RoomTransactionRunner.java` |
+| 2026-11-19 | G5 | Audited production write/maintenance paths. Found Drive upload journal acknowledgement bypassing `RoomTransactionRunner`; corrected it to use the shared runner. Wiring and concurrency evidence remain pending. | IN_PROGRESS | `docs/DB_WRITE_PATH_AUDIT.md`; commit `a42d2ea8ae4f3fd9755671350f107b6bdcfbb03e` |
