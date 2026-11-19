@@ -213,7 +213,7 @@ public final class MainActivity extends Activity {
                 runOnUiThread(() -> Toast.makeText(this,
                         "สำรองข้อมูลไม่สำเร็จ: " + failure.getMessage(), Toast.LENGTH_LONG).show());
             } finally {
-                Arrays.fill(passwordChars, '\\0');
+                Arrays.fill(passwordChars, '\0');
                 runOnUiThread(() -> {
                     setBackupActionsEnabled(true);
                     refreshBackupButtons();
@@ -273,7 +273,7 @@ public final class MainActivity extends Activity {
         try {
             workId = DriveBackupWorkScheduler.enqueueList(this, account);
         } catch (RuntimeException failure) {
-            Arrays.fill(password, '\\0');
+            Arrays.fill(password, '\0');
             Toast.makeText(this, "เริ่มค้นหา Drive ไม่สำเร็จ: " + failure.getMessage(),
                     Toast.LENGTH_LONG).show();
             return;
@@ -286,7 +286,7 @@ public final class MainActivity extends Activity {
                         WorkManager.getInstance(MainActivity.this).getWorkInfoByIdLiveData(workId)
                                 .removeObserver(this);
                         if (info.getState() != WorkInfo.State.SUCCEEDED) {
-                            Arrays.fill(password, '\\0');
+                            Arrays.fill(password, '\0');
                             boolean auth = info.getOutputData().getBoolean(
                                     GoogleDriveBackupListWorker.OUTPUT_AUTH_REQUIRED, false);
                             Toast.makeText(MainActivity.this, auth
@@ -316,7 +316,7 @@ public final class MainActivity extends Activity {
                                 }
                             }
                             if (ids.isEmpty()) {
-                                Arrays.fill(password, '\\0');
+                                Arrays.fill(password, '\0');
                                 Toast.makeText(MainActivity.this,
                                         "ไม่พบไฟล์สำรอง .myobak ใน Google Drive",
                                         Toast.LENGTH_LONG).show();
@@ -328,11 +328,11 @@ public final class MainActivity extends Activity {
                                     .setItems(labels, (dialog, selected) ->
                                             downloadDriveBackup(account, ids.get(selected), password))
                                     .setNegativeButton("ยกเลิก", (dialog, which) ->
-                                            Arrays.fill(password, '\\0'))
-                                    .setOnCancelListener(dialog -> Arrays.fill(password, '\\0'))
+                                            Arrays.fill(password, '\0'))
+                                    .setOnCancelListener(dialog -> Arrays.fill(password, '\0'))
                                     .show();
                         } catch (Exception malformed) {
-                            Arrays.fill(password, '\\0');
+                            Arrays.fill(password, '\0');
                             Toast.makeText(MainActivity.this,
                                     "อ่านรายการข้อมูลสำรองจาก Drive ไม่สำเร็จ",
                                     Toast.LENGTH_LONG).show();
@@ -346,7 +346,7 @@ public final class MainActivity extends Activity {
         try {
             workId = DriveBackupWorkScheduler.enqueueDownload(this, account, driveFileId);
         } catch (RuntimeException failure) {
-            Arrays.fill(password, '\\0');
+            Arrays.fill(password, '\0');
             Toast.makeText(this, "เริ่มดาวน์โหลดไม่สำเร็จ: " + failure.getMessage(),
                     Toast.LENGTH_LONG).show();
             return;
@@ -359,7 +359,7 @@ public final class MainActivity extends Activity {
                         WorkManager.getInstance(MainActivity.this).getWorkInfoByIdLiveData(workId)
                                 .removeObserver(this);
                         if (info.getState() != WorkInfo.State.SUCCEEDED) {
-                            Arrays.fill(password, '\\0');
+                            Arrays.fill(password, '\0');
                             boolean auth = info.getOutputData().getBoolean(
                                     GoogleDriveBackupDownloadWorker.OUTPUT_AUTH_REQUIRED, false);
                             Toast.makeText(MainActivity.this, auth
@@ -371,7 +371,7 @@ public final class MainActivity extends Activity {
                         String path = info.getOutputData().getString(
                                 GoogleDriveBackupDownloadWorker.OUTPUT_BACKUP_PATH);
                         if (path == null) {
-                            Arrays.fill(password, '\\0');
+                            Arrays.fill(password, '\0');
                             Toast.makeText(MainActivity.this,
                                     "Drive ไม่ส่งตำแหน่งไฟล์สำรองกลับมา", Toast.LENGTH_LONG).show();
                             return;
@@ -394,7 +394,7 @@ public final class MainActivity extends Activity {
                 runOnUiThread(() -> Toast.makeText(this,
                         "กู้คืนไม่สำเร็จ: " + failure.getMessage(), Toast.LENGTH_LONG).show());
             } finally {
-                Arrays.fill(password, '\\0');
+                Arrays.fill(password, '\0');
                 runOnUiThread(() -> restoreButton.setEnabled(true));
             }
         }, "pos-drive-restore").start();
@@ -431,7 +431,7 @@ public final class MainActivity extends Activity {
                                     "กู้คืนไม่สำเร็จ: " + failure.getMessage(),
                                     Toast.LENGTH_LONG).show());
                         } finally {
-                            Arrays.fill(password, '\\0');
+                            Arrays.fill(password, '\0');
                             runOnUiThread(() -> restoreButton.setEnabled(true));
                         }
                     }, "pos-backup-restore").start();
