@@ -120,7 +120,7 @@ public final class GoogleDriveBackupDownloadWorker extends Worker {
         }
     }
 
-    static boolean isValidDriveFileId(String id) {
+    public static boolean isValidDriveFileId(String id) {
         return id != null && id.matches("[A-Za-z0-9_-]{10,256}");
     }
 
