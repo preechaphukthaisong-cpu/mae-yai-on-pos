@@ -3,8 +3,8 @@
 - Current phase: **Phase 3 — Foundation and real-device qualification**
 - Active branch: `phase-3-release-gates`
 - Base implementation branch: `phase-3-foundation` (merged)
-- Latest code commit: `db1baa947608b96546845bcbd39274699962acb2` (Drive lookup now fails closed; CI pending).
-- Latest completed CI evidence: [Run #361](https://github.com/preechaphukthaisong-cpu/mae-yai-on-pos/actions/runs/44471430760) — success on `805c4cba7291229aaad445e22a00654d58b349c5`; unit tests, debug APK, Room schema verification and database instrumentation passed.
+- Latest relevant code commit: `57d959a1445a5a0210cb2d418f9125d9ce14a1f3` (Google Sign-In result diagnostics).
+- Latest completed CI evidence: [Run #366](https://github.com/preechaphukthaisong-cpu/mae-yai-on-pos/actions/runs/44476508437) — success; unit tests/APK build and database instrumentation tests passed. This is CI evidence only; it does not prove physical-device OAuth/Drive qualification.
 - Phase 4 status: **BLOCKED** until every Phase 3 acceptance criterion in v2.1 is met.
 
 
