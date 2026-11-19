@@ -36,6 +36,8 @@
 4. Do not start Phase 3.1 or Phase 4 until Phase 3 acceptance is complete. Do not merge PR #4 or mark any gate passed without its required evidence.
 
 ## Work log
+- 2026-11-19: Fixed Google Sign-In result handling in `MainActivity`: inspect a returned Intent even when Activity resultCode is not RESULT_OK, and surface the Google Sign-In status code/string instead of reporting every non-OK result as user cancellation. If no result Intent is returned, show the resultCode for diagnosis. Commit `57d959a1445a5a0210cb2d418f9125d9ce14a1f3`. Physical-device OAuth retest and CI are pending; this does not yet prove G1.
+
 
 - 2026-11-19: Read `docs/DECISIONS.md` and the existing `docs/phase-3-progress.md`; established this canonical v2.1 progress file because `docs/PROGRESS.md` was missing.
 - 2026-11-19: Verified PR #4 remains open at `c85293e24acac5f4615a294f2235b79968102a4c`; CI Run #358 succeeded. No device/OAuth evidence was available in the repository.
