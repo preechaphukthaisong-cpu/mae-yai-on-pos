@@ -14,8 +14,13 @@ final class DriveUploadReconciliation {
     private DriveUploadReconciliation() {}
 
     static String findMatchingFileId(String response, String expectedName) throws IOException {
+        return findMatchingFileId(response, expectedName, -1L);
+    }
+
+    static String findMatchingFileId(String response, String expectedName, long expectedSize)
+            throws IOException {
         if (response == null || response.length() > MAX_RESPONSE_CHARS
-                || expectedName == null || expectedName.isEmpty()) {
+                || expectedName == null || expectedName.isEmpty() || expectedSize < -1L) {
             throw new IOException("Drive lookup response or expected filename is invalid");
         }
         int filesKey = response.indexOf("files");
@@ -35,6 +40,12 @@ final class DriveUploadReconciliation {
             if (expectedName.equals(name.group(1))) {
                 if (match != null) {
                     throw new IOException("Drive contains multiple objects with the deterministic backup filename");
+                }
+                if (expectedSize >= 0L) {
+                    Matcher size = SIZE.matcher(object);
+                    if (!size.find() || Long.parseLong(size.group(1)) != expectedSize) {
+                        throw new IOException("Drive object size does not match the local encrypted backup");
+                    }
                 }
                 match = id.group(1);
             }
