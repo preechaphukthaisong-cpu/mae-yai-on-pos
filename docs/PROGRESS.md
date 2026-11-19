@@ -44,7 +44,9 @@ Baseline ที่ตรวจ: branch `phase-3-foundation`, commit `e44e3e9293e
 - แก้แล้วใน branch `phase-0-lock-rules`: ใช้ single-connection ตาม D-064 พร้อม `PRAGMA journal_mode=WAL`, `busy_timeout=5000`, `synchronous=FULL`; ไม่เปิด Android WAL connection pool
 - แก้แล้วใน branch `phase-0-lock-rules`: `MainActivity` แสดงเมนู 6 รายการตามลำดับล็อก; แต่ทั้ง 6 เมนูยังเป็น placeholder
 - แก้แล้วใน branch `phase-0-lock-rules`: Room schema v5 มี `sale`/`sale_line`, Migration4To5 และ `CashSaleService` แบบ atomic
-- ต้องตรวจและทดสอบการสร้างสินค้า + สแกน + ขายเงินสด atomic, local backup/restore และ Drive upload/download บนเครื่องจริงตามเกณฑ์ Phase 1
+- เพิ่ม `PosWorkflowActivity`: เมนูคลังสินค้าสร้างสินค้า/บาร์โค้ดและบันทึกสต๊อกตั้งต้นใน transaction เดียว; เมนูการขายสแกนด้วย CameraX + bundled ML Kit หรือกรอกบาร์โค้ด และยืนยันขายเงินสดผ่าน `CashSaleService`; เมนูสร้างบาร์โค้ดเชื่อมไปหน้าคลังสินค้า
+- เชื่อมเมนูหลัก 3 รายการเข้าหน้าทดลองใช้งานโดยไม่เปลี่ยนชื่อหรือลำดับเมนู; อีก 3 เมนูยังเป็น placeholder
+- ต้องตรวจ CI ของหน้าทดลองใช้งานใหม่ และทดสอบการสร้างสินค้า + สแกน + ขายเงินสด atomic, local backup/restore และ Drive upload/download บนเครื่องจริงตามเกณฑ์ Phase 1
 - การมี source code หรือ unit tests ยังไม่เท่ากับผ่านการทดสอบบนมือถือจริง
 
 ## ข้อจำกัดการดำเนินงาน
@@ -66,4 +68,4 @@ Baseline ที่ตรวจ: branch `phase-3-foundation`, commit `e44e3e9293e
 
 ## สถานะปัจจุบัน
 
-Phase 0 DONE. Phase 1 IN PROGRESS; ยังห้ามเริ่ม Phase 2 จนกว่าเกณฑ์ Phase 1 ผ่านครบ
+Phase 0 DONE. Phase 1 IN PROGRESS; CI สำหรับหน้าทดลองใช้งานล่าสุดยังต้องตรวจผล; ยังไม่มีหลักฐานทดสอบบนมือถือจริง และ local backup/restore + Drive basic UI ยังไม่ครบ จึงยังห้ามเริ่ม Phase 2
