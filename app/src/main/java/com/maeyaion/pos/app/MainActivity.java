@@ -2,6 +2,7 @@ package com.maeyaion.pos.app;
 
 import android.app.Activity;
 import android.content.SharedPreferences;
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
@@ -81,9 +82,15 @@ public final class MainActivity extends Activity {
         Button button = new Button(this);
         button.setText(label);
         button.setAllCaps(false);
-        button.setOnClickListener(view ->
-                Toast.makeText(this, label + ": ยังอยู่ระหว่างพัฒนา",
-                        Toast.LENGTH_SHORT).show());
+        button.setOnClickListener(view -> {
+            if ("การขาย".equals(label) || "คลังสินค้า".equals(label)
+                    || "สร้างบาร์โค้ด".equals(label)) {
+                startActivity(new Intent(this, PosWorkflowActivity.class).putExtra("screen", label));
+            } else {
+                Toast.makeText(this, label + ": อยู่ในลำดับพัฒนาถัดไป",
+                        Toast.LENGTH_SHORT).show();
+            }
+        });
         LinearLayout.LayoutParams params = matchWrap();
         params.bottomMargin = dp(8);
         root.addView(button, params);
