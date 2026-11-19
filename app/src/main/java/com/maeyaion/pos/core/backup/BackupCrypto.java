@@ -293,10 +293,31 @@ public final class BackupCrypto {
     public static void decryptFileTo(File envelopeFile, File plaintextFile,
             char[] recoveryPassword, String recoveryKey)
             throws IOException, GeneralSecurityException {
+        decryptFileToInternal(envelopeFile, plaintextFile, recoveryPassword, recoveryKey,
+                null, null);
+    }
+
+    /** Streaming restore using the originating installation's Keystore-protected DEK. */
+    public static void decryptFileToLocalKey(File envelopeFile, File plaintextFile,
+            byte[] locallyProtectedDataKey, AndroidKeystoreKeyProtector protector)
+            throws IOException, GeneralSecurityException {
+        if (locallyProtectedDataKey == null || protector == null) {
+            throw new GeneralSecurityException("Local protected key and Keystore protector are required");
+        }
+        decryptFileToInternal(envelopeFile, plaintextFile, null, null,
+                locallyProtectedDataKey, protector);
+    }
+
+    private static void decryptFileToInternal(File envelopeFile, File plaintextFile,
+            char[] recoveryPassword, String recoveryKey, byte[] locallyProtectedDataKey,
+            AndroidKeystoreKeyProtector protector)
+            throws IOException, GeneralSecurityException {
         boolean usePassword = recoveryPassword != null && recoveryPassword.length > 0;
         boolean useRecoveryKey = recoveryKey != null && !recoveryKey.trim().isEmpty();
-        if (usePassword == useRecoveryKey || envelopeFile == null || plaintextFile == null
-                || !envelopeFile.isFile()) {
+        boolean useLocalKey = locallyProtectedDataKey != null;
+        int credentials = (usePassword ? 1 : 0) + (useRecoveryKey ? 1 : 0) + (useLocalKey ? 1 : 0);
+        if (credentials != 1 || envelopeFile == null || plaintextFile == null
+                || !envelopeFile.isFile() || (useLocalKey && protector == null)) {
             throw new GeneralSecurityException("Supply exactly one recovery credential and valid files");
         }
         byte[] passwordSalt = null, payloadNonce = null, passwordNonce = null, recoveryNonce = null;
@@ -338,11 +359,13 @@ public final class BackupCrypto {
                 passwordKey = derivePasswordKey(recoveryPassword, passwordSalt);
                 dataKey = gcm(Cipher.DECRYPT_MODE, new SecretKeySpec(passwordKey, "AES"),
                         passwordNonce, wrapAad(base, "password"), passwordWrapped);
-            } else {
+            } else if (useRecoveryKey) {
                 recoveryBytes = decodeRecoveryKey(recoveryKey);
                 recoveryWrapKey = recoveryWrappingKey(recoveryBytes);
                 dataKey = gcm(Cipher.DECRYPT_MODE, new SecretKeySpec(recoveryWrapKey, "AES"),
                         recoveryNonce, wrapAad(base, "recovery"), recoveryWrapped);
+            } else {
+                dataKey = protector.unprotect(locallyProtectedDataKey);
             }
 
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
