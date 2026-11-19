@@ -4,8 +4,10 @@ import android.app.Activity;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.view.Gravity;
+import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -28,41 +30,66 @@ public final class MainActivity extends Activity {
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        renderFoundationStatus();
+        renderMainMenu();
         refreshDriveStatus();
     }
 
-    private void renderFoundationStatus() {
+    private void renderMainMenu() {
+        ScrollView scroll = new ScrollView(this);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setGravity(Gravity.CENTER);
-        root.setPadding(32, 32, 32, 32);
+        root.setGravity(Gravity.CENTER_HORIZONTAL);
+        root.setPadding(dp(20), dp(24), dp(20), dp(24));
 
         TextView title = new TextView(this);
         title.setText(R.string.app_name);
         title.setTextSize(24);
         title.setGravity(Gravity.CENTER);
+        root.addView(title, matchWrap());
 
-        TextView status = new TextView(this);
-        status.setText(R.string.foundation_status);
-        status.setTextSize(16);
-        status.setGravity(Gravity.CENTER);
-        status.setPadding(0, 16, 0, 24);
+        TextView subtitle = new TextView(this);
+        subtitle.setText("ระบบขายหน้าร้าน — ใช้งานออฟไลน์");
+        subtitle.setTextSize(15);
+        subtitle.setGravity(Gravity.CENTER);
+        subtitle.setPadding(0, dp(8), 0, dp(20));
+        root.addView(subtitle, matchWrap());
+
+        addMenuButton(root, "การขาย");
+        addMenuButton(root, "คลังสินค้า");
+        addMenuButton(root, "สร้างบาร์โค้ด");
+        addMenuButton(root, "ประวัติการขาย");
+        addMenuButton(root, "จัดการร้านค้า");
+        addMenuButton(root, "รายงานยอดขาย");
+
+        TextView backupHeading = new TextView(this);
+        backupHeading.setText("สำรองข้อมูล");
+        backupHeading.setTextSize(18);
+        backupHeading.setPadding(0, dp(24), 0, dp(8));
+        root.addView(backupHeading, matchWrap());
 
         driveStatus = new TextView(this);
         driveStatus.setTextSize(14);
-        driveStatus.setGravity(Gravity.CENTER);
-        driveStatus.setPadding(0, 0, 0, 12);
+        root.addView(driveStatus, matchWrap());
 
         Button connectDrive = new Button(this);
-        connectDrive.setText("เลือกบัญชี Google Drive");
+        connectDrive.setText("เลือกบัญชี Google สำหรับสำรองข้อมูล");
         connectDrive.setOnClickListener(view -> launchDriveAccountPicker());
+        root.addView(connectDrive, matchWrap());
 
-        root.addView(title);
-        root.addView(status);
-        root.addView(driveStatus);
-        root.addView(connectDrive);
-        setContentView(root);
+        scroll.addView(root);
+        setContentView(scroll);
+    }
+
+    private void addMenuButton(LinearLayout root, String label) {
+        Button button = new Button(this);
+        button.setText(label);
+        button.setAllCaps(false);
+        button.setOnClickListener(view ->
+                Toast.makeText(this, label + ": ยังอยู่ระหว่างพัฒนา",
+                        Toast.LENGTH_SHORT).show());
+        LinearLayout.LayoutParams params = matchWrap();
+        params.bottomMargin = dp(8);
+        root.addView(button, params);
     }
 
     private void launchDriveAccountPicker() {
@@ -94,9 +121,9 @@ public final class MainActivity extends Activity {
             }
             preferences().edit().putString(KEY_ACCOUNT, account.getEmail()).apply();
             refreshDriveStatus();
-            Toast.makeText(this, "เชื่อมต่อบัญชี Google Drive แล้ว", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "เลือกบัญชีสำรองข้อมูลแล้ว", Toast.LENGTH_SHORT).show();
         } catch (ApiException failure) {
-            Toast.makeText(this, "เชื่อมต่อ Google Drive ไม่สำเร็จ: "
+            Toast.makeText(this, "เลือกบัญชี Google ไม่สำเร็จ: "
                     + failure.getStatusCode(), Toast.LENGTH_LONG).show();
         }
     }
@@ -105,11 +132,21 @@ public final class MainActivity extends Activity {
         if (driveStatus == null) return;
         String email = preferences().getString(KEY_ACCOUNT, null);
         driveStatus.setText(email == null
-                ? "Google Drive: ยังไม่ได้เลือกบัญชี"
+                ? "Google Drive: ยังไม่ได้เลือกบัญชี (ไม่จำเป็นต่อการขาย)"
                 : "Google Drive: " + email);
     }
 
     private SharedPreferences preferences() {
         return getSharedPreferences(PREFS, MODE_PRIVATE);
+    }
+
+    private LinearLayout.LayoutParams matchWrap() {
+        return new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
     }
 }
