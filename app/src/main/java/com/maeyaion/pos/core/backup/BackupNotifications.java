@@ -21,6 +21,20 @@ public final class BackupNotifications {
         show(context, "สำรองข้อมูลสำเร็จ", "ยืนยันไฟล์สำรองบน Google Drive แล้ว");
     }
 
+    public static void showVerificationSuccess(Context context) {
+        show(context, "ตรวจสอบข้อมูลสำรองแล้ว", "ดาวน์โหลดและกู้คืนลงฐานข้อมูลทดสอบแยกสำเร็จ โดยไม่แตะฐานข้อมูลจริง");
+    }
+
+    public static void showFailureThrottled(Context context, String message) {
+        long now = System.currentTimeMillis();
+        android.content.SharedPreferences preferences = context.getSharedPreferences(
+                UnattendedBackupScheduler.PREFS, Context.MODE_PRIVATE);
+        long last = preferences.getLong(UnattendedBackupScheduler.KEY_LAST_FAILURE, 0L);
+        if (last != 0L && now - last < 6L * 60L * 60L * 1000L) return;
+        preferences.edit().putLong(UnattendedBackupScheduler.KEY_LAST_FAILURE, now).apply();
+        showFailure(context, message);
+    }
+
     private static void show(Context context, String title, String message) {
         NotificationManager manager = (NotificationManager)
                 context.getSystemService(Context.NOTIFICATION_SERVICE);
