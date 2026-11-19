@@ -57,7 +57,7 @@ public final class AppDatabaseMigrationTest {
         old.close();
 
         database = Room.databaseBuilder(context, AppDatabase.class, databaseName)
-                .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
+                .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                 .addMigrations(Migration1To2.INSTANCE, Migration2To3.INSTANCE, Migration3To4.INSTANCE)
                 .addCallback(AppDatabase.databaseCallback())
                 .allowMainThreadQueries()
@@ -115,7 +115,7 @@ public final class AppDatabaseMigrationTest {
         old.close();
 
         database = Room.databaseBuilder(context, AppDatabase.class, databaseName)
-                .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
+                .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                 .addMigrations(Migration3To4.INSTANCE)
                 .addCallback(AppDatabase.databaseCallback())
                 .allowMainThreadQueries()
@@ -139,7 +139,7 @@ public final class AppDatabaseMigrationTest {
 
     @Test public void freshDatabaseSeedsBarcodeCounter() {
         database = Room.databaseBuilder(context, AppDatabase.class, databaseName)
-                .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
+                .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                 .addCallback(AppDatabase.databaseCallback())
                 .allowMainThreadQueries()
                 .build();
@@ -308,7 +308,7 @@ public final class AppDatabaseMigrationTest {
 
         database.close();
         database = Room.databaseBuilder(context, AppDatabase.class, databaseName)
-                .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
+                .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                 .addCallback(AppDatabase.databaseCallback())
                 .allowMainThreadQueries()
                 .build();
@@ -335,7 +335,7 @@ public final class AppDatabaseMigrationTest {
 
     private void openFreshDatabase() {
         database = Room.databaseBuilder(context, AppDatabase.class, databaseName)
-                .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
+                .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                 .addCallback(AppDatabase.databaseCallback())
                 .allowMainThreadQueries()
                 .build();
