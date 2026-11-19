@@ -73,3 +73,22 @@ Baseline ที่ตรวจ: branch `phase-3-foundation`, commit `e44e3e9293e
 ## สถานะปัจจุบัน
 
 Phase 0 DONE. Phase 1 IN PROGRESS; CI run 44507036329 ผ่านครบทั้งสอง jobs และสร้าง APK debug artifact แล้ว; workflow local backup/restore และ Drive basic ถูกเชื่อมใน UI แล้ว แต่ยังไม่มีหลักฐานทดสอบบนโทรศัพท์จริงและบัญชี Google จริง จึงยังห้ามเริ่ม Phase 2
+
+## ผลทดสอบบนเครื่องจริงและการแก้ไขหลัง QA (2026-11-19)
+
+หลักฐานจากผู้ใช้:
+- PASS: เปิดใช้งานออฟไลน์โดยไม่บังคับ Google Sign-In, สร้างสินค้า/บาร์โค้ด, ขายเงินสด/ตัดสต๊อก, ป้องกันการขายซ้ำ และ Local Backup/Restore
+- PASS: กู้คืนด้วยรหัสผิดแล้วข้อมูลเดิมไม่ถูกเขียนทับ; กู้คืน snapshot ที่ถูกต้องแล้วสต๊อกย้อนกลับตรงตามเวลาสำรอง
+- FAIL: หน้าต่างเลือกบัญชี Google ปิดหลังแตะบัญชี โดยแอปเดิมรายงานเป็นการยกเลิก
+- NOT TESTED: Drive upload/download/restore ยังทำไม่ได้เพราะ Sign-In ไม่ผ่าน
+
+การแก้ไขใน branch นี้:
+- ปรับ Sign-In result handling ไม่ตีความทุกผลลัพธ์ที่ไม่ใช่ RESULT_OK ว่าผู้ใช้กดยกเลิก; อ่าน ApiException status เมื่อมี Intent และแสดงแนวทางตาม status เช่น 10 (OAuth/package/SHA-1), 12500 และ 12501
+- เพิ่ม Recovery Key เป็นทางเลือกในการกู้คืนทั้ง Local และ Google Drive; ต้องกรอก Recovery Password หรือ Recovery Key เพียงอย่างเดียว
+- เพิ่ม BackupErrorMessages แปลง BAD_DECRYPT / authentication failure เป็นข้อความภาษาไทย และเพิ่ม unit tests
+- เพิ่ม CI debug keystore แบบ cache เพื่อให้ SHA-1 ของ debug APK คงที่ระหว่าง build ปกติ พร้อมพิมพ์ certificate fingerprint ใน CI log
+- CI run 44546086532: Unit tests และ APK build ผ่าน; Database instrumentation กำลังทำงาน ณ เวลาบันทึกนี้
+- SHA-1 ของ APK จาก CI run 44546086532: `c26d4b95eb4c212668b8baece2c36e9059e4c043`
+- ต้องเพิ่ม SHA-1 นี้ใน OAuth 2.0 Android Client ของ Google Cloud Console โดยใช้ package `com.maeyaion.pos`; หากล้าง/หมดอายุ GitHub Actions cache แล้ว debug keystore ถูกสร้างใหม่ SHA-1 จะเปลี่ยนและต้องปรับ OAuth client อีกครั้ง
+
+Phase 1 ยังคง IN PROGRESS จนกว่า OAuth Sign-In จะผ่านและมีหลักฐาน Drive upload + download + restore บนเครื่องจริง
