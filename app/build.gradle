@@ -16,6 +16,24 @@ android {
             }
         }
     }
+    // Keep CI debug APK signing deterministic for the registered Android OAuth SHA-1.
+    // Local builds retain Android Gradle Plugin's normal debug signing behavior.
+    def ciDebugKeystore = file("${System.getProperty('user.home')}/.android/debug.keystore")
+    if (System.getenv('CI') == 'true' && ciDebugKeystore.isFile()) {
+        signingConfigs {
+            debug {
+                storeFile ciDebugKeystore
+                storePassword 'android'
+                keyAlias 'AndroidDebugKey'
+                keyPassword 'android'
+            }
+        }
+        buildTypes {
+            debug {
+                signingConfig signingConfigs.debug
+            }
+        }
+    }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
@@ -24,6 +42,7 @@ android {
     testOptions { unitTests.returnDefaultValues = true }
 }
 dependencies {
+    implementation 'androidx.activity:activity:1.10.1'
     implementation 'androidx.room:room-runtime:2.8.5'
     annotationProcessor 'androidx.room:room-compiler:2.8.5'
     implementation 'androidx.work:work-runtime:2.12.0'

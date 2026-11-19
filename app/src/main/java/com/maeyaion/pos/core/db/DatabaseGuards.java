@@ -48,6 +48,23 @@ public final class DatabaseGuards {
         db.execSQL("CREATE TRIGGER IF NOT EXISTS op_log_no_delete BEFORE DELETE ON op_log BEGIN SELECT RAISE(ABORT, 'op_log_append_only'); END");
     }
 
+
+    /** Enforces the minimum cash-sale ledger invariants at the SQLite boundary. */
+    public static void installSales(@NonNull SupportSQLiteDatabase db) {
+        db.execSQL("DROP TRIGGER IF EXISTS sale_cash_insert_guard");
+        db.execSQL("CREATE TRIGGER sale_cash_insert_guard BEFORE INSERT ON sale WHEN NEW.type != 'CASH' OR NEW.payment_status != 'PAID' OR NEW.lifecycle_status != 'COMPLETED' OR NEW.customer_id IS NOT NULL OR NEW.subtotal_satang < 0 OR NEW.fee_total_satang != 0 OR NEW.total_satang != NEW.subtotal_satang OR NEW.cash_received_satang IS NULL OR NEW.cash_received_satang < NEW.total_satang OR NEW.change_satang IS NULL OR NEW.change_satang != NEW.cash_received_satang - NEW.total_satang OR length(NEW.content_hash) != 64 OR NEW.content_hash GLOB '*[^0-9a-f]*' OR length(trim(NEW.idem_key)) = 0 OR length(trim(NEW.created_at_utc)) = 0 OR NEW.paid_at_utc IS NULL OR NEW.paid_at_utc != NEW.created_at_utc OR NEW.settled_by_reversal_at_utc IS NOT NULL BEGIN SELECT RAISE(ABORT, 'sale_cash_invalid'); END");
+        db.execSQL("DROP TRIGGER IF EXISTS sale_no_update");
+        db.execSQL("CREATE TRIGGER sale_no_update BEFORE UPDATE ON sale BEGIN SELECT RAISE(ABORT, 'sale_append_only'); END");
+        db.execSQL("DROP TRIGGER IF EXISTS sale_no_delete");
+        db.execSQL("CREATE TRIGGER sale_no_delete BEFORE DELETE ON sale BEGIN SELECT RAISE(ABORT, 'sale_append_only'); END");
+        db.execSQL("DROP TRIGGER IF EXISTS sale_line_insert_guard");
+        db.execSQL("CREATE TRIGGER sale_line_insert_guard BEFORE INSERT ON sale_line WHEN NEW.line_no <= 0 OR length(trim(NEW.sku)) = 0 OR length(trim(NEW.name_snap)) = 0 OR NEW.price_snap_satang < 0 OR NEW.cost_snap_satang < 0 OR NEW.qty_milli <= 0 OR NEW.line_total_satang < 0 OR NOT EXISTS (SELECT 1 FROM sale WHERE id = NEW.sale_id AND type = 'CASH' AND lifecycle_status = 'COMPLETED') BEGIN SELECT RAISE(ABORT, 'sale_line_invalid'); END");
+        db.execSQL("DROP TRIGGER IF EXISTS sale_line_no_update");
+        db.execSQL("CREATE TRIGGER sale_line_no_update BEFORE UPDATE ON sale_line BEGIN SELECT RAISE(ABORT, 'sale_line_append_only'); END");
+        db.execSQL("DROP TRIGGER IF EXISTS sale_line_no_delete");
+        db.execSQL("CREATE TRIGGER sale_line_no_delete BEFORE DELETE ON sale_line BEGIN SELECT RAISE(ABORT, 'sale_line_append_only'); END");
+    }
+
     public static void installBackupJournal(@NonNull SupportSQLiteDatabase db) {
         db.execSQL("DROP TRIGGER IF EXISTS backup_journal_insert_guard");
         db.execSQL("CREATE TRIGGER IF NOT EXISTS backup_journal_insert_guard BEFORE INSERT ON backup_journal WHEN length(trim(NEW.operation_id)) = 0 OR length(trim(NEW.op)) = 0 OR length(NEW.payload) = 0 OR length(NEW.payload_sha256) != 64 OR NEW.payload_sha256 GLOB '*[^0-9a-fA-F]*' OR NEW.schema_version < 1 OR length(trim(NEW.created_at_utc)) = 0 OR NEW.uploaded NOT IN (0,1) BEGIN SELECT RAISE(ABORT, 'backup_journal_invalid'); END");

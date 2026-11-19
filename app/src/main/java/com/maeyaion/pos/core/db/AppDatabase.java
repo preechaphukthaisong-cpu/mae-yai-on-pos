@@ -17,8 +17,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase;
         CustomerEntity.class,
         StockLogEntity.class,
         OpLogEntity.class,
-        BackupJournalEntity.class
-}, version = 4, exportSchema = true)
+        BackupJournalEntity.class,
+        SaleEntity.class,
+        SaleLineEntity.class
+}, version = 5, exportSchema = true)
 public abstract class AppDatabase extends RoomDatabase {
     private static volatile AppDatabase INSTANCE;
 
@@ -30,6 +32,7 @@ public abstract class AppDatabase extends RoomDatabase {
     public abstract StockLogDao stockLogDao();
     public abstract OpLogDao opLogDao();
     public abstract BackupJournalDao backupJournalDao();
+    public abstract SaleDao saleDao();
 
     public static RoomDatabase.Callback databaseCallback() {
         return new RoomDatabase.Callback() {
@@ -39,6 +42,7 @@ public abstract class AppDatabase extends RoomDatabase {
                 db.execSQL("INSERT OR IGNORE INTO barcode_counter (id, next_value) VALUES (1, 2000001)");
                 DatabaseGuards.installCore(db);
                 DatabaseGuards.installBackupJournal(db);
+                DatabaseGuards.installSales(db);
             }
 
             @Override
@@ -51,12 +55,8 @@ public abstract class AppDatabase extends RoomDatabase {
     }
 
     /**
-     * The database is deliberately opened by Room without WAL connection pooling,
-     * then switched to SQLite WAL mode below. Android's public per-connection SQL
-     * API cannot execute PRAGMAs that return rows (busy_timeout does), and WAL
-     * pooling has no public connection-created callback. Keeping one SQLite
-     * connection makes the D-064 settings deterministic on API 26+ while retaining
-     * WAL journaling and FULL synchronous durability.
+     * Keep Room on one SQLite connection so every connection-local durability
+     * pragma is applied consistently. WAL itself is enabled directly at open.
      */
     private static void applyDurabilityPragmas(@NonNull SupportSQLiteDatabase db) {
         executePragma(db, "PRAGMA journal_mode=WAL");
@@ -64,11 +64,6 @@ public abstract class AppDatabase extends RoomDatabase {
         executePragma(db, "PRAGMA synchronous=FULL");
     }
 
-    /**
-     * PRAGMA statements can return rows. SupportSQLiteDatabase.execSQL is for
-     * statements that do not return a result set; use query and always drain
-     * and close the cursor for assignment PRAGMAs.
-     */
     private static void executePragma(@NonNull SupportSQLiteDatabase db, @NonNull String sql) {
         try (Cursor cursor = db.query(sql)) {
             while (cursor.moveToNext()) {
@@ -88,7 +83,7 @@ public abstract class AppDatabase extends RoomDatabase {
                                     AppDatabase.class,
                                     "maeyaion_pos.db")
                             .setJournalMode(JournalMode.TRUNCATE)
-                            .addMigrations(Migration1To2.INSTANCE, Migration2To3.INSTANCE, Migration3To4.INSTANCE)
+                            .addMigrations(Migration1To2.INSTANCE, Migration2To3.INSTANCE, Migration3To4.INSTANCE, Migration4To5.INSTANCE)
                             .addCallback(databaseCallback())
                             .build();
                     INSTANCE = local;

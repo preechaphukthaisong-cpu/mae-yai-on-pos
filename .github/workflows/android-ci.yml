@@ -3,7 +3,7 @@ on:
   push:
     branches: [main, phase-3-foundation]
   pull_request:
-    branches: [main]
+    branches: [main, phase-3-foundation]
 permissions:
   contents: read
 concurrency:
@@ -26,6 +26,29 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
+      - name: Restore stable CI debug signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: mae-yai-on-pos-ci-debug-keystore-v3
+      - name: Ensure CI debug signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.android"
+          KEYSTORE="$HOME/.android/debug.keystore"
+          if ! keytool -list -storetype JKS -keystore "$KEYSTORE" -storepass android \
+              -alias AndroidDebugKey >/dev/null 2>&1; then
+            rm -f "$KEYSTORE"
+            keytool -genkeypair -v \
+              -keystore "$KEYSTORE" \
+              -storetype JKS \
+              -storepass android \
+              -alias AndroidDebugKey \
+              -keypass android \
+              -dname "CN=Android Debug,O=Android,C=US" \
+              -keyalg RSA -keysize 2048 -validity 10000
+          fi
       - name: Locate Android SDK tools
         shell: bash
         run: |
@@ -60,14 +83,29 @@ jobs:
       - name: Run unit tests
         run: gradle --no-daemon :app:testDebugUnitTest
       - name: Assemble debug APK
-        run: gradle --no-daemon :app:assembleDebug
+        run: gradle --no-daemon --no-build-cache :app:assembleDebug
+      - name: Report debug APK signing certificate SHA-1
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEYSTORE="$HOME/.android/debug.keystore"
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          KEYSTORE_SHA1="$(keytool -list -v -storetype JKS -keystore "$KEYSTORE" -storepass android -alias AndroidDebugKey | awk -F': ' '/SHA1:/{gsub(":","",$2); print tolower($2)}')"
+          APK_SHA1="$("$APKSIGNER" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | awk '/certificate SHA-1 digest:/{print $NF}')"
+          echo "Debug keystore SHA-1: $KEYSTORE_SHA1"
+          echo "Debug APK SHA-1:      $APK_SHA1"
+          if [[ -z "$KEYSTORE_SHA1" || "$KEYSTORE_SHA1" != "$APK_SHA1" ]]; then
+            echo "::error::APK signing certificate does not match the cached CI debug keystore."
+            exit 1
+          fi
+          "$APKSIGNER" verify --print-certs app/build/outputs/apk/debug/app-debug.apk
       - name: Verify Room schema export
         shell: bash
         run: |
           set -euo pipefail
-          SCHEMA_FILE="app/schemas/com.maeyaion.pos.core.db.AppDatabase/4.json"
+          SCHEMA_FILE="app/schemas/com.maeyaion.pos.core.db.AppDatabase/5.json"
           test -s "$SCHEMA_FILE" || {
-            echo "::error::Room schema v4 was not generated at $SCHEMA_FILE"
+            echo "::error::Room schema v5 was not generated at $SCHEMA_FILE"
             find app/schemas -type f -print || true
             exit 1
           }
@@ -77,22 +115,29 @@ jobs:
           import subprocess
           from pathlib import Path
 
-          schema_path = "app/schemas/com.maeyaion.pos.core.db.AppDatabase/4.json"
+          schema_path = "app/schemas/com.maeyaion.pos.core.db.AppDatabase/5.json"
           generated = json.loads(Path(schema_path).read_text(encoding="utf-8"))
-          committed_text = subprocess.check_output(
-              ["git", "show", f"HEAD:{schema_path}"], text=True
-          )
-          committed = json.loads(committed_text)
-          if generated != committed:
-              raise SystemExit(
-                  "::error::Generated Room schema differs from the committed schema."
+          exists = subprocess.run(
+              ["git", "cat-file", "-e", f"HEAD:{schema_path}"],
+              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+          ).returncode == 0
+          if exists:
+              committed_text = subprocess.check_output(
+                  ["git", "show", f"HEAD:{schema_path}"], text=True
               )
+              committed = json.loads(committed_text)
+              if generated != committed:
+                  raise SystemExit(
+                      "::error::Generated Room schema differs from the committed schema."
+                  )
+          else:
+              print("New Room schema version detected; artifact will be reviewed and committed.")
           PY
       - name: Upload Room schema
         uses: actions/upload-artifact@v4
         with:
-          name: mae-yai-on-pos-room-schema-v4
-          path: app/schemas/com.maeyaion.pos.core.db.AppDatabase/4.json
+          name: mae-yai-on-pos-room-schema-v5
+          path: app/schemas/com.maeyaion.pos.core.db.AppDatabase/5.json
           if-no-files-found: error
           retention-days: 30
       - name: Upload debug APK

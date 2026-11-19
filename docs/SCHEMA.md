@@ -2,14 +2,14 @@
 
 - รุ่นเอกสาร: 1.0.7
 - เฟส: 3 — Foundation implementation in progress
-- สถานะ: แบบจำลองเชิงบรรทัดฐานตาม D-001 ถึง D-061; ตาราง foundation ที่ implement แล้วอยู่ใน Room v4 ส่วนตารางธุรกิจอื่นยังไม่ถือว่าพัฒนาเสร็จ
+- สถานะ: แบบจำลองเชิงบรรทัดฐาน; Room v5 เพิ่มตาราง sale และ sale_line สำหรับ cash-sale foundation เท่านั้น ตารางธุรกิจอื่นยังไม่ถือว่าพัฒนาเสร็จ
 - Database: SQLite ไฟล์เดียวผ่าน Room
 - เงิน: INTEGER หน่วยสตางค์; Java ใช้ long
 - อ้างอิง: docs/SPEC.md, docs/DECISIONS.md, docs/ARCHITECTURE.md
 
 ## 1. กติกากลาง
 
-Room schema ที่ใช้งานจริงใน foundation ปัจจุบันคือ version 4; Migration 3→4 ติดตั้ง/refresh database guards โดยไม่ลบหรือเขียนทับข้อมูลเดิม
+Room schema ปัจจุบันคือ version 5; Migration 4→5 เพิ่ม sale/sale_line แบบไม่ทำลายข้อมูลเดิม และติดตั้ง database guards สำหรับ cash-sale ledger
 
 1. ชื่อตาราง snake_case; primary key ของเอกสารใช้ UUID เก็บเป็น TEXT เว้นแต่ระบุเป็นอย่างอื่น
 2. เงินทุกคอลัมน์เป็น SQLite INTEGER หน่วยสตางค์; จำนวนเงินของธุรกรรมต้องไม่ติดลบ แต่คอลัมน์ยอดสุทธิ/ผลต่างในตารางสรุปอาจติดลบได้; ห้าม REAL/FLOAT/DOUBLE
