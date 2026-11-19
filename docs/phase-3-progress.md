@@ -13,7 +13,12 @@
 - [x] Integer-satang money and bill-level 5% Half Up fee calculator with unit tests.
 - [x] SQLite/WAL snapshot, integrity validation, staging restore and rollback-oriented database activation code.
 - [x] AES-256-GCM portable backup envelope, Recovery Password and Recovery Key wrapping, Android Keystore local DEK protection, and cryptographic tests.
-- [x] Google Drive appDataFolder upload worker; it now performs bounded structural validation of the encrypted envelope before upload. This does not replace GCM authentication during restore.
+- [x] Google Drive appDataFolder upload worker; it validates encrypted envelopes and reconciles uploads by remote filename before retrying.
+- [x] Bounded encrypted delta-batch builder; validates sequence order and payload SHA-256, encrypts the journal batch, and acknowledges rows only after remote upload confirmation/reconciliation.
+- [x] Drive appDataFolder list and bounded download workers; downloaded envelopes are validated before being exposed to restore.
+- [x] Restore coordinator connects encrypted download, safety snapshot, authenticated streaming decryption, SQLite/Room validation, staged activation and rollback.
+- [x] Full snapshot encryption and portable restore now use streaming AES-GCM file operations instead of materializing the entire database payload in heap memory.
+- [x] Launcher includes Google account selection and Drive appData consent entry point; selected account email is stored locally, not OAuth tokens.
 - [x] CameraX + bundled ML Kit offline barcode scanner source and duplicate-emission tests.
 - [x] Thai TTS selection/service source and fallback logic.
 - [x] Room schema v4 JSON committed; CI workflow checks generated schema drift.
@@ -23,11 +28,11 @@
 
 - [ ] Latest CI run must finish successfully on the latest PR head, including unit tests, APK build, schema verification and instrumentation tests. A cancelled or compile-only run is not acceptance.
 - [ ] Commit reproducible Room schema history for every supported historical version, or formally revise D-063 with evidence that older schemas were never Room-generated. Do not fabricate historical JSON.
-- [ ] Prove `busy_timeout=5000` and `synchronous=FULL` on every effective Room connection; current callback/test coverage does not prove pool-wide enforcement.
-- [ ] Complete Drive OAuth consent/account selection, remote list/download, and a tested upload→download→decrypt→staged-restore round trip.
-- [ ] Implement durable journal delta cursor/reconciliation and daily full-snapshot scheduling; current worker uploads a supplied encrypted snapshot file only.
+- [ ] Prove `busy_timeout=5000` and `synchronous=FULL` on every effective Room connection; concurrent pooled-connection instrumentation test has been added and must pass on CI/device.
+- [ ] Complete Google OAuth app registration/consent on the target handset and execute a real upload→list→download→decrypt→staged-restore round trip. Source workers and account-selection entry point exist; runtime Google credentials/device evidence do not.
+- [ ] Complete daily full-snapshot scheduling and verify delta recovery/replay semantics after interrupted uploads. Delta packaging and post-confirmation journal acknowledgement are implemented in source, but the full remote replay chain is not yet accepted.
 - [ ] Add restore activation rollback tests, including failure after the candidate database has been opened.
-- [ ] Reduce backup memory pressure: current crypto/file-store path materializes large payloads in byte arrays and can exhaust handset memory near the 512 MiB limit.
+- [ ] Finish memory audit for every backup path: full portable snapshot encryption/decryption is now streaming, but the legacy local-Keystore restore helper still uses byte arrays and requires conversion or a strict safe size bound.
 - [ ] Audit every production write path so snapshot/restore maintenance cannot be bypassed by direct DAO/database writes.
 - [ ] Resolve append-only ledger retention through a verifiable archive/reconciliation design before any purge implementation.
 - [ ] Physical-device acceptance: migration, process death, power loss, scanner behavior, TTS voice/lifecycle, encrypted backup and recovery.
