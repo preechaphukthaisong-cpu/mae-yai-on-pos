@@ -75,6 +75,8 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
         } catch (UserRecoverableAuthException needsUserConsent) {
             return Result.failure(new Data.Builder().putBoolean(OUTPUT_AUTH_REQUIRED, true).build());
         } catch (GoogleAuthException | IOException authFailure) {
+            BackupNotifications.showFailureThrottled(getApplicationContext(),
+                    "ยืนยันตัวตน Google Drive ไม่สำเร็จ ระบบจะลองใหม่");
             return Result.retry();
         }
 
@@ -133,6 +135,8 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
             String driveFileId = extractDriveFileId(response);
             return completeUpload(driveFileId, backup);
         } catch (IOException networkFailure) {
+            BackupNotifications.showFailureThrottled(getApplicationContext(),
+                    "อัปโหลดไฟล์สำรองไป Google Drive ไม่สำเร็จ ระบบจะลองใหม่");
             return Result.retry();
         } finally {
             if (connection != null) connection.disconnect();
@@ -148,6 +152,7 @@ public final class GoogleDriveBackupUploadWorker extends Worker {
                 getApplicationContext().getSharedPreferences(UnattendedBackupScheduler.PREFS,
                         Context.MODE_PRIVATE).edit()
                         .putLong(UnattendedBackupScheduler.KEY_LAST_SUCCESS, System.currentTimeMillis())
+                        .putString(UnattendedBackupScheduler.KEY_LAST_DRIVE_FILE_ID, driveFileId)
                         .apply();
                 BackupNotifications.showSuccess(getApplicationContext());
             }
