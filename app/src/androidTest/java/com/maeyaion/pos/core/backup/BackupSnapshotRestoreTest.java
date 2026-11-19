@@ -70,7 +70,7 @@ public final class BackupSnapshotRestoreTest {
                 .create(context, database, backupDirectory);
         assertTrue(snapshot.file.isFile());
         assertTrue(snapshot.sizeBytes > 0);
-        assertEquals(4, snapshot.schemaVersion);
+        assertEquals(5, snapshot.schemaVersion);
         assertEquals(64, snapshot.sha256.length());
 
         byte[] rawSnapshot = Files.readAllBytes(snapshot.file.toPath());
