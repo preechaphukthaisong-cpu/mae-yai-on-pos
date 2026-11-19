@@ -54,12 +54,9 @@ public final class MainActivity extends Activity {
         subtitle.setPadding(0, dp(8), 0, dp(20));
         root.addView(subtitle, matchWrap());
 
-        addMenuButton(root, "การขาย");
-        addMenuButton(root, "คลังสินค้า");
-        addMenuButton(root, "สร้างบาร์โค้ด");
-        addMenuButton(root, "ประวัติการขาย");
-        addMenuButton(root, "จัดการร้านค้า");
-        addMenuButton(root, "รายงานยอดขาย");
+        for (String menuLabel : MainMenuDefinition.items()) {
+            addMenuButton(root, menuLabel);
+        }
 
         TextView backupHeading = new TextView(this);
         backupHeading.setText("สำรองข้อมูล");
