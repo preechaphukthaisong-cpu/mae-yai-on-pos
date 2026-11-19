@@ -20,7 +20,7 @@
 | เฟส | สถานะ | หมายเหตุ |
 |---|---|---|
 | 0 — ล็อกกฎ | DONE | อ่าน DECISIONS.md และ SPEC.md; ยืนยันข้อกำหนดหลักและเมนู 6 รายการ; บันทึกแผนปัจจุบันในไฟล์นี้ |
-| 1 — Foundation ที่ใช้งานได้ | IN PROGRESS | คง single-connection WAL durability ตาม D-064, เพิ่มหน้าหลัก 6 เมนู และเพิ่ม cash-sale ledger/service ขั้นต่ำ; ยังต้องผ่าน CI, ทดสอบ backup และอุปกรณ์จริง |
+| 1 — Foundation ที่ใช้งานได้ | IN PROGRESS | CI ล่าสุดผ่านทั้ง unit tests, instrumentation tests และ APK build (run 44504525332); ยังต้องตรวจ/เชื่อม local backup-restore และ Drive basic ให้ใช้งานได้ พร้อมทดสอบบนโทรศัพท์จริง |
 | 2 — ขายและคลัง | NOT STARTED | รอ Phase 1 ผ่าน; จะทำ workflow ขายเต็มรูปแบบและคลังสินค้าตามแผน |
 | 3 — ขายเชื่อ คืนสินค้า และรายงาน | NOT STARTED | รอ Phase 2 ผ่าน |
 | 4 — ติดตั้งทับและเสถียรภาพ | NOT STARTED | รอ Phase 3 ผ่าน |
@@ -46,7 +46,8 @@ Baseline ที่ตรวจ: branch `phase-3-foundation`, commit `e44e3e9293e
 - แก้แล้วใน branch `phase-0-lock-rules`: Room schema v5 มี `sale`/`sale_line`, Migration4To5 และ `CashSaleService` แบบ atomic
 - เพิ่ม `PosWorkflowActivity`: เมนูคลังสินค้าสร้างสินค้า/บาร์โค้ดและบันทึกสต๊อกตั้งต้นใน transaction เดียว; เมนูการขายสแกนด้วย CameraX + bundled ML Kit หรือกรอกบาร์โค้ด และยืนยันขายเงินสดผ่าน `CashSaleService`; เมนูสร้างบาร์โค้ดเชื่อมไปหน้าคลังสินค้า
 - เชื่อมเมนูหลัก 3 รายการเข้าหน้าทดลองใช้งานโดยไม่เปลี่ยนชื่อหรือลำดับเมนู; อีก 3 เมนูยังเป็น placeholder
-- ต้องตรวจ CI ของหน้าทดลองใช้งานใหม่ และทดสอบการสร้างสินค้า + สแกน + ขายเงินสด atomic, local backup/restore และ Drive upload/download บนเครื่องจริงตามเกณฑ์ Phase 1
+- CI ของหน้าทดลองใช้งานใหม่ผ่านแล้ว (run 44504525332; commit 9357afcea6e94bf2f80f0c91ed82d7510ce85ebf): unit tests/APK build และ database instrumentation tests ผ่าน; ได้ artifact APK debug
+- ยังต้องตรวจ/เชื่อม workflow local backup/restore และ Drive basic ให้ครบตามแผน v1 และต้องทดสอบการสร้างสินค้า + สแกน + ขายเงินสด atomic รวมถึง backup/restore บนโทรศัพท์จริง
 - การมี source code หรือ unit tests ยังไม่เท่ากับผ่านการทดสอบบนมือถือจริง
 
 ## ข้อจำกัดการดำเนินงาน
@@ -68,4 +69,4 @@ Baseline ที่ตรวจ: branch `phase-3-foundation`, commit `e44e3e9293e
 
 ## สถานะปัจจุบัน
 
-Phase 0 DONE. Phase 1 IN PROGRESS; CI สำหรับหน้าทดลองใช้งานล่าสุดยังต้องตรวจผล; ยังไม่มีหลักฐานทดสอบบนมือถือจริง และ local backup/restore + Drive basic UI ยังไม่ครบ จึงยังห้ามเริ่ม Phase 2
+Phase 0 DONE. Phase 1 IN PROGRESS; CI run 44504525332 ผ่านครบทั้งสอง jobs และสร้าง APK debug artifact แล้ว; ยังไม่มีหลักฐานทดสอบบนมือถือจริง และยังต้องยืนยัน/เชื่อม local backup-restore กับ Drive basic workflow ให้ใช้งานได้ จึงยังห้ามเริ่ม Phase 2
