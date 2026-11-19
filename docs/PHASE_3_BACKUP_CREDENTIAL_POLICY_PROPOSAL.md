@@ -1,32 +1,42 @@
-# Daily Full Backup Credential Lifecycle — Security Decision Proposal
+# Daily Full Backup Credential Lifecycle — Approved Implementation Specification
 
-**Status: PENDING OWNER APPROVAL — NOT IMPLEMENTED**  
-**Scope:** G3, unattended daily encrypted full snapshots.
+**Status: OWNER APPROVED — IMPLEMENTATION IN PROGRESS**  
+**Decision date:** 2026-11-19  
+**Scope:** G3, opt-in unattended daily full snapshots.
 
-## Proposed design
+## Approved policy
 
-1. Daily full-backup scheduling is explicitly opt-in. The UI must explain that unattended backup requires the app to access the owner's recovery credentials while the device is unattended.
-2. On explicit opt-in, store the Recovery Password and Recovery Key only as an AES-256-GCM authenticated ciphertext file in app-private storage. Protect the vault encryption key with a dedicated non-exportable Android Keystore AES key. Never put credentials in SharedPreferences, WorkManager input/output, intents, logs, crash reports, analytics, or cloud metadata.
-3. WorkManager receives only the selected Google account email (non-secret routing metadata). OAuth access tokens are acquired just-in-time by the worker and are not persisted by application code.
-4. A unique 24-hour periodic worker runs without a network constraint, loads/decrypts the credential vault only in memory, creates the encrypted full snapshot, wipes mutable credential buffers, and queues the already-encrypted file for upload. The upload worker retains its connected-network constraint. A missing network therefore delays upload, not the local snapshot.
-5. If the vault is absent, corrupted, or the Keystore key is unavailable/invalidated, the worker must fail closed, create no backup, expose a recoverable status, and require the owner to re-enter credentials. Never fall back to plaintext.
-6. Account changes cancel/replace the unique schedule and require the owner to confirm the new account. Disabling unattended backup cancels periodic work and deletes the local credential vault; already uploaded encrypted backups remain subject to the owner's retention policy.
-7. The owner must keep an independent offline copy of the Recovery Password and Recovery Key. The Keystore-protected vault is device-bound and is not a substitute for portable recovery credentials. Reinstall, device loss, or Keystore invalidation may require re-entry.
+The owner approves unattended daily full backups subject to every control below. Approval does not mean the feature is implemented, tested, or enabled in production.
+
+1. Scheduling is opt-in. The setup screen must explain the unattended-access trade-off and require explicit confirmation.
+2. Recovery Password and Recovery Key are entered by the owner. The Recovery Key must be displayed/exported through a deliberate one-time setup flow, and the owner must confirm that an independent offline copy is stored before enabling unattended backup.
+3. Store credentials only as AES-256-GCM authenticated ciphertext in app-private storage. Protect the vault key with a dedicated non-exportable Android Keystore AES key. Use a dedicated alias and versioned AAD; never reuse the backup DEK alias.
+4. Never place Recovery Password, Recovery Key, DEK plaintext, or OAuth access tokens in WorkManager input/output, intents, logs, crash reports, analytics, notifications, or cloud metadata. WorkManager may receive only non-secret routing metadata such as the selected account name.
+5. A unique 24-hour periodic worker creates a local full snapshot without requiring network connectivity. The snapshot/upload stages must use appropriate charging and battery-not-low constraints where supported; upload remains network-constrained and uses retry with exponential backoff. Constraints must not prevent a user-triggered backup.
+6. A missing, corrupted, or invalidated vault/Keystore key fails closed. Do not create an incomplete backup or fall back to plaintext. Expose a clear recoverable status and require owner re-entry.
+7. Notify the owner when no successful backup exists for more than 24 hours or repeated backup attempts fail. Do not silently report success before upload confirmation.
+8. Verify the encrypted envelope and SHA-256 digest after creation and after upload/download. A successful upload must be reconciled by deterministic remote filename and confirmed Drive file metadata; an ambiguous response is retried without acknowledging the journal.
+9. Provide a user-triggered restore verification flow and an automated monthly restore-integrity check against an isolated staging database. Never replace the live database during a verification-only test.
+10. Keep local full-backup files for a rolling 7–14 days, but never delete the last known-good locally recoverable copy or any copy required by an unfinished upload/restore. Cloud archives containing accounting evidence follow G6 retention, not this short local cache policy.
+11. Account changes cancel/replace the unique schedule only after explicit confirmation. Disabling unattended backup cancels periodic work and securely removes the local credential vault; it does not delete previously uploaded archives.
+12. Wipe mutable credential and decrypted byte arrays in finally blocks. The existing Recovery Key APIs accept immutable Java String values; implementation must minimize their lifetime and document this JVM limitation. Do not claim complete zeroization of immutable strings.
 
 ## Security properties and trade-offs
 
-- AES-GCM protects the stored credential file against offline disclosure and tampering; the Keystore key is non-exportable.
-- Unattended operation necessarily permits the app process to decrypt credentials without interactive biometric approval. This increases exposure if an attacker can execute code inside the app or compromises the unlocked device.
-- No credential is sent to WorkManager or included in a backup payload. The backup envelope continues to use the existing independent Recovery Password and Recovery Key wrappers.
-- The implementation must use a separate Keystore alias and authenticated metadata/AAD for the credential vault; it must not reuse the backup DEK alias.
-- Credential arrays and decrypted byte buffers must be wiped on every exit path. The existing recovery-key APIs currently accept immutable Java String values; a security review must account for this limitation or change those APIs before claiming complete in-memory zeroization.
+- AES-GCM authenticates the vault; Android Keystore protects a non-exportable device-bound key.
+- Unattended operation necessarily permits the app process to decrypt credentials without interactive biometric approval during a scheduled run.
+- The vault is device-bound and is not a substitute for portable Recovery Password/Key copies.
+- Reinstall, device loss, or Keystore invalidation may require credential re-entry. Without the independent Recovery Key, older portable backups may be unrecoverable.
+- The local backup cache retention does not override G6 accounting-evidence retention.
 
-## Required owner decision
+## Required implementation evidence
 
-Approve or reject all of the following:
-- [ ] Permit unattended backup to use an encrypted, device-bound credential vault.
-- [ ] Accept that no biometric prompt can be required for each scheduled backup.
-- [ ] Require the owner to keep the Recovery Password and Recovery Key separately offline.
-- [ ] Accept that reinstall/device loss/Keystore invalidation requires re-entering credentials.
+- Opt-in/consent UI and offline Recovery Key acknowledgement.
+- Keystore alias separation, AAD/version validation, authenticated encryption, corruption and invalidation tests.
+- WorkManager input inspection proving no recovery secret/token is passed.
+- Scheduler constraints, retry/backoff, account-change and disable tests.
+- Process-death and fail-closed credential lifecycle tests.
+- Backup creation, Drive confirmation, checksum verification, notification and monthly staging-restore tests.
+- Local rolling retention tests proving last-known-good and pending-upload files are preserved.
 
-Until approval, G3 remains NOT_STARTED and no background credential persistence is implemented.
+**Owner decision:** APPROVED with the requirements above. G3 remains IN_PROGRESS until implementation and CI evidence pass; real-account/device qualification remains part of G1/G4.
