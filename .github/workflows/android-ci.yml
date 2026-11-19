@@ -30,18 +30,19 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.android/debug.keystore
-          key: mae-yai-on-pos-ci-debug-keystore-v2
+          key: mae-yai-on-pos-ci-debug-keystore-v3
       - name: Ensure CI debug signing key
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.android"
           KEYSTORE="$HOME/.android/debug.keystore"
-          if ! keytool -list -keystore "$KEYSTORE" -storepass android \
+          if ! keytool -list -storetype JKS -keystore "$KEYSTORE" -storepass android \
               -alias AndroidDebugKey >/dev/null 2>&1; then
             rm -f "$KEYSTORE"
             keytool -genkeypair -v \
               -keystore "$KEYSTORE" \
+              -storetype JKS \
               -storepass android \
               -alias AndroidDebugKey \
               -keypass android \
@@ -89,7 +90,7 @@ jobs:
           set -euo pipefail
           KEYSTORE="$HOME/.android/debug.keystore"
           APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
-          KEYSTORE_SHA1="$(keytool -list -v -keystore "$KEYSTORE" -storepass android -alias AndroidDebugKey | awk -F': ' '/SHA1:/{gsub(":","",$2); print tolower($2)}')"
+          KEYSTORE_SHA1="$(keytool -list -v -storetype JKS -keystore "$KEYSTORE" -storepass android -alias AndroidDebugKey | awk -F': ' '/SHA1:/{gsub(":","",$2); print tolower($2)}')"
           APK_SHA1="$("$APKSIGNER" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | awk '/certificate SHA-1 digest:/{print $NF}')"
           echo "Debug keystore SHA-1: $KEYSTORE_SHA1"
           echo "Debug APK SHA-1:      $APK_SHA1"
