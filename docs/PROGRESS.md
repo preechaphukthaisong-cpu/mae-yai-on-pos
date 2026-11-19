@@ -12,7 +12,7 @@
 | Gate | Status | Evidence / remaining work |
 |---|---|---|
 | G1 — Real Google Drive qualification | BLOCKED — owner/device required | Real OAuth consent, encrypted upload/list/download/decrypt/staged restore, token/account/offline cases on target handset. |
-| G2 — Delta replay and interrupted upload | IN PROGRESS | Staging replay and negative-path tests exist. Fixed lookup so 401/non-2xx/malformed/paginated responses cannot be treated as absence; exact-name reconciliation is now wired. CI and deterministic transport interruption tests plus real Drive qualification remain. |
+| G2 — Delta replay and interrupted upload | IN PROGRESS | Staging replay and negative-path tests exist. Fixed lookup so 401/non-2xx/malformed/paginated responses cannot be treated as absence; exact-name reconciliation is now wired. CI passed on Run #361 for the reconciliation fix. Deterministic transport interruption tests and real Drive qualification remain. |
 | G3 — Secure unattended backup lifecycle | IN PROGRESS | Owner-approved policy is documented; credential vault, opt-in, scheduler, notifications, local retention and monthly staging verification need implementation and tests. |
 | G4 — Physical-device qualification | BLOCKED — target handset required | Migration, process death, force-stop/reboot/power interruption, scanner lifecycle, Thai TTS, backup/restore and rollback. |
 | G5 — Database write/maintenance serialization | PASSED | `docs/DB_WRITE_PATH_AUDIT.md`; CI evidence recorded in `docs/PHASE_3_RELEASE_GATES.md`. |
@@ -40,4 +40,6 @@
 - 2026-11-19: Read `docs/DECISIONS.md` and the existing `docs/phase-3-progress.md`; established this canonical v2.1 progress file because `docs/PROGRESS.md` was missing.
 - 2026-11-19: Verified PR #4 remains open at `c85293e24acac5f4615a294f2235b79968102a4c`; CI Run #358 succeeded. No device/OAuth evidence was available in the repository.
 
-- 2026-11-19: Fixed `GoogleDriveBackupUploadWorker.findExistingDriveFile`: clear expired token and fail closed on 401, fail closed on every non-2xx, request up to 1000 results, reject paginated/incomplete lookup, and use `DriveUploadReconciliation` for exact-name/duplicate detection. Commit `db1baa947608b96546845bcbd39274699962acb2`; CI pending.
+- 2026-11-19: Fixed `GoogleDriveBackupUploadWorker.findExistingDriveFile`: clear expired token and fail closed on 401, fail closed on every non-2xx, request up to 1000 results, reject paginated/incomplete lookup, and use `DriveUploadReconciliation` for exact-name/duplicate detection. Commit `db1baa947608b96546845bcbd39274699962acb2`; CI Run #361 passed (unit tests, APK build, Room schema verification, database instrumentation).
+
+- 2026-11-19: CI Run #361 completed successfully for `805c4cba7291229aaad445e22a00654d58b349c5`: unit tests, debug APK assembly, Room schema verification/export, and database instrumentation passed. This does not satisfy real-device/Google-account acceptance gates.
