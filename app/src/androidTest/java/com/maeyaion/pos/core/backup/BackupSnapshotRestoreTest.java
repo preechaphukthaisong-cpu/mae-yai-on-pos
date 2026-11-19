@@ -81,7 +81,7 @@ public final class BackupSnapshotRestoreTest {
         assertTrue(encrypted.length() > 0);
 
         File restored = store.restoreToStaging(stagingDirectory, encrypted, PASSWORD, null,
-                new SQLiteStagedRestoreValidator(4));
+                new SQLiteStagedRestoreValidator(5));
         assertTrue(restored.isFile());
         SQLiteDatabase restoredDb = SQLiteDatabase.openDatabase(
                 restored.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
@@ -94,20 +94,20 @@ public final class BackupSnapshotRestoreTest {
         }
 
         File restoredByRecoveryKey = store.restoreToStaging(stagingDirectory, encrypted, null,
-                recoveryKey, new SQLiteStagedRestoreValidator(4));
+                recoveryKey, new SQLiteStagedRestoreValidator(5));
         assertTrue(restoredByRecoveryKey.isFile());
 
         AndroidKeystoreKeyProtector localProtector = new AndroidKeystoreKeyProtector();
         File localEncrypted = store.writeBackupWithLocalKey(backupDirectory, rawSnapshot,
                 PASSWORD, recoveryKey, localProtector);
         File restoredLocally = store.restoreWithLocalKeyToStaging(stagingDirectory,
-                localEncrypted, localProtector, new SQLiteStagedRestoreValidator(4));
+                localEncrypted, localProtector, new SQLiteStagedRestoreValidator(5));
         assertTrue(restoredLocally.isFile());
         File restoredPortablePassword = store.restoreToStaging(stagingDirectory,
-                localEncrypted, PASSWORD, null, new SQLiteStagedRestoreValidator(4));
+                localEncrypted, PASSWORD, null, new SQLiteStagedRestoreValidator(5));
         assertTrue(restoredPortablePassword.isFile());
         File restoredPortableRecovery = store.restoreToStaging(stagingDirectory,
-                localEncrypted, null, recoveryKey, new SQLiteStagedRestoreValidator(4));
+                localEncrypted, null, recoveryKey, new SQLiteStagedRestoreValidator(5));
         assertTrue(restoredPortableRecovery.isFile());
     }
 
@@ -128,7 +128,7 @@ public final class BackupSnapshotRestoreTest {
 
         try {
             store.restoreToStaging(stagingDirectory, encrypted, "wrong password".toCharArray(),
-                    null, new SQLiteStagedRestoreValidator(4));
+                    null, new SQLiteStagedRestoreValidator(5));
             fail("Wrong password must not restore");
         } catch (GeneralSecurityException expected) {
             // Authenticated decryption must fail before staging publication.
@@ -138,7 +138,7 @@ public final class BackupSnapshotRestoreTest {
         File invalidEncrypted = store.writeBackup(backupDirectory, invalidSqlite, PASSWORD, recoveryKey);
         try {
             store.restoreToStaging(stagingDirectory, invalidEncrypted, PASSWORD, null,
-                    new SQLiteStagedRestoreValidator(4));
+                    new SQLiteStagedRestoreValidator(5));
             fail("Invalid SQLite content must not be staged");
         } catch (java.io.IOException expected) {
             // The validator rejects non-database plaintext before publication.
