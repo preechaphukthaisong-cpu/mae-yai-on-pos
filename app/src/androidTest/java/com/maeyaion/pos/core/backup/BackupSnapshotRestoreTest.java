@@ -305,13 +305,13 @@ public final class BackupSnapshotRestoreTest {
 
     private static BackupJournalEntity createProductRow(long sequence, String sku,
             String barcode, String createdAt) throws Exception {
-        String payload = "{\\"v\\":1,\\"op\\":\\"PRODUCT_CREATE_SYSTEM\\","
-                + "\\"sku\\":\\"" + sku + "\\",\\"barcode\\":\\"" + barcode + "\\","
-                + "\\"name\\":\\"Replay product\\",\\"price_satang\\":100,"
-                + "\\"cost_satang\\":50,\\"unit\\":\\"ชิ้น\\","
-                + "\\"stock_limit_qty_milli\\":null,"
-                + "\\"created_at_utc\\":\\"" + createdAt + "\\","
-                + "\\"updated_at_utc\\":\\"" + createdAt + "\\"}";
+        String payload = "{\"v\":1,\"op\":\"PRODUCT_CREATE_SYSTEM\","
+                + "\"sku\":\"" + sku + "\",\"barcode\":\"" + barcode + "\","
+                + "\"name\":\"Replay product\",\"price_satang\":100,"
+                + "\"cost_satang\":50,\"unit\":\"ชิ้น\","
+                + "\"stock_limit_qty_milli\":null,"
+                + "\"created_at_utc\":\"" + createdAt + "\","
+                + "\"updated_at_utc\":\"" + createdAt + "\"}";
         return new BackupJournalEntity(sequence, UUID.randomUUID().toString(),
                 "PRODUCT_CREATE_SYSTEM", payload, hexSha256(payload), 4, createdAt, 0);
     }
