@@ -4,9 +4,9 @@ Android native application written in Java. Single-device, offline-first POS.
 
 ## Current status
 - Phase 2 design and business decisions O-001 through O-030 were approved and merged to `main` in PR #2 on 17 November 2026.
-- Phase 3 foundation is in progress on branch `phase-3-foundation`.
-- Android source and Gradle build project are being reconstructed incrementally.
-- The current launcher is a foundation-status screen, not a usable POS. No production-ready APK is available until implementation, CI, backup/recovery gates and physical-device acceptance pass.
+- Phase 3 Android foundation was delivered and merged in PR #3 on 19 November 2026 (D-065).
+- This is a foundation build, not a finished shop-ready POS. The launcher remains a foundation/status screen.
+- Production use is blocked until Google Drive round-trip, delta replay, daily backup credential lifecycle, ledger archive policy and physical-device qualification pass.
 
 ## Project rules
 - One Room/SQLite database is the single source of truth for all screens.
