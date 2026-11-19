@@ -255,7 +255,6 @@ public final class MainActivity extends ComponentActivity {
     }
 
     private void loadDriveBackupList(String account, char[] password, String recoveryKey) {
-    private void loadDriveBackupList(String account, char[] password) {
         final UUID workId;
         try {
             workId = DriveBackupWorkScheduler.enqueueList(this, account);
