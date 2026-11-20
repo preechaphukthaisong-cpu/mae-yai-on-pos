@@ -1,5 +1,27 @@
 plugins { id 'com.android.application' }
 
+def releaseStoreFilePath = System.getenv('MAEYAI_RELEASE_STORE_FILE')
+def releaseStorePassword = System.getenv('MAEYAI_RELEASE_STORE_PASSWORD')
+def releaseKeyAlias = System.getenv('MAEYAI_RELEASE_KEY_ALIAS')
+def releaseKeyPassword = System.getenv('MAEYAI_RELEASE_KEY_PASSWORD')
+def releaseSigningConfigured = releaseStoreFilePath &&
+        releaseStorePassword &&
+        releaseKeyAlias &&
+        releaseKeyPassword &&
+        file(releaseStoreFilePath).isFile()
+
+def releaseTaskRequested = gradle.startParameter.taskNames.any {
+    def task = it.toLowerCase(Locale.ROOT)
+    task.contains('assemblerelease') || task.contains('bundlerelease')
+}
+if (releaseTaskRequested && !releaseSigningConfigured) {
+    throw new GradleException(
+            'Release signing is not configured. Set MAEYAI_RELEASE_STORE_FILE, ' +
+            'MAEYAI_RELEASE_STORE_PASSWORD, MAEYAI_RELEASE_KEY_ALIAS and ' +
+            'MAEYAI_RELEASE_KEY_PASSWORD.'
+    )
+}
+
 android {
     namespace 'com.maeyaion.pos'
     compileSdk 36
@@ -32,6 +54,25 @@ android {
             debug {
                 signingConfig signingConfigs.debug
             }
+        }
+    }
+    if (releaseSigningConfigured) {
+        signingConfigs {
+            release {
+                storeFile file(releaseStoreFilePath)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+                storeType 'PKCS12'
+            }
+        }
+    }
+    buildTypes {
+        release {
+            if (releaseSigningConfigured) {
+                signingConfig signingConfigs.release
+            }
+            minifyEnabled false
         }
     }
     compileOptions {
