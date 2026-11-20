@@ -16,7 +16,6 @@ jobs:
       MAEYAI_RELEASE_STORE_PASSWORD: ${{ secrets.MAEYAI_RELEASE_STORE_PASSWORD }}
       MAEYAI_RELEASE_KEY_ALIAS: ${{ secrets.MAEYAI_RELEASE_KEY_ALIAS }}
       MAEYAI_RELEASE_KEY_PASSWORD: ${{ secrets.MAEYAI_RELEASE_KEY_PASSWORD }}
-      EXPECTED_RELEASE_SHA1: 4a17ccc a25dea7bcb7cee2ec9b78742fd1bccb47
     steps:
       - uses: actions/checkout@v4
 
