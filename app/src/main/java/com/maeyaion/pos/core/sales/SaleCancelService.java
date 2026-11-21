@@ -30,7 +30,7 @@ public final class SaleCancelService {
    List<SaleLineEntity> source=db.saleLineDao().forSale(saleId);
    long returnedGoods=db.saleReturnLineDao().returnedGoods(saleId);
    long returnedFee=db.saleReturnLineDao().returnedFee(saleId);
-   long remainingGoods=0;List<Long> quantities=new ArrayList<>();List<Long> values=new ArrayList<>();List<LineRequest> choices=new ArrayList<>();
+   long remainingGoods=0;List<SaleLineEntity> remainingLines=new ArrayList<>();List<Long> quantities=new ArrayList<>();List<Long> values=new ArrayList<>();List<LineRequest> choices=new ArrayList<>();
    for(SaleLineEntity line:source){
     long returned=db.saleReturnLineDao().returnedQty(line.id);
     long qty=Math.subtractExact(line.qty_milli,returned);
@@ -39,7 +39,7 @@ public final class SaleCancelService {
     if(choice==null)throw new IllegalArgumentException("ต้องระบุการนำสินค้ากลับเข้าสต๊อกทุกบรรทัด");
     if(!choice.restock)require(choice.nonRestockReason,"เหตุผลที่ไม่นำกลับเข้าสต๊อก");
     long value=Math.subtractExact(line.line_total_satang,db.saleReturnLineDao().returnedValue(line.id));
-    quantities.add(qty);values.add(value);choices.add(choice);remainingGoods=Math.addExact(remainingGoods,value);
+    remainingLines.add(line);quantities.add(qty);values.add(value);choices.add(choice);remainingGoods=Math.addExact(remainingGoods,value);
    }
    if(quantities.isEmpty())throw new IllegalStateException("ไม่มีจำนวนคงเหลือให้ยกเลิก");
    long remainingFee=Math.subtractExact(sale.fee_total_satang,returnedFee);
@@ -55,10 +55,7 @@ public final class SaleCancelService {
    List<SaleCancelLineEntity> rows=new ArrayList<>();
    long goodsCumulative=returnedGoods,feeCumulative=returnedFee;
    for(int i=0;i<quantities.size();i++){
-    SaleLineEntity line=source.stream().filter(x->x.id.equals(findLineId(source,choices.get(i),restockChoices))).findFirst().orElse(null);
-    // Source rows and the prepared arrays share insertion order; find by matching the request map key below.
-    String lineId=findLineId(source,choices.get(i),restockChoices);
-    if(line==null)line=source.stream().filter(x->x.id.equals(lineId)).findFirst().orElseThrow();
+    SaleLineEntity line=remainingLines.get(i);
     long qty=quantities.get(i),value=values.get(i);
     goodsCumulative=Math.addExact(goodsCumulative,value);
     long feeTarget=sale.subtotal_satang==0?0:roundHalfUp(sale.fee_total_satang,goodsCumulative,sale.subtotal_satang);
@@ -88,10 +85,6 @@ public final class SaleCancelService {
    db.backupJournalDao().append(new BackupJournalEntity(0,op,"SALE_CANCEL",payload,sha256(payload),5,atUtc,0));
    return header;
   });
- }
- private static String findLineId(List<SaleLineEntity> source,LineRequest choice,Map<String,LineRequest> map){
-  for(Map.Entry<String,LineRequest> e:map.entrySet())if(e.getValue()==choice)return e.getKey();
-  throw new IllegalStateException("cancel line mapping missing");
  }
  private static long roundHalfUp(long a,long b,long d){if(d<=0)return 0;BigInteger[] q=BigInteger.valueOf(a).multiply(BigInteger.valueOf(b)).divideAndRemainder(BigInteger.valueOf(d));if(q[1].shiftLeft(1).compareTo(BigInteger.valueOf(d))>=0)q[0]=q[0].add(BigInteger.ONE);return q[0].longValueExact();}
  private static void require(String s,String f){if(s==null||s.trim().isEmpty())throw new IllegalArgumentException(f+" is required");}
