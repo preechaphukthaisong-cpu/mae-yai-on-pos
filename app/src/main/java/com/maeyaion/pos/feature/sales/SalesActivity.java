@@ -111,13 +111,13 @@ public final class SalesActivity extends ComponentActivity {
     AppDatabase db=AppDatabase.getInstance(getApplicationContext());
     java.util.List<CustomerEntity> customers=db.customerDao().listAll();
     java.util.Map<String,java.util.List<SaleEntity>> debts=new LinkedHashMap<>();
-    java.util.Map<String,Long> balances=new LinkedHashMap<>();
+    java.util.Map<String,Long> balances=new LinkedHashMap<>();java.util.Map<String,Long> billBalances=new LinkedHashMap<>();
     for(CustomerEntity customer:customers){
      java.util.List<SaleEntity> bills=db.saleDao().creditForCustomer(customer.id);
      java.util.List<SaleEntity> unpaid=new java.util.ArrayList<>();long balance=0;
      for(SaleEntity sale:bills)if("UNPAID".equals(sale.payment_status)){
       long outstanding=db.saleBalanceDao().outstanding(sale.id);
-      if(outstanding>0){unpaid.add(sale);balance=Math.addExact(balance,outstanding);}
+      if(outstanding>0){unpaid.add(sale);billBalances.put(sale.id,outstanding);balance=Math.addExact(balance,outstanding);}
      }
      debts.put(customer.id,unpaid);balances.put(customer.id,balance);
     }
@@ -127,7 +127,7 @@ public final class SalesActivity extends ComponentActivity {
       heading.setText(customer.name+"\nยอดค้างรวม: "+formatMoney(balances.get(customer.id))+" บาท");
       heading.setTextSize(18);heading.setPadding(4,14,4,6);root.addView(heading);
       for(SaleEntity sale:debts.get(customer.id)){
-       long outstanding=db.saleBalanceDao().outstanding(sale.id);
+       long outstanding=billBalances.get(sale.id);
        Button bill=new Button(this);
        bill.setText("บิล "+sale.id.substring(0,8)+" · ค้าง "+formatMoney(outstanding)+" บาท · รับชำระเต็มบิล");
        bill.setOnClickListener(v->payCustomerBill(sale.id));root.addView(bill);
