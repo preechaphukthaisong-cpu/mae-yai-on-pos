@@ -34,6 +34,7 @@ public final class HistoryActivity extends Activity {
  @Override protected void onCreate(Bundle state){super.onCreate(state);screen=getIntent().getStringExtra(HistoryRoute.EXTRA_SCREEN);renderList();}
  private void renderList(){
   ScrollView scroll=new ScrollView(this);content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(20,16,20,24);scroll.addView(content);setContentView(scroll);
+  Button backButton=new Button(this);backButton.setText("ย้อนกลับหน้าก่อน");backButton.setOnClickListener(v->finish());content.addView(backButton);
   TextView title=new TextView(this);title.setText("unpaid".equals(screen)?"บิลค้างชำระ":"all".equals(screen)?"ประวัติการขายทั้งหมด":"บิลจ่ายแล้ว");title.setTextSize(22);title.setGravity(Gravity.CENTER);content.addView(title);
   worker.execute(()->{
    try{AppDatabase db=AppDatabase.getInstance(getApplicationContext());List<SaleEntity> rows="unpaid".equals(screen)?db.saleDao().unpaidCredit():"all".equals(screen)?db.saleDao().latest(200):db.saleDao().paid(200);
@@ -45,14 +46,13 @@ public final class HistoryActivity extends Activity {
   worker.execute(()->{
    try{AppDatabase db=AppDatabase.getInstance(getApplicationContext());SaleEntity sale=db.saleDao().findById(saleId);List<SaleLineEntity> lines=db.saleLineDao().forSale(saleId);long balance=db.saleBalanceDao().outstanding(saleId);List<SaleReturnEntity> returns=db.saleReturnDao().forSale(saleId);SaleCancelEntity cancellation=db.saleCancelDao().findForSale(saleId);java.util.Map<String,Long> remaining=new java.util.HashMap<>();for(SaleLineEntity line:lines){long returned=db.saleReturnLineDao().returnedQty(line.id);long cancelled=db.saleCancelLineDao().cancelledQty(line.id);remaining.put(line.id,Math.max(0,line.qty_milli-returned-cancelled));}
     runOnUiThread(()->{
-     content.removeAllViews();addText("รายละเอียดบิล");addText("เลขที่: "+sale.id);addText("ประเภท: "+sale.type);addText("สถานะชำระ: "+sale.payment_status);addText("สถานะบิล: "+sale.lifecycle_status);
+     content.removeAllViews();Button backToList=new Button(this);backToList.setText("ย้อนกลับรายการบิล");backToList.setOnClickListener(v->renderList());content.addView(backToList);addText("รายละเอียดบิล");addText("เลขที่: "+sale.id);addText("ประเภท: "+sale.type);addText("สถานะชำระ: "+sale.payment_status);addText("สถานะบิล: "+sale.lifecycle_status);
      for(SaleReturnEntity r:returns)addText("คืนสินค้า · "+r.reason+" · คืนเงิน "+money(r.cash_refund_satang)+" บาท · ลดหนี้ "+money(r.debt_reduction_satang)+" บาท · "+r.created_at_utc);
      if(cancellation!=null)addText("ยกเลิกบิล · "+cancellation.reason+" · คืนเงิน "+money(cancellation.cash_refund_satang)+" บาท · ลดหนี้ "+money(cancellation.debt_reduction_satang)+" บาท · "+cancellation.created_at_utc);
      for(SaleLineEntity line:lines){addText(line.name_snap+" × "+qty(line.qty_milli)+" = "+money(line.line_total_satang)+" บาท");if(!"CANCELLED".equals(sale.lifecycle_status)&&remaining.get(line.id)>0){Button ret=new Button(this);ret.setText("คืนสินค้า: "+line.name_snap+" (คงเหลือ "+qty(remaining.get(line.id))+")");ret.setOnClickListener(v->showReturnDialog(sale,line));content.addView(ret);}}
      addText("ยอดสินค้า: "+money(sale.subtotal_satang)+" บาท");addText("ค่าบริการ: "+money(sale.fee_total_satang)+" บาท");addText("ยอดรวม: "+money(sale.total_satang)+" บาท");addText("ยอดค้าง: "+money(balance)+" บาท");
      if("CREDIT".equals(sale.type)&&"UNPAID".equals(sale.payment_status)&&balance>0){Button pay=new Button(this);pay.setText("รับชำระเต็มยอดค้าง");pay.setOnClickListener(v->payDebt(sale.id));content.addView(pay);}
      if(!"CANCELLED".equals(sale.lifecycle_status)){Button cancel=new Button(this);cancel.setText("ยกเลิกบิลคงเหลือ");cancel.setOnClickListener(v->showCancelDialog(sale,lines));content.addView(cancel);}
-     Button back=new Button(this);back.setText("กลับรายการบิล");back.setOnClickListener(v->renderList());content.addView(back);
     });
    }catch(RuntimeException e){runOnUiThread(()->toast(msg(e)));}
   });
