@@ -42,7 +42,7 @@ final class OfflineBarcodeAnalyzer implements ImageAnalysis.Analyzer, AutoClosea
 
     @Override
     public void analyze(@NonNull ImageProxy imageProxy) {
-        if (closed || !enabled) {
+        if (closed) {
             imageProxy.close();
             return;
         }
@@ -55,13 +55,14 @@ final class OfflineBarcodeAnalyzer implements ImageAnalysis.Analyzer, AutoClosea
         try {
             scanner.process(input)
                     .addOnSuccessListener(callbackExecutor, barcodes -> {
+                        if (closed) return;
                         long now = SystemClock.elapsedRealtime();
                         boolean hasReadableBarcode = false;
                         for (Barcode barcode : barcodes) {
                             String raw = barcode.getRawValue();
                             if (raw == null || raw.trim().isEmpty()) continue;
                             hasReadableBarcode = true;
-                            if (emissionGate.shouldEmit(raw, now)) {
+                            if (enabled && emissionGate.shouldEmit(raw, now)) {
                                 listener.onBarcode(raw, barcode.getFormat());
                             }
                         }
@@ -83,10 +84,6 @@ final class OfflineBarcodeAnalyzer implements ImageAnalysis.Analyzer, AutoClosea
 
     void setEnabled(boolean enabled) {
         this.enabled = enabled;
-        if (enabled) {
-            emissionGate.reset();
-            lastBarcodeSeenAtMs = Long.MIN_VALUE;
-        }
     }
 
     @Override public void close() {
