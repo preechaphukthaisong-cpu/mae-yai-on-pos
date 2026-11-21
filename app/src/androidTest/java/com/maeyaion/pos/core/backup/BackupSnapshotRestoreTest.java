@@ -94,7 +94,7 @@ public final class BackupSnapshotRestoreTest {
         }
 
         File restoredByRecoveryKey = store.restoreToStaging(stagingDirectory, encrypted, null,
-                recoveryKey, new SQLiteStagedRestoreValidator(4));
+                recoveryKey, new SQLiteStagedRestoreValidator(5));
         assertTrue(restoredByRecoveryKey.isFile());
 
         AndroidKeystoreKeyProtector localProtector = new AndroidKeystoreKeyProtector();
