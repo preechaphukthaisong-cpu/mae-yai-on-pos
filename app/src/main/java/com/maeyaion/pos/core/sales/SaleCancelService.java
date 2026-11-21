@@ -86,7 +86,7 @@ public final class SaleCancelService {
    return header;
   });
  }
- private static long roundHalfUp(long a,long b,long d){if(d<=0)return 0;BigInteger[] q=BigInteger.valueOf(a).multiply(BigInteger.valueOf(b)).divideAndRemainder(BigInteger.valueOf(d));if(q[1].shiftLeft(1).compareTo(BigInteger.valueOf(d))>=0)q[0]=q[0].add(BigInteger.ONE);return q[0].longValueExact();}
+ private static long roundHalfUp(long a,long b,long d){if(d<=0)return 0;BigInteger[] q=BigInteger.valueOf(a).multiply(BigInteger.valueOf(b)).divideAndRemainder(BigInteger.valueOf(d));if(q[1].shiftLeft(1).compareTo(BigInteger.valueOf(d))>=0)q[0]=q[0].add(BigInteger.ONE);if(q[0].compareTo(BigInteger.valueOf(Long.MAX_VALUE))>0)throw new ArithmeticException("long overflow");return q[0].longValue();}
  private static void require(String s,String f){if(s==null||s.trim().isEmpty())throw new IllegalArgumentException(f+" is required");}
  private static String sha256(String s){try{byte[] d=MessageDigest.getInstance("SHA-256").digest(s.getBytes(StandardCharsets.UTF_8));StringBuilder b=new StringBuilder();for(byte v:d)b.append(String.format(Locale.ROOT,"%02x",v&255));return b.toString();}catch(Exception e){throw new IllegalStateException(e);}}
 }
