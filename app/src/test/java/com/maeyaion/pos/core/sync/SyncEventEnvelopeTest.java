@@ -11,7 +11,12 @@ public final class SyncEventEnvelopeTest {
         JSONObject data = new JSONObject();
         data.put("z", 9);
         data.put("a", "สินค้า");
-        data.put("lines", new JSONArray().put(new JSONObject().put("qtyMilli", 1500).put("sku", "A-1")));
+        JSONObject line = new JSONObject();
+        line.put("qtyMilli", 1500);
+        line.put("sku", "A-1");
+        JSONArray lines = new JSONArray();
+        lines.put(line);
+        data.put("lines", lines);
 
         SyncEventEnvelope event = SyncEventEnvelope.create(
                 "upsert", "sale", "sale-123", 0, data);
@@ -28,22 +33,28 @@ public final class SyncEventEnvelopeTest {
     }
 
     @Test public void canonicalChecksumDoesNotDependOnObjectInsertionOrder() throws Exception {
-        JSONObject first = new JSONObject().put("b", 2).put("a", 1);
-        JSONObject second = new JSONObject().put("a", 1).put("b", 2);
+        JSONObject first = new JSONObject();
+        first.put("b", 2);
+        first.put("a", 1);
+        JSONObject second = new JSONObject();
+        second.put("a", 1);
+        second.put("b", 2);
         SyncEventEnvelope a = SyncEventEnvelope.create("upsert", "product", "SKU-1", 0, first);
         SyncEventEnvelope b = SyncEventEnvelope.create("upsert", "product", "SKU-1", 0, second);
         assertEquals(a.payloadSha256, b.payloadSha256);
     }
 
     @Test public void rejectsUnsupportedOperationAndInvalidEntityVersion() throws Exception {
-        JSONObject data = new JSONObject().put("name", "สินค้า");
+        JSONObject data = new JSONObject();
+        data.put("name", "สินค้า");
         expectInvalid("merge", "product", "SKU-1", 0, data);
         expectInvalid("upsert", "Product", "SKU-1", 0, data);
         expectInvalid("upsert", "product", "SKU-1", -1, data);
     }
 
     @Test public void rejectsFloatingPointPayloadValuesToKeepWireHashDeterministic() throws Exception {
-        JSONObject data = new JSONObject().put("price", 12.5d);
+        JSONObject data = new JSONObject();
+        data.put("price", 12.5d);
         expectInvalid("upsert", "product", "SKU-1", 0, data);
     }
 
