@@ -65,7 +65,7 @@ public final class InventoryService {
                             + "\",\"name\":\"" + escape(name) + "\",\"price_satang\":" + priceSatang
                             + ",\"cost_satang\":" + costSatang + ",\"unit\":\"" + escape(unit)
                             + "\",\"stock_limit_qty_milli\":" + (stockLimitQtyMilli == null ? "null" : stockLimitQtyMilli) + "}", nowUtc);
-            appendStock(operationId, product, receivedQtyMilli, "RECEIVE", nowUtc);
+            appendStock(UUID.randomUUID().toString(), product, receivedQtyMilli, "RECEIVE", nowUtc);
             return products.findBySku(sku);
         });
     }
