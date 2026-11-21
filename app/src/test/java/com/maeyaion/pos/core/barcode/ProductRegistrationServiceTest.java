@@ -245,6 +245,13 @@ public final class ProductRegistrationServiceTest {
             return null;
         }
         @Override public List<ProductEntity> listActive() { return new ArrayList<>(values.values()); }
+        @Override public List<ProductEntity> listActiveByStockAscending() { return listActive(); }
+        @Override public List<ProductEntity> listBelowStockLimit() { return new ArrayList<>(); }
+        @Override public int update(ProductEntity product) {
+            if (!values.containsKey(product.sku)) return 0;
+            values.put(product.sku, product);
+            return 1;
+        }
         @Override public void insert(ProductEntity product) {
             if (failInsert) throw new IllegalStateException("simulated_product_insert_failure");
             if (values.putIfAbsent(product.sku, product) != null) {
