@@ -101,7 +101,7 @@ public final class SyncApiClient {
 
     public void revokeDevice(@NonNull String deviceId) throws SyncException {
         if (!isUuid(deviceId)) throw new SyncException("Invalid device ID");
-        requestJson("DELETE", "/v1/devices/" + deviceId, null, false);
+        requestJson("DELETE", "/v1/devices/" + deviceId, null, true);
     }
 
     @NonNull public JSONObject listBackups() throws SyncException {
