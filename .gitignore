@@ -11,4 +11,7 @@ captures/
 *.jks
 *.keystore
 secrets.properties
-\n# Backend runtime secrets and dependencies\nbackend/.env\n**/node_modules/\n
+
+# Backend runtime secrets and dependencies
+backend/.env
+**/node_modules/
