@@ -10,7 +10,6 @@ import androidx.annotation.NonNull;
 
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.EncodeHintType;
-import com.google.zxing.WriterException;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.oned.Code128Writer;
 
@@ -48,12 +47,8 @@ public final class BarcodeImageGenerator {
         Map<EncodeHintType, Object> hints = new EnumMap<>(EncodeHintType.class);
         hints.put(EncodeHintType.MARGIN, 16);
         final BitMatrix matrix;
-        try {
-            matrix = new Code128Writer().encode(value, BarcodeFormat.CODE_128,
-                    width, BAR_HEIGHT, hints);
-        } catch (WriterException invalid) {
-            throw new IllegalArgumentException("Barcode cannot be encoded", invalid);
-        }
+        matrix = new Code128Writer().encode(value, BarcodeFormat.CODE_128,
+                width, BAR_HEIGHT, hints);
 
         Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
