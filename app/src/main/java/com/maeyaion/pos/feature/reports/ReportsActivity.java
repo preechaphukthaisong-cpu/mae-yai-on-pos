@@ -23,8 +23,9 @@ public final class ReportsActivity extends Activity {
  private final ExecutorService worker=Executors.newSingleThreadExecutor();private LinearLayout content,results;private int loadGeneration;private String screen;private android.widget.EditText fromInput,toInput;
  @Override protected void onCreate(Bundle state){super.onCreate(state);screen=getIntent().getStringExtra(ReportsRoute.EXTRA_SCREEN);render();}
  private void render(){
-  ScrollView scroll=new ScrollView(this);content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(18),dp(16),dp(18),dp(24));content.setBackgroundColor(getColor(com.maeyaion.pos.R.color.pos_background));scroll.addView(content);setContentView(scroll);
-  android.widget.Button backButton=new android.widget.Button(this);backButton.setText("ย้อนกลับ");backButton.setOnClickListener(v->finish());content.addView(backButton);
+  LinearLayout screenRoot=new LinearLayout(this);screenRoot.setOrientation(LinearLayout.VERTICAL);
+  ScrollView scroll=new ScrollView(this);scroll.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,0,1f));content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(18),dp(16),dp(18),dp(24));content.setBackgroundColor(getColor(com.maeyaion.pos.R.color.pos_background));scroll.addView(content);screenRoot.addView(scroll);setContentView(screenRoot);
+  android.widget.Button backButton=new android.widget.Button(this);backButton.setText("ย้อนกลับ");backButton.setOnClickListener(v->finish());LinearLayout.LayoutParams backParams=new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,dp(56));backParams.setMargins(dp(16),dp(8),dp(16),dp(12));screenRoot.addView(backButton,backParams);
   TextView title=new TextView(this);title.setText("รายงานยอดขาย · "+label(screen));title.setTextSize(23);title.setTextColor(getColor(com.maeyaion.pos.R.color.pos_forest));title.setTypeface(android.graphics.Typeface.DEFAULT,android.graphics.Typeface.BOLD);title.setGravity(Gravity.CENTER);title.setPadding(0,dp(12),0,dp(18));content.addView(title);
   results=new LinearLayout(this);results.setOrientation(LinearLayout.VERTICAL);content.addView(results);
   if("monthly".equals(screen)){
