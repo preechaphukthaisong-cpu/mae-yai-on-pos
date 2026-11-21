@@ -370,6 +370,7 @@ async function handle(req, res) {
          connected_by_google_sub = EXCLUDED.connected_by_google_sub, updated_at = now()`,
       [context.store_id, credentials.ciphertext, credentials.iv, credentials.tag, identity.sub]
     );
+    setImmediate(() => void sweepPendingDriveMirrors());
     return send(res, 200, { connected: true, account: profile.email });
   }
   if (req.method === 'DELETE' && url.pathname.startsWith('/v1/devices/')) {
@@ -393,6 +394,33 @@ async function handle(req, res) {
   throw new HttpError(404, 'Route not found');
 }
 
+let mirrorSweepRunning = false;
+async function sweepPendingDriveMirrors() {
+  if (mirrorSweepRunning) return;
+  mirrorSweepRunning = true;
+  try {
+    const pending = await pool.query(
+      `SELECT b.store_id, b.id
+         FROM backup_snapshots b
+         JOIN drive_connections d ON d.store_id = b.store_id
+        WHERE b.drive_file_id IS NULL
+        ORDER BY b.created_at ASC
+        LIMIT 10`
+    );
+    for (const item of pending.rows) {
+      try {
+        await mirrorSnapshot(pool, item.store_id, item.id);
+      } catch (error) {
+        console.error('Drive mirror retry failed for snapshot', item.id, error.message);
+      }
+    }
+  } catch (error) {
+    console.error('Drive mirror recovery scan failed:', error.message);
+  } finally {
+    mirrorSweepRunning = false;
+  }
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     await handle(req, res);
@@ -409,9 +437,13 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log('Maeyai POS sync backend listening on port ' + PORT);
+  void sweepPendingDriveMirrors();
 });
+const mirrorSweepTimer = setInterval(() => void sweepPendingDriveMirrors(), 30_000);
+mirrorSweepTimer.unref();
 
 async function shutdown() {
+  clearInterval(mirrorSweepTimer);
   server.close();
   await pool.end();
 }
