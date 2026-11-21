@@ -132,9 +132,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [refreshToken]
+              required: [serverAuthCode]
               properties:
-                refreshToken: { type: string, minLength: 20 }
+                serverAuthCode: { type: string, minLength: 20, maxLength: 4096 }
       responses:
         '200': { description: Refresh token encrypted and Drive identity verified }
         '403': { description: Google account or Drive scope mismatch }
