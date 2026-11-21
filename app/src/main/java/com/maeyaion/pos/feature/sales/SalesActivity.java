@@ -17,6 +17,7 @@ import android.widget.Toast;
 import com.maeyaion.pos.core.db.AppDatabase;
 import com.maeyaion.pos.core.db.CustomerEntity;
 import com.maeyaion.pos.core.db.ProductEntity;
+import com.maeyaion.pos.core.db.SaleEntity;
 import com.maeyaion.pos.core.money.SaleCalculator;
 import com.maeyaion.pos.core.scanner.OfflineBarcodeScanner;
 import com.maeyaion.pos.core.speech.ThaiSpeechService;
