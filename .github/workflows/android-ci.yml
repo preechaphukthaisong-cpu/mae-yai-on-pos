@@ -61,13 +61,20 @@ jobs:
         run: gradle --no-daemon :app:testDebugUnitTest
       - name: Assemble debug APK
         run: gradle --no-daemon :app:assembleDebug
+      - name: Upload generated Room schema v5 for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: mae-yai-on-pos-room-schema-v5-generated
+          path: app/schemas/com.maeyaion.pos.core.db.AppDatabase/5.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Verify Room schema export
         shell: bash
         run: |
           set -euo pipefail
-          SCHEMA_FILE="app/schemas/com.maeyaion.pos.core.db.AppDatabase/4.json"
+          SCHEMA_FILE="app/schemas/com.maeyaion.pos.core.db.AppDatabase/5.json"
           test -s "$SCHEMA_FILE" || {
-            echo "::error::Room schema v4 was not generated at $SCHEMA_FILE"
+            echo "::error::Room schema v5 was not generated at $SCHEMA_FILE"
             find app/schemas -type f -print || true
             exit 1
           }
@@ -77,7 +84,7 @@ jobs:
           import subprocess
           from pathlib import Path
 
-          schema_path = "app/schemas/com.maeyaion.pos.core.db.AppDatabase/4.json"
+          schema_path = "app/schemas/com.maeyaion.pos.core.db.AppDatabase/5.json"
           generated = json.loads(Path(schema_path).read_text(encoding="utf-8"))
           committed_text = subprocess.check_output(
               ["git", "show", f"HEAD:{schema_path}"], text=True
@@ -91,8 +98,8 @@ jobs:
       - name: Upload Room schema
         uses: actions/upload-artifact@v4
         with:
-          name: mae-yai-on-pos-room-schema-v4
-          path: app/schemas/com.maeyaion.pos.core.db.AppDatabase/4.json
+          name: mae-yai-on-pos-room-schema-v5
+          path: app/schemas/com.maeyaion.pos.core.db.AppDatabase/5.json
           if-no-files-found: error
           retention-days: 30
       - name: Upload debug APK
