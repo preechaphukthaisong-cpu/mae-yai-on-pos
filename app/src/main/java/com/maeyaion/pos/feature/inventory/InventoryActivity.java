@@ -108,19 +108,38 @@ public final class InventoryActivity extends ComponentActivity {
         TextView scanned = text("สแกนบาร์โค้ดสินค้าเดิมเพื่อรับเข้า หากไม่พบจะเปิดแบบฟอร์มสินค้าใหม่");
         page.addView(scanned);
         addButton("สแกนบาร์โค้ด", () -> startScan(barcode -> {
-            ProductEntity product = inventory.findByBarcode(barcode);
-            if (product != null) {
-                try {
-                    long qty = quantityMilli(quantity.getText().toString());
-                    ProductEntity updated = inventory.receive(UUID.randomUUID().toString(),
-                            barcode, qty, now());
-                    toast("รับสินค้าเพิ่มแล้ว: " + updated.name + " คงเหลือ " + quantityText(updated.stockQtyMilli));
-                    render("receive");
-                } catch (RuntimeException error) { toast(message(error)); }
-            } else {
-                toast("ไม่พบสินค้า เปิดแบบฟอร์มเพิ่มสินค้าใหม่");
-                renderNewProduct(barcode, quantity.getText().toString());
+            final String quantityText = quantity.getText().toString();
+            final long receivedQty;
+            try {
+                receivedQty = quantityMilli(quantityText);
+                if (receivedQty <= 0) throw new IllegalArgumentException("จำนวนรับต้องมากกว่า 0");
+            } catch (RuntimeException invalid) {
+                toast(message(invalid));
+                return;
             }
+            toast("กำลังตรวจสอบบาร์โค้ด...");
+            ioExecutor.execute(() -> {
+                try {
+                    ProductEntity product = inventory.findByBarcode(barcode);
+                    if (product != null) {
+                        ProductEntity updated = inventory.receive(UUID.randomUUID().toString(),
+                                barcode, receivedQty, now());
+                        runOnUiThread(() -> {
+                            if (isFinishing() || isDestroyed()) return;
+                            toast("รับสินค้าเพิ่มแล้ว: " + updated.name + " คงเหลือ " + quantityText(updated.stockQtyMilli));
+                            render("receive");
+                        });
+                    } else {
+                        runOnUiThread(() -> {
+                            if (isFinishing() || isDestroyed()) return;
+                            toast("ไม่พบสินค้า เปิดแบบฟอร์มเพิ่มสินค้าใหม่");
+                            renderNewProduct(barcode, quantityText);
+                        });
+                    }
+                } catch (RuntimeException error) {
+                    runOnUiThread(() -> { if (!isFinishing() && !isDestroyed()) toast(message(error)); });
+                }
+            });
         }));
     }
 
@@ -132,23 +151,50 @@ public final class InventoryActivity extends ComponentActivity {
         EditText unit = field("หน่วยนับ *", "ชิ้น");
         EditText limit = field("สต็อกขั้นต่ำ *", "");
         EditText qty = field("จำนวนรับเข้า *", defaultQty);
-        addButton("บันทึกสินค้าและรับเข้าคลัง", () -> {
+        Button saveButton = new Button(this);
+        saveButton.setText("บันทึกสินค้าและรับเข้าคลัง");
+        page.addView(saveButton);
+        saveButton.setOnClickListener(v -> {
+            final String productName;
+            final String productUnit;
+            final long priceSatang;
+            final long limitMilli;
+            final long receivedMilli;
             try {
-                String productName = required(name, "กรอกชื่อสินค้า");
-                String productUnit = required(unit, "กรอกหน่วยนับ");
-                long priceSatang = moneySatang(price.getText().toString());
-                long costSatang = 0L;
-                long limitMilli = quantityMilli(required(limit, "กรอกสต็อกขั้นต่ำ"));
+                productName = required(name, "กรอกชื่อสินค้า");
+                productUnit = required(unit, "กรอกหน่วยนับ");
+                priceSatang = moneySatang(price.getText().toString());
+                limitMilli = quantityMilli(required(limit, "กรอกสต็อกขั้นต่ำ"));
                 if (limitMilli <= 0) throw new IllegalArgumentException("สต็อกขั้นต่ำต้องมากกว่า 0");
-                long receivedMilli = quantityMilli(qty.getText().toString());
-                String sku = "SKU-" + UUID.randomUUID().toString().toUpperCase(Locale.ROOT);
-                ProductEntity created = inventory.createAndReceiveWithBarcode(UUID.randomUUID().toString(),
-                        sku, scannedBarcode, productName, priceSatang, costSatang, productUnit,
-                        limitMilli, receivedMilli, now());
-                speakNewProduct();
-                toast("บันทึกสินค้าแล้ว บาร์โค้ด " + created.barcode);
-                render("all");
-            } catch (RuntimeException error) { toast(message(error)); }
+                receivedMilli = quantityMilli(qty.getText().toString());
+                if (receivedMilli <= 0) throw new IllegalArgumentException("จำนวนรับเข้าต้องมากกว่า 0");
+            } catch (RuntimeException invalid) {
+                toast(message(invalid));
+                return;
+            }
+            saveButton.setEnabled(false);
+            saveButton.setText("กำลังบันทึก...");
+            final String sku = "SKU-" + UUID.randomUUID().toString().toUpperCase(Locale.ROOT);
+            ioExecutor.execute(() -> {
+                try {
+                    ProductEntity created = inventory.createAndReceiveWithBarcode(UUID.randomUUID().toString(),
+                            sku, scannedBarcode, productName, priceSatang, 0L, productUnit,
+                            limitMilli, receivedMilli, now());
+                    runOnUiThread(() -> {
+                        if (isFinishing() || isDestroyed()) return;
+                        speakNewProduct();
+                        toast("บันทึกสินค้าแล้ว บาร์โค้ด " + created.barcode);
+                        render("all");
+                    });
+                } catch (RuntimeException error) {
+                    runOnUiThread(() -> {
+                        if (isFinishing() || isDestroyed()) return;
+                        saveButton.setEnabled(true);
+                        saveButton.setText("บันทึกสินค้าและรับเข้าคลัง");
+                        toast(message(error));
+                    });
+                }
+            });
         });
     }
 
