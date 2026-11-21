@@ -26,12 +26,12 @@ public final class StoreService {
    ProductEntity old=db.productDao().findBySku(sku);
    if(old==null)throw new IllegalArgumentException("ไม่พบสินค้า");
    if(old.priceSatang==newPriceSatang)return old;
+   db.priceHistoryDao().append(new PriceHistoryEntity(UUID.randomUUID().toString(),sku,
+    old.priceSatang,newPriceSatang,changedAtUtc));
    ProductEntity changed=new ProductEntity(old.sku,old.barcode,old.name,newPriceSatang,
     old.costSatang,old.unit,old.stockLimitQtyMilli,old.stockQtyMilli,old.isActive,
     old.createdAtUtc,changedAtUtc);
    if(db.productDao().update(changed)!=1)throw new IllegalStateException("ไม่สามารถบันทึกราคาใหม่");
-   db.priceHistoryDao().append(new PriceHistoryEntity(UUID.randomUUID().toString(),sku,
-    old.priceSatang,newPriceSatang,changedAtUtc));
    String payload="{\"sku\":"+JSONObject.quote(sku)+",\"old_price_satang\":"+old.priceSatang+
     ",\"new_price_satang\":"+newPriceSatang+"}";
    db.opLogDao().append(new OpLogEntity(UUID.randomUUID().toString(),"PRICE_CHANGED","PRODUCT",sku,payload,changedAtUtc));
