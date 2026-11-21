@@ -99,6 +99,24 @@ public final class SyncInboxProcessor {
                         throw new SyncException("Remote event sequence gap; refusing to advance cursor");
                     }
 
+                    com.maeyaion.pos.core.db.SyncOutboxEntity localEvent =
+                            dao.outboxEvent(event.event_id);
+                    if (localEvent != null && "ACKNOWLEDGED".equals(localEvent.delivery_state)) {
+                        SyncEntityVersionEntity localVersion =
+                                dao.entityVersion(event.entity_type, event.entity_id);
+                        if (!localEvent.store_id.equals(event.store_id)
+                                || !localEvent.payload_sha256.equalsIgnoreCase(event.payload_sha256)
+                                || localVersion == null || localVersion.version < event.entity_version) {
+                            throw new SyncException("Server echo does not match the acknowledged local event");
+                        }
+                        if (dao.markRemoteApplied(event.event_id) != 1) {
+                            throw new SyncException("Local event echo acknowledgement was not persisted");
+                        }
+                        dao.saveCursor(new SyncCursorEntity(storeId, event.server_sequence, nowUtc));
+                        applied[0] = true;
+                        return;
+                    }
+
                     SyncEntityVersionEntity current = dao.entityVersion(event.entity_type, event.entity_id);
                     long localVersion = current == null ? 0 : current.version;
                     if (localVersion != event.base_version) {
