@@ -42,6 +42,9 @@ public interface SyncQueueDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void saveEntityVersion(SyncEntityVersionEntity version);
 
+    @Query("UPDATE sync_outbox SET store_id=:storeId WHERE store_id='__UNBOUND__'")
+    int bindUnboundOutbox(String storeId);
+
     @Query("SELECT COUNT(*) FROM sync_outbox WHERE store_id=:storeId AND delivery_state='PENDING'")
     long pendingOutboxCount(String storeId);
 
