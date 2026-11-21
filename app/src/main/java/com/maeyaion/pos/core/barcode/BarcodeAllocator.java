@@ -48,6 +48,19 @@ public final class BarcodeAllocator {
         return entity;
     }
 
+    /** Reuses an already registered barcode or registers it, within the caller's transaction. */
+    @NonNull
+    public BarcodeRegistryEntity registerOrGetManufacturerInTransaction(@NonNull String barcode,
+            @NonNull String displayName, long priceSatang, @NonNull String createdAtUtc) {
+        validate(barcode, displayName, priceSatang, createdAtUtc);
+        BarcodeRegistryEntity existing = registryDao.findByBarcode(barcode);
+        if (existing != null) return existing;
+        BarcodeRegistryEntity entity = new BarcodeRegistryEntity(
+                barcode, displayName, priceSatang, "MANUFACTURER", createdAtUtc);
+        registryDao.insert(entity);
+        return entity;
+    }
+
     @NonNull
     public BarcodeRegistryEntity allocateSystem(@NonNull String displayName,
             long priceSatang, @NonNull String createdAtUtc) {
