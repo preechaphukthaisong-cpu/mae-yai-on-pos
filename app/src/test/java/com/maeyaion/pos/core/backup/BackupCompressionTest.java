@@ -48,7 +48,7 @@ public class BackupCompressionTest {
     }
 
     @Test
-    public void rejectsExpandedPayloadAboveConfiguredLimit() throws Exception {
+    public void copiesLegacyUncompressedPayload() throws Exception {
         File directory = Files.createTempDirectory("maeyai-backup-limit").toFile();
         File source = new File(directory, "snapshot.db");
         Files.write(source.toPath(), "SQLite format 3".getBytes(StandardCharsets.US_ASCII));
