@@ -20,12 +20,29 @@ import java.util.concurrent.Executors;
 
 /** Daily, weekly, monthly and product ranking reports from persisted summary ledgers. */
 public final class ReportsActivity extends Activity {
- private final ExecutorService worker=Executors.newSingleThreadExecutor();private LinearLayout content;private String screen;
+ private final ExecutorService worker=Executors.newSingleThreadExecutor();private LinearLayout content;private String screen;private android.widget.EditText fromInput,toInput;
  @Override protected void onCreate(Bundle state){super.onCreate(state);screen=getIntent().getStringExtra(ReportsRoute.EXTRA_SCREEN);render();}
  private void render(){
   ScrollView scroll=new ScrollView(this);content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(20,16,20,24);scroll.addView(content);setContentView(scroll);
   TextView title=new TextView(this);title.setText("รายงานยอดขาย · "+label(screen));title.setTextSize(22);title.setGravity(Gravity.CENTER);content.addView(title);
+  if("monthly".equals(screen)){
+   LocalDate today=LocalDate.now(ZoneId.of("Asia/Bangkok"));
+   fromInput=new android.widget.EditText(this);fromInput.setSingleLine(true);fromInput.setHint("วันที่เริ่ม YYYY-MM-DD");fromInput.setText(today.withDayOfMonth(1).toString());content.addView(fromInput);
+   toInput=new android.widget.EditText(this);toInput.setSingleLine(true);toInput.setHint("วันที่สิ้นสุด YYYY-MM-DD");toInput.setText(today.toString());content.addView(toInput);
+   android.widget.Button custom=new android.widget.Button(this);custom.setText("ดูรายงานตามช่วงวันที่");content.addView(custom);custom.setOnClickListener(v->loadCustomRange());
+  }
   load();
+ }
+
+ private void loadCustomRange(){
+  final LocalDate from,to;
+  try{from=LocalDate.parse(fromInput.getText().toString().trim());to=LocalDate.parse(toInput.getText().toString().trim());if(from.isAfter(to))throw new IllegalArgumentException("วันที่เริ่มต้องไม่เกินวันที่สิ้นสุด");}
+  catch(RuntimeException e){Toast.makeText(this,"รูปแบบวันที่ไม่ถูกต้อง ใช้ YYYY-MM-DD",Toast.LENGTH_LONG).show();return;}
+  worker.execute(()->{try{List<DailySummaryEntity> rows=AppDatabase.getInstance(getApplicationContext()).dailySummaryDao().range(from.toString(),to.toString());runOnUiThread(()->{
+   long net=0;for(DailySummaryEntity r:rows){net=Math.addExact(net,r.net_sales_satang);addText(r.business_date+" · "+money(r.net_sales_satang)+" บาท");}
+   addText("ยอดสุทธิรวม "+from+" ถึง "+to+" = "+money(net)+" บาท");
+   if(rows.isEmpty())addText("ยังไม่มีข้อมูลยอดขาย");
+  });}catch(RuntimeException e){runOnUiThread(()->Toast.makeText(this,e.getMessage()==null?"โหลดรายงานไม่สำเร็จ":e.getMessage(),Toast.LENGTH_LONG).show());}});
  }
  private void load(){
   worker.execute(()->{try{
