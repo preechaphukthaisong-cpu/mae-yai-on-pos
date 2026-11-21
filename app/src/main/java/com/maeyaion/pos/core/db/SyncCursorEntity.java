@@ -9,7 +9,7 @@ import androidx.room.PrimaryKey;
 @Entity(tableName = "sync_cursor")
 public final class SyncCursorEntity {
     @PrimaryKey @NonNull @ColumnInfo(name = "store_id") public final String store_id;
-    @ColumnInfo(name = "last_applied_sequence") public final long last_applied_sequence;
+    @ColumnInfo(name = "last_applied_sequence", defaultValue = "0") public final long last_applied_sequence;
     @NonNull @ColumnInfo(name = "updated_at_utc") public final String updated_at_utc;
 
     public SyncCursorEntity(@NonNull String store_id, long last_applied_sequence,
