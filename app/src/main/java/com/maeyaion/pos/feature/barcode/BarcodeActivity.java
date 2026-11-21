@@ -102,6 +102,7 @@ public final class BarcodeActivity extends Activity {
             createButton.setVisibility(View.GONE);
             resultText.setVisibility(View.GONE);
             barcodeImage.setVisibility(View.GONE);
+            exportButton.setVisibility(View.GONE);
         }
     }
 
@@ -173,7 +174,7 @@ public final class BarcodeActivity extends Activity {
                 List<BarcodeRegistryEntity> rows = AppDatabase.getInstance(getApplicationContext())
                         .barcodeRegistryDao().listAll();
                 runOnUiThread(() -> {
-                    final int firstCatalogChild = 8;
+                    final int firstCatalogChild = 9;
                     while (content.getChildCount() > firstCatalogChild) {
                         content.removeViewAt(firstCatalogChild);
                     }
