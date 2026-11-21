@@ -25,11 +25,12 @@ import java.util.concurrent.Executors;
 /** Product price maintenance and immutable change history. */
 public final class StoreActivity extends Activity {
  private final ExecutorService worker=Executors.newSingleThreadExecutor();
- private EditText skuInput,priceInput;private LinearLayout content,productList,historyContent;private int historyGeneration;private String screen;
+ private EditText skuInput,priceInput;private LinearLayout content,productList,historyContent,screenRoot;private int historyGeneration;private String screen;
  @Override protected void onCreate(Bundle state){super.onCreate(state);screen=getIntent().getStringExtra(StoreRoute.EXTRA_SCREEN);render();}
  private void render(){
-  ScrollView scroll=new ScrollView(this);content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(18),dp(16),dp(18),dp(24));content.setBackgroundColor(getColor(com.maeyaion.pos.R.color.pos_background));scroll.addView(content);setContentView(scroll);
-  Button backButton=new Button(this);backButton.setText("ย้อนกลับ");backButton.setOnClickListener(v->finish());content.addView(backButton);
+  screenRoot=new LinearLayout(this);screenRoot.setOrientation(LinearLayout.VERTICAL);
+  ScrollView scroll=new ScrollView(this);scroll.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,0,1f));content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(18),dp(16),dp(18),dp(24));content.setBackgroundColor(getColor(com.maeyaion.pos.R.color.pos_background));scroll.addView(content);screenRoot.addView(scroll);setContentView(screenRoot);
+  Button backButton=new Button(this);backButton.setText("ย้อนกลับ");backButton.setOnClickListener(v->finish());LinearLayout.LayoutParams backParams=new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,dp(56));backParams.setMargins(dp(16),dp(8),dp(16),dp(12));screenRoot.addView(backButton,backParams);
   TextView title=new TextView(this);title.setText("history".equals(screen)?"ประวัติราคา":"แก้ไขราคาขาย");title.setTextSize(23);title.setTextColor(getColor(com.maeyaion.pos.R.color.pos_forest));title.setTypeface(android.graphics.Typeface.DEFAULT,android.graphics.Typeface.BOLD);title.setGravity(Gravity.CENTER);title.setPadding(0,dp(12),0,dp(18));content.addView(title);
   skuInput=field("SKU สินค้า");priceInput=field("ราคาขายใหม่ (บาท)");
   if(!"history".equals(screen)){Button save=new Button(this);save.setText("บันทึกราคาใหม่");content.addView(save);save.setOnClickListener(v->savePrice());}
