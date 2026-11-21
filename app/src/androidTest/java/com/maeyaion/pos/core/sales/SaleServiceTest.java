@@ -76,4 +76,20 @@ public final class SaleServiceTest {
   assertEquals(0L,db.dailySummaryDao().find("2026-11-21").net_sales_satang);
   assertEquals(4,db.stockLogDao().historyForSku(p.sku).size());
  }
+
+ @Test public void dailyAndProductRankingReportsReadCommittedSales(){
+  ProductEntity high=InventoryServiceFactory.create(db).createAndReceive(UUID.randomUUID().toString(),
+   "SKU-REPORT-HIGH","สินค้าขายดี",1000,500,"ชิ้น",null,5000,NOW);
+  ProductEntity low=InventoryServiceFactory.create(db).createAndReceive(UUID.randomUUID().toString(),
+   "SKU-REPORT-LOW","สินค้าขายน้อย",2000,1000,"ชิ้น",null,5000,NOW);
+  SaleService sales=new SaleService(db,tx);
+  sales.checkout("report-high",SaleCalculator.SaleType.CASH,null,Collections.singletonMap(high.sku,3000L),5000L,NOW);
+  sales.checkout("report-low",SaleCalculator.SaleType.CASH,null,Collections.singletonMap(low.sku,1000L),5000L,NOW);
+  List<ProductRankRow> top=db.productDailyDao().topSellers("2026-11-21","2026-11-21");
+  List<ProductRankRow> bottom=db.productDailyDao().leastSellers("2026-11-21","2026-11-21");
+  assertEquals(high.sku,top.get(0).sku);
+  assertEquals(low.sku,bottom.get(0).sku);
+  DailySummaryEntity summary=db.dailySummaryDao().find("2026-11-21");
+  assertNotNull(summary);assertEquals(5000L,summary.cash_sales_satang);assertEquals(5000L,summary.net_sales_satang);
+ }
 }
