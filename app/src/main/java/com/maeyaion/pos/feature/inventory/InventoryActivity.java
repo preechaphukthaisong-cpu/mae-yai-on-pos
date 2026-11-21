@@ -69,8 +69,7 @@ public final class InventoryActivity extends ComponentActivity {
         page.setOrientation(LinearLayout.VERTICAL);
         page.setPadding(dp(20), dp(18), dp(20), dp(24));
         page.setBackgroundColor(getColor(com.maeyaion.pos.R.color.pos_background));
-        addButton("menu".equals(screen) ? "ย้อนกลับหน้าหลัก" : "ย้อนกลับเมนูคลังสินค้า",
-                () -> { if ("menu".equals(screen)) finish(); else render("menu"); });
+        
         switch (screen) {
             case "receive": renderReceive(); break;
             case "all": renderAll(); break;
@@ -79,10 +78,20 @@ public final class InventoryActivity extends ComponentActivity {
             case "history": renderHistory(); break;
             default: renderMenu(); break;
         }
+        LinearLayout screenRoot = new LinearLayout(this);
+        screenRoot.setOrientation(LinearLayout.VERTICAL);
         ScrollView scroll = new ScrollView(this);
+        scroll.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
         scroll.setFillViewport(true);
         scroll.addView(page);
-        setContentView(scroll);
+        screenRoot.addView(scroll);
+        Button backButton = new Button(this);
+        backButton.setText("menu".equals(screen) ? "ย้อนกลับหน้าหลัก" : "ย้อนกลับเมนูคลังสินค้า");
+        backButton.setOnClickListener(v -> { if ("menu".equals(screen)) finish(); else render("menu"); });
+        LinearLayout.LayoutParams backParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(56));
+        backParams.setMargins(dp(16), dp(8), dp(16), dp(12));
+        screenRoot.addView(backButton, backParams);
+        setContentView(screenRoot);
     }
 
     private void renderMenu() {
