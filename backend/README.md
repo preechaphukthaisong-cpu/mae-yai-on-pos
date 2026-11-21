@@ -45,3 +45,7 @@ All authenticated requests use Authorization: Bearer <Google ID token>. Device-s
 ## Deployment is not activation
 
 The backend requires a real PostgreSQL instance, HTTPS hosting, OAuth client configuration, and secret provisioning. This repository change does not create cloud infrastructure, does not contain credentials, and does not activate multi-device sync in the Android UI. The Android client must still implement durable local outbox/inbox processing, event-to-Room mapping, conflict resolution UX, device registration, Drive connection, snapshot upload/download, and restore validation before this service can be used by the shop.
+
+## Security boundary before production
+
+The encrypted full-backup blob and stored Drive refresh token are encrypted at rest by this implementation. Sync event payloads are currently JSON in PostgreSQL, not end-to-end encrypted. Production must use HTTPS, a private database network, managed PostgreSQL disk encryption, strict database access, and encrypted database backups. The token-encryption master key is supplied through deployment configuration; a managed KMS/HSM integration and key rotation workflow are not yet implemented. Do not deploy with public database access or treat this draft as a completed security review.
