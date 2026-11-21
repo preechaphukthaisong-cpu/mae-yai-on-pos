@@ -63,6 +63,7 @@ public abstract class AppDatabase extends RoomDatabase {
                 db.execSQL("INSERT OR IGNORE INTO barcode_counter (id, next_value) VALUES (1, 2000001)");
                 DatabaseGuards.installCore(db);
                 DatabaseGuards.installBackupJournal(db);
+                DatabaseGuards.installBusiness(db);
             }
 
             @Override
