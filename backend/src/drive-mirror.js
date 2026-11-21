@@ -64,7 +64,7 @@ async function uploadAppDataFile(accessToken, snapshot) {
 }
 
 function cryptoRandomBoundary() {
-  return Array.from(crypto.getRandomValues(new Uint8Array(18)), b => b.toString(16).padStart(2, '0')).join('');
+  return crypto.randomBytes(18).toString('hex');
 }
 
 async function deleteDriveFile(accessToken, fileId) {
