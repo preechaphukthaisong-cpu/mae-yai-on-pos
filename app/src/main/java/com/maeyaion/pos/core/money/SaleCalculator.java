@@ -123,7 +123,10 @@ public final class SaleCalculator {
         BigInteger[] qr = numerator.divideAndRemainder(BigInteger.valueOf(divisor));
         BigInteger rounded = qr[1].shiftLeft(1).compareTo(BigInteger.valueOf(divisor)) >= 0
                 ? qr[0].add(BigInteger.ONE) : qr[0];
-        return rounded.longValueExact();
+        if (rounded.compareTo(BigInteger.valueOf(Long.MAX_VALUE)) > 0) {
+            throw new ArithmeticException("long overflow");
+        }
+        return rounded.longValue();
     }
 
     private static String requireText(String value, String label) {
