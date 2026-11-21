@@ -117,7 +117,7 @@ public final class SyncEventEnvelope {
             for (int i = 0; i < keys.size(); i++) {
                 if (i > 0) out.append(',');
                 String key = keys.get(i);
-                out.append(JSONObject.quote(key)).append(':')
+                out.append(quoteJsonString(key)).append(':')
                         .append(canonicalJson(object.opt(key)));
             }
             return out.append('}').toString();
@@ -131,11 +131,41 @@ public final class SyncEventEnvelope {
             }
             return out.append(']').toString();
         }
-        if (value instanceof String) return JSONObject.quote((String) value);
+        if (value instanceof String) return quoteJsonString((String) value);
         if (value instanceof Boolean || value instanceof Integer
                 || value instanceof Long || value instanceof Short
                 || value instanceof Byte) return String.valueOf(value);
         throw new SyncException("Sync payload supports only JSON strings, booleans, integers, arrays, objects, and null");
+    }
+
+    /** JSON string escaping independent of Android's mocked org.json implementation. */
+    @NonNull
+    private static String quoteJsonString(@NonNull String value) {
+        StringBuilder out = new StringBuilder(value.length() + 2);
+        out.append('"');
+        for (int i = 0; i < value.length(); i++) {
+            char ch = value.charAt(i);
+            switch (ch) {
+                case '"': out.append("\\\""); break;
+                case '\\\\': out.append("\\\\\\\\"); break;
+                case '\\b': out.append("\\\\b"); break;
+                case '\\f': out.append("\\\\f"); break;
+                case '\\n': out.append("\\\\n"); break;
+                case '\\r': out.append("\\\\r"); break;
+                case '\\t': out.append("\\\\t"); break;
+                default:
+                    if (ch < 0x20 || (Character.isSurrogate(ch)
+                            && !(Character.isHighSurrogate(ch) && i + 1 < value.length()
+                            && Character.isLowSurrogate(value.charAt(i + 1)))
+                            && !(Character.isLowSurrogate(ch) && i > 0
+                            && Character.isHighSurrogate(value.charAt(i - 1))))) {
+                        out.append(String.format(Locale.ROOT, "\\\\u%04x", (int) ch));
+                    } else {
+                        out.append(ch);
+                    }
+            }
+        }
+        return out.append('"').toString();
     }
 
     private static String sha256Hex(byte[] bytes) throws SyncException {
