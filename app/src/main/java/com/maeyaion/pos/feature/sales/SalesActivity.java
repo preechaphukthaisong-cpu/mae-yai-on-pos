@@ -32,6 +32,9 @@ public final class SalesActivity extends Activity {
  private final Map<String,Long> cart=new LinkedHashMap<>();
  private EditText productCode,quantity,cashReceived,customerName,customerIdentity;
  private TextView cartText,resultText;
+ private Button addButton,checkoutButton;
+ private boolean checkoutInFlight;
+ private String checkoutIdempotencyKey=UUID.randomUUID().toString();
  private boolean credit;
  private String screen;
  @Override protected void onCreate(Bundle state){super.onCreate(state);screen=getIntent().getStringExtra(SalesRoute.EXTRA_SCREEN);credit="credit".equals(screen);render();}
@@ -41,11 +44,11 @@ public final class SalesActivity extends Activity {
   TextView title=new TextView(this);title.setText("customers".equals(screen)?"บัญชีลูกค้าเชื่อ":credit?"ขายเชื่อ":"ขายเงินสด");title.setTextSize(23);title.setGravity(Gravity.CENTER);root.addView(title);
   if("customers".equals(screen)){loadCustomers(root);return;}
   productCode=field(root,"บาร์โค้ดหรือ SKU");quantity=field(root,"จำนวน (สูงสุด 3 ตำแหน่ง)");quantity.setText("1");
-  Button add=new Button(this);add.setText("เพิ่มสินค้าในบิล");root.addView(add);add.setOnClickListener(v->addItem());
+  addButton=new Button(this);addButton.setText("เพิ่มสินค้าในบิล");root.addView(addButton);addButton.setOnClickListener(v->addItem());
   cartText=new TextView(this);cartText.setPadding(0,12,0,12);root.addView(cartText);refreshCart();
   if(credit){customerName=field(root,"ชื่อลูกค้า");customerIdentity=field(root,"ข้อมูลแยกบุคคล เช่น เบอร์โทร");}
   else cashReceived=field(root,"รับเงิน (บาท)");
-  Button checkout=new Button(this);checkout.setText(credit?"บันทึกบิลขายเชื่อ":"รับชำระและบันทึกการขาย");root.addView(checkout);checkout.setOnClickListener(v->checkout());
+  checkoutButton=new Button(this);checkoutButton.setText(credit?"บันทึกบิลขายเชื่อ":"รับชำระและบันทึกการขาย");root.addView(checkoutButton);checkoutButton.setOnClickListener(v->checkout());
   resultText=new TextView(this);root.addView(resultText);
  }
  private EditText field(LinearLayout root,String hint){EditText e=new EditText(this);e.setSingleLine(true);e.setHint(hint);root.addView(e);return e;}
@@ -65,6 +68,7 @@ public final class SalesActivity extends Activity {
   StringBuilder b=new StringBuilder("รายการสินค้า\n");for(Map.Entry<String,Long> e:cart.entrySet())b.append(e.getKey()).append(" × ").append(formatQty(e.getValue())).append('\n');cartText.setText(b.toString());
  }
  private void checkout(){
+  if(checkoutInFlight)return;
   if(cart.isEmpty()){toast("กรุณาเพิ่มสินค้า");return;}
   final Long received;
   try{received=credit?null:parseMoney(cashReceived.getText().toString());}
@@ -72,6 +76,8 @@ public final class SalesActivity extends Activity {
   final String name=credit?customerName.getText().toString():null;
   final String identity=credit?customerIdentity.getText().toString():null;
   final Map<String,Long> items=new LinkedHashMap<>(cart);
+  final String idempotencyKey=checkoutIdempotencyKey;
+  checkoutInFlight=true;checkoutButton.setEnabled(false);addButton.setEnabled(false);
   worker.execute(()->{
    try{
     AppDatabase db=AppDatabase.getInstance(getApplicationContext());
@@ -79,10 +85,10 @@ public final class SalesActivity extends Activity {
     String now=Instant.now().toString();String customerId=null;
     if(credit){CustomerEntity customer=new CustomerService(db,tx).register(name,identity,now);customerId=customer.id;}
     SaleCalculator.SaleType type=credit?SaleCalculator.SaleType.CREDIT:SaleCalculator.SaleType.CASH;
-    com.maeyaion.pos.core.db.SaleEntity sale=new SaleService(db,tx).checkout(UUID.randomUUID().toString(),type,customerId,items,received,now);
+    com.maeyaion.pos.core.db.SaleEntity sale=new SaleService(db,tx).checkout(idempotencyKey,type,customerId,items,received,now);
     String summary="บันทึกบิลสำเร็จ\nเลขที่: "+sale.id+"\nยอดสินค้า: "+formatMoney(sale.subtotal_satang)+" บาท\nค่าบริการ: "+formatMoney(sale.fee_total_satang)+" บาท\nยอดรวม: "+formatMoney(sale.total_satang)+" บาท"+(sale.change_satang==null?"":"\nเงินทอน: "+formatMoney(sale.change_satang)+" บาท");
-    runOnUiThread(()->{cart.clear();refreshCart();resultText.setText(summary);});
-   }catch(RuntimeException e){runOnUiThread(()->toast(message(e)));}
+    runOnUiThread(()->{checkoutInFlight=false;checkoutButton.setEnabled(true);addButton.setEnabled(true);cart.clear();checkoutIdempotencyKey=UUID.randomUUID().toString();refreshCart();resultText.setText(summary);});
+   }catch(RuntimeException e){runOnUiThread(()->{checkoutInFlight=false;checkoutButton.setEnabled(true);addButton.setEnabled(true);toast(message(e));});}
   });
  }
  private void loadCustomers(LinearLayout root){
