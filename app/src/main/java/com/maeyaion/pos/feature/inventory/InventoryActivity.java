@@ -46,6 +46,7 @@ public final class InventoryActivity extends ComponentActivity {
     private Runnable afterScan;
     private ThaiSpeechService speech;
     private String initialScreen = "menu";
+    private String currentScreen = "menu";
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -59,6 +60,7 @@ public final class InventoryActivity extends ComponentActivity {
     }
 
     private void render(String screen) {
+        currentScreen = screen;
         closeScanner();
         page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
@@ -141,6 +143,7 @@ public final class InventoryActivity extends ComponentActivity {
         heading("สินค้าทั้งหมด");
         addText("เรียงตามจำนวนคงเหลือจากน้อยไปมาก · หน้านี้ดูข้อมูลอย่างเดียว");
         addButton("สแกนค้นหาสินค้า", () -> startScan(barcode -> {
+            render("all");
             ProductEntity found = inventory.findByBarcode(barcode);
             if (found == null) toast("ไม่พบสินค้าในคลัง");
             else showProduct(found, false);
@@ -153,7 +156,10 @@ public final class InventoryActivity extends ComponentActivity {
     private void renderCount() {
         heading("ตรวจนับสต๊อก");
         EditText counted = field("จำนวนที่นับได้", "0");
-        addButton("สแกนสินค้าเพื่อตรวจนับ", () -> startScan(barcode -> {
+        addButton("สแกนสินค้าเพื่อตรวจนับ", () -> {
+            String countedBeforeScan = counted.getText().toString();
+            startScan(barcode -> {
+            render("count");
             ProductEntity product = inventory.findByBarcode(barcode);
             if (product == null) {
                 toast("ไม่พบสินค้าในคลัง");
@@ -161,7 +167,7 @@ public final class InventoryActivity extends ComponentActivity {
             }
             showProduct(product, true);
             addText("กรอกยอดนับจริงของ " + product.name + " (เดิม " + quantityText(product.stockQtyMilli) + " " + product.unit + ")");
-            EditText actual = field("ยอดนับจริง", counted.getText().toString());
+            EditText actual = field("ยอดนับจริง", countedBeforeScan);
             addButton("ยืนยันแทนที่ยอดคงเหลือทันที", () -> {
                 try {
                     long qty = quantityMilli(actual.getText().toString());
@@ -172,7 +178,8 @@ public final class InventoryActivity extends ComponentActivity {
                 } catch (RuntimeException error) { toast(message(error)); }
             });
             addButton("ดูประวัติการตรวจนับ", () -> showHistory(product));
-        }));
+            });
+        });
         addText("การตรวจนับจะแทนที่ยอดคงเหลือทันที และบันทึกประวัติทุกครั้ง");
     }
 
@@ -190,6 +197,7 @@ public final class InventoryActivity extends ComponentActivity {
     private void renderHistory() {
         heading("ประวัติการตรวจนับ");
         addButton("สแกนสินค้าเพื่อดูประวัติ", () -> startScan(barcode -> {
+            render("history");
             ProductEntity product = inventory.findByBarcode(barcode);
             if (product == null) toast("ไม่พบสินค้าในคลัง");
             else showHistory(product);
@@ -224,6 +232,8 @@ public final class InventoryActivity extends ComponentActivity {
     private void addProductCard(ProductEntity product, boolean lowStock) {
         TextView card = text(product.name + " · " + product.barcode
                 + "\nคงเหลือ " + quantityText(product.stockQtyMilli) + " " + product.unit
+                + " · ราคาขาย " + moneyText(product.priceSatang) + " บาท"
+                + " · ต้นทุน " + moneyText(product.costSatang) + " บาท"
                 + (product.stockLimitQtyMilli == null ? "" :
                 " · ลิมิต " + quantityText(product.stockLimitQtyMilli)));
         card.setPadding(8, 14, 8, 14);
@@ -290,7 +300,7 @@ public final class InventoryActivity extends ComponentActivity {
         scanPage.addView(preview);
         Button cancel = new Button(this);
         cancel.setText("ยกเลิก");
-        cancel.setOnClickListener(v -> render(initialScreen));
+        cancel.setOnClickListener(v -> render(currentScreen));
         scanPage.addView(cancel);
         setContentView(scanPage);
         scanner = new OfflineBarcodeScanner(this, this, preview, cameraExecutor,
