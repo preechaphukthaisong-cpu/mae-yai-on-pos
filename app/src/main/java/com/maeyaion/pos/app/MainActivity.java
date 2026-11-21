@@ -89,13 +89,13 @@ public final class MainActivity extends Activity {
         page.addView(subtitle);
 
         addMenuRow(page,
-                new String[]{"▣\\nการขาย\\nขายสินค้าและรับชำระ", "▦\\nคลังสินค้า\\nสินค้าและสต๊อก"},
+                new String[]{"▣\nการขาย\nขายสินค้าและรับชำระ", "▦\nคลังสินค้า\nสินค้าและสต๊อก"},
                 new Runnable[]{() -> openSales("cash"), () -> openInventory("menu")});
         addMenuRow(page,
-                new String[]{"▤\\nสร้างบาร์โค้ด\\nลงทะเบียนและพิมพ์", "↻\\nประวัติการขาย\\nค้นหาบิลและคืนสินค้า"},
+                new String[]{"▤\nสร้างบาร์โค้ด\nลงทะเบียนและพิมพ์", "↻\nประวัติการขาย\nค้นหาบิลและคืนสินค้า"},
                 new Runnable[]{() -> openBarcode("create"), () -> openHistory("paid")});
         addMenuRow(page,
-                new String[]{"⚙\\nจัดการร้านค้า\\nตั้งค่าและเครื่องมือ", "▥\\nรายงานยอดขาย\\nสรุปผลประกอบการ"},
+                new String[]{"⚙\nจัดการร้านค้า\nตั้งค่าและเครื่องมือ", "▥\nรายงานยอดขาย\nสรุปผลประกอบการ"},
                 new Runnable[]{this::renderStoreManagement, () -> openReports("daily")});
 
         TextView footer = new TextView(this);
