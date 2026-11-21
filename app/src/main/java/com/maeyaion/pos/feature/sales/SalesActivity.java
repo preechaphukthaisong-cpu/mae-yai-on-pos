@@ -87,8 +87,17 @@ public final class SalesActivity extends Activity {
  }
  private void loadCustomers(LinearLayout root){
   worker.execute(()->{
-   try{AppDatabase db=AppDatabase.getInstance(getApplicationContext());java.util.List<CustomerEntity> customers=db.customerDao().listAll();
-    runOnUiThread(()->{for(CustomerEntity c:customers){long balance=0;for(com.maeyaion.pos.core.db.SaleEntity sale:db.saleDao().creditForCustomer(c.id))if("UNPAID".equals(sale.payment_status))balance=Math.addExact(balance,db.saleBalanceDao().outstanding(sale.id));TextView row=new TextView(this);row.setText(c.name+"\nยอดค้าง: "+formatMoney(balance)+" บาท");row.setPadding(4,12,4,12);root.addView(row);}});
+   try{
+    AppDatabase db=AppDatabase.getInstance(getApplicationContext());
+    java.util.List<CustomerEntity> customers=db.customerDao().listAll();
+    java.util.List<String> labels=new java.util.ArrayList<>();
+    for(CustomerEntity customer:customers){
+     long balance=0;
+     for(com.maeyaion.pos.core.db.SaleEntity sale:db.saleDao().creditForCustomer(customer.id))
+      if("UNPAID".equals(sale.payment_status))balance=Math.addExact(balance,db.saleBalanceDao().outstanding(sale.id));
+     labels.add(customer.name+"\\nยอดค้าง: "+formatMoney(balance)+" บาท");
+    }
+    runOnUiThread(()->{for(String label:labels){TextView row=new TextView(this);row.setText(label);row.setPadding(4,12,4,12);root.addView(row);}});
    }catch(RuntimeException e){runOnUiThread(()->toast(message(e)));}
   });
  }
