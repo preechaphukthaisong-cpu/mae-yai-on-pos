@@ -7,6 +7,7 @@ import androidx.room.Query;
 
 @Dao
 public interface CustomerDao {
+    @Query("SELECT * FROM customer WHERE id = :id LIMIT 1") CustomerEntity findById(String id);
     @Query("SELECT * FROM customer WHERE name_key = :nameKey AND identity_key = :identityKey LIMIT 1")
     CustomerEntity findByNormalizedIdentity(String nameKey, String identityKey);
 
