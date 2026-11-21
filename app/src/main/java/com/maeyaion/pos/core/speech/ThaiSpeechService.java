@@ -3,6 +3,7 @@ package com.maeyaion.pos.core.speech;
 import android.content.Context;
 import android.os.Bundle;
 import android.speech.tts.TextToSpeech;
+import android.speech.tts.UtteranceProgressListener;
 import android.speech.tts.Voice;
 
 import androidx.annotation.NonNull;
@@ -12,6 +13,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /** Offline-only Thai TTS. Call close() from the owning component's lifecycle. */
 public final class ThaiSpeechService implements AutoCloseable {
@@ -26,6 +29,7 @@ public final class ThaiSpeechService implements AutoCloseable {
             ThaiVoiceSelector.Availability.TEXT_ONLY;
     private volatile boolean initialized;
     private volatile boolean closed;
+    private final ConcurrentMap<String, Runnable> completionCallbacks = new ConcurrentHashMap<>();
 
     public ThaiSpeechService(@NonNull Context context, @Nullable Listener listener) {
         this.appContext = context.getApplicationContext();
@@ -62,6 +66,12 @@ public final class ThaiSpeechService implements AutoCloseable {
             publish(ThaiVoiceSelector.Availability.TEXT_ONLY);
             return;
         }
+        current.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+            @Override public void onStart(String utteranceId) { }
+            @Override public void onDone(String utteranceId) { completeUtterance(utteranceId); }
+            @Override public void onError(String utteranceId) { completeUtterance(utteranceId); }
+            @Override public void onStop(String utteranceId, boolean interrupted) { completeUtterance(utteranceId); }
+        });
         Voice selected = null;
         if (voices != null) {
             for (Voice voice : voices) {
@@ -99,16 +109,29 @@ public final class ThaiSpeechService implements AutoCloseable {
 
     /** Returns false when Thai offline TTS is unavailable or the engine rejects the utterance. */
     public boolean speak(@NonNull String text, @NonNull String utteranceId) {
+        return speak(text, utteranceId, null);
+    }
+
+    /** Queues speech and invokes completion on the TTS callback thread, including error/stop. */
+    public boolean speak(@NonNull String text, @NonNull String utteranceId, @Nullable Runnable onComplete) {
         TextToSpeech current = engine;
         if (closed || !initialized || current == null || text.trim().isEmpty()) return false;
+        if (onComplete != null) completionCallbacks.put(utteranceId, onComplete);
         Bundle parameters = new Bundle();
-        return current.speak(text, TextToSpeech.QUEUE_ADD, parameters, utteranceId)
-                == TextToSpeech.SUCCESS;
+        int result = current.speak(text, TextToSpeech.QUEUE_ADD, parameters, utteranceId);
+        if (result != TextToSpeech.SUCCESS && onComplete != null) completionCallbacks.remove(utteranceId);
+        return result == TextToSpeech.SUCCESS;
+    }
+
+    private void completeUtterance(String utteranceId) {
+        Runnable callback = completionCallbacks.remove(utteranceId);
+        if (callback != null) callback.run();
     }
 
     @Override public synchronized void close() {
         closed = true;
         initialized = false;
+        completionCallbacks.clear();
         if (engine != null) {
             engine.stop();
             engine.shutdown();
