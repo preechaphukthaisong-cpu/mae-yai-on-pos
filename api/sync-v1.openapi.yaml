@@ -1,0 +1,198 @@
+openapi: 3.1.0
+info:
+  title: Maeyai-On-POS Multi-device Sync API
+  version: 1.0.0
+  description: >
+    Offline-first store event synchronization and encrypted backup transport.
+    Google ID tokens identify the store owner. Device-scoped routes require a
+    registered X-Device-ID. The API never accepts plaintext SQLite backups.
+servers:
+  - url: https://SYNC_BACKEND_HOST
+security:
+  - googleIdToken: []
+paths:
+  /health:
+    get:
+      security: []
+      responses:
+        '200':
+          description: Service and database are reachable
+  /v1/stores:
+    post:
+      summary: Create or retrieve the store for the authenticated Google identity
+      responses:
+        '201':
+          description: Store identity
+  /v1/stores/me:
+    get:
+      summary: Read the store associated with the authenticated Google identity
+      responses:
+        '200':
+          description: Store identity and latest event sequence
+        '404':
+          description: No store is registered
+  /v1/devices:
+    post:
+      summary: Register an Android installation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [deviceId, label]
+              properties:
+                deviceId: { type: string, format: uuid }
+                label: { type: string, minLength: 1, maxLength: 80 }
+      responses:
+        '201': { description: Device registered }
+        '409': { description: Device ID belongs to another or revoked installation }
+  /v1/devices/{deviceId}:
+    delete:
+      summary: Revoke another registered device
+      parameters:
+        - in: path
+          name: deviceId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Device revoked }
+        '404': { description: Device not found }
+  /v1/sync/push:
+    post:
+      summary: Submit locally committed immutable events
+      parameters:
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [events]
+              properties:
+                events:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [eventId, operation, entityType, entityId, baseVersion, payload, payloadSha256]
+                    properties:
+                      eventId: { type: string, format: uuid }
+                      operation: { type: string, enum: [upsert, delete] }
+                      entityType: { type: string, maxLength: 64 }
+                      entityId: { type: string, maxLength: 160 }
+                      baseVersion: { type: integer, minimum: 0 }
+                      payload: { type: object }
+                      payloadSha256: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
+      responses:
+        '200': { description: Durable per-event acknowledgements and conflicts }
+        '409': { description: Idempotency key reused with different content }
+  /v1/sync/pull:
+    get:
+      summary: Read the authoritative ordered event log after a cursor
+      parameters:
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: after
+          schema: { type: integer, minimum: 0, default: 0 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 500, default: 200 }
+      responses:
+        '200': { description: Ordered event page and next cursor }
+  /v1/conflicts:
+    get:
+      summary: List unresolved entity-version conflicts
+      parameters:
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Unresolved conflicts }
+  /v1/drive/connect:
+    post:
+      summary: Connect the same Google account's Drive appDataFolder
+      parameters:
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [serverAuthCode]
+              properties:
+                serverAuthCode: { type: string, minLength: 20, maxLength: 4096 }
+      responses:
+        '200': { description: Refresh token encrypted and Drive identity verified }
+        '403': { description: Google account or Drive scope mismatch }
+  /v1/backups:
+    get:
+      summary: List encrypted full snapshots
+      parameters:
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Encrypted snapshot metadata }
+    post:
+      summary: Upload an encrypted full snapshot for the latest authoritative sequence
+      parameters:
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema: { type: string, format: uuid }
+        - in: header
+          name: X-Through-Seq
+          required: true
+          schema: { type: integer, minimum: 0 }
+        - in: header
+          name: X-Backup-SHA256
+          required: true
+          schema: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        '202': { description: Encrypted snapshot stored; Drive mirror queued }
+        '409': { description: Snapshot is not at the latest server event sequence }
+  /v1/backups/{snapshotId}:
+    get:
+      summary: Download an encrypted snapshot for cross-device restore
+      parameters:
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: snapshotId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Encrypted backup bytes
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '404': { description: Snapshot not found }
+components:
+  securitySchemes:
+    googleIdToken:
+      type: http
+      scheme: bearer
+      bearerFormat: Google ID token

@@ -64,11 +64,13 @@ public final class FullBackupCoordinator {
 
         char[] passwordCopy = recoveryPassword.clone();
         RoomDatabaseSnapshotter.Snapshot snapshot = null;
+        File compressedSnapshot = null;
         Throwable primaryFailure = null;
         try {
             snapshot = snapshotter.create(app, database, snapshotDirectory);
+            compressedSnapshot = BackupCompression.compressIfSmaller(snapshot.file, snapshotDirectory);
             File encryptedBackup = fileStore.writeBackupWithLocalKey(
-                    backupDirectory, snapshot.file, passwordCopy, recoveryKey, keyProtector);
+                    backupDirectory, compressedSnapshot, passwordCopy, recoveryKey, keyProtector);
 
             // The worker independently checks app-private location, envelope
             // magic/version, KDF parameters, and exact envelope length.
@@ -79,6 +81,8 @@ public final class FullBackupCoordinator {
             throw failure;
         } finally {
             Arrays.fill(passwordCopy, '\0');
+            cleanupSnapshot(compressedSnapshot != null && snapshot != null
+                    && compressedSnapshot.equals(snapshot.file) ? null : compressedSnapshot, primaryFailure);
             cleanupSnapshot(snapshot == null ? null : snapshot.file, primaryFailure);
         }
     }
