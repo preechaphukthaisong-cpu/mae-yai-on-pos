@@ -56,7 +56,8 @@ public final class BarcodeAllocator {
     }
 
     @NonNull
-    BarcodeRegistryEntity allocateSystemInTransaction(@NonNull String displayName,
+    /** Allocates inside a caller-owned transaction; invoke only through TransactionRunner. */
+    public BarcodeRegistryEntity allocateSystemInTransaction(@NonNull String displayName,
             long priceSatang, @NonNull String createdAtUtc) {
         validate("2000001", displayName, priceSatang, createdAtUtc);
         BarcodeCounterEntity counter = counterDao.get();

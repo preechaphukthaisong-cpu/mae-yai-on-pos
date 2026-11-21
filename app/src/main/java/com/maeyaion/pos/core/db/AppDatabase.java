@@ -17,8 +17,21 @@ import androidx.sqlite.db.SupportSQLiteDatabase;
         CustomerEntity.class,
         StockLogEntity.class,
         OpLogEntity.class,
-        BackupJournalEntity.class
-}, version = 4, exportSchema = true)
+        BackupJournalEntity.class,
+        SaleEntity.class,
+        SaleLineEntity.class,
+        DebtPaymentEntity.class,
+        PriceHistoryEntity.class,
+        SaleReturnEntity.class,
+        SaleReturnLineEntity.class,
+        SaleCancelEntity.class,
+        SaleCancelLineEntity.class,
+        DailySummaryEntity.class,
+        ProductDailyEntity.class,
+        SaleReconciliationEntity.class,
+        StockCountEntity.class,
+        StockCountLineEntity.class
+}, version = 5, exportSchema = true)
 public abstract class AppDatabase extends RoomDatabase {
     private static volatile AppDatabase INSTANCE;
 
@@ -30,6 +43,17 @@ public abstract class AppDatabase extends RoomDatabase {
     public abstract StockLogDao stockLogDao();
     public abstract OpLogDao opLogDao();
     public abstract BackupJournalDao backupJournalDao();
+    public abstract SaleDao saleDao();
+    public abstract SaleLineDao saleLineDao();
+    public abstract DebtPaymentDao debtPaymentDao();
+    public abstract PriceHistoryDao priceHistoryDao();
+    public abstract DailySummaryDao dailySummaryDao();
+    public abstract ProductDailyDao productDailyDao();
+    public abstract SaleBalanceDao saleBalanceDao();
+    public abstract SaleReturnDao saleReturnDao();
+    public abstract SaleReturnLineDao saleReturnLineDao();
+    public abstract SaleCancelDao saleCancelDao();
+    public abstract SaleCancelLineDao saleCancelLineDao();
 
     public static RoomDatabase.Callback databaseCallback() {
         return new RoomDatabase.Callback() {
@@ -39,6 +63,7 @@ public abstract class AppDatabase extends RoomDatabase {
                 db.execSQL("INSERT OR IGNORE INTO barcode_counter (id, next_value) VALUES (1, 2000001)");
                 DatabaseGuards.installCore(db);
                 DatabaseGuards.installBackupJournal(db);
+                DatabaseGuards.installBusiness(db);
             }
 
             @Override
@@ -88,7 +113,7 @@ public abstract class AppDatabase extends RoomDatabase {
                                     AppDatabase.class,
                                     "maeyaion_pos.db")
                             .setJournalMode(JournalMode.TRUNCATE)
-                            .addMigrations(Migration1To2.INSTANCE, Migration2To3.INSTANCE, Migration3To4.INSTANCE)
+                            .addMigrations(Migration1To2.INSTANCE, Migration2To3.INSTANCE, Migration3To4.INSTANCE, Migration4To5.INSTANCE)
                             .addCallback(databaseCallback())
                             .build();
                     INSTANCE = local;

@@ -2,10 +2,12 @@ package com.maeyaion.pos.app;
 
 import android.app.Activity;
 import android.content.SharedPreferences;
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -16,6 +18,12 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.common.api.Scope;
 import com.maeyaion.pos.R;
+import com.maeyaion.pos.core.navigation.BarcodeRoute;
+import com.maeyaion.pos.core.navigation.InventoryRoute;
+import com.maeyaion.pos.core.navigation.SalesRoute;
+import com.maeyaion.pos.core.navigation.HistoryRoute;
+import com.maeyaion.pos.core.navigation.StoreRoute;
+import com.maeyaion.pos.core.navigation.ReportsRoute;
 
 public final class MainActivity extends Activity {
     private static final int REQUEST_DRIVE_ACCOUNT = 4102;
@@ -25,44 +33,167 @@ public final class MainActivity extends Activity {
     private static final String KEY_ACCOUNT = "selected_google_account";
 
     private TextView driveStatus;
+    private boolean showingStoreManagement;
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        renderFoundationStatus();
-        refreshDriveStatus();
+        renderHome();
     }
 
-    private void renderFoundationStatus() {
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setGravity(Gravity.CENTER);
-        root.setPadding(32, 32, 32, 32);
+    private LinearLayout createPage() {
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(24, 24, 24, 24);
+        return page;
+    }
 
-        TextView title = new TextView(this);
-        title.setText(R.string.app_name);
-        title.setTextSize(24);
-        title.setGravity(Gravity.CENTER);
+    private TextView addHeading(LinearLayout parent, String label, float size) {
+        TextView heading = new TextView(this);
+        heading.setText(label);
+        heading.setTextSize(size);
+        heading.setGravity(Gravity.CENTER);
+        heading.setPadding(0, 12, 0, 16);
+        parent.addView(heading);
+        return heading;
+    }
 
-        TextView status = new TextView(this);
-        status.setText(R.string.foundation_status);
-        status.setTextSize(16);
-        status.setGravity(Gravity.CENTER);
-        status.setPadding(0, 16, 0, 24);
+    private Button addButton(LinearLayout parent, String label, Runnable action) {
+        Button button = new Button(this);
+        button.setText(label);
+        button.setOnClickListener(view -> action.run());
+        parent.addView(button);
+        return button;
+    }
 
+    private void renderHome() {
+        showingStoreManagement = false;
+        LinearLayout page = createPage();
+        addHeading(page, getString(R.string.app_name), 24);
+
+        addButton(page, "การขาย", () -> openSales("cash"));
+        addButton(page, "คลังสินค้า", () -> openInventory("menu"));
+        addButton(page, "สร้างบาร์โค้ด", () -> openBarcode("create"));
+        addButton(page, "ประวัติการขาย", () -> openHistory("paid"));
+        addButton(page, "จัดการร้านค้า", this::renderStoreManagement);
+        addButton(page, "รายงานยอดขาย", () -> openReports("daily"));
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(page);
+        setContentView(scroll);
+    }
+
+    private void renderStoreManagement() {
+        showingStoreManagement = true;
+        LinearLayout page = createPage();
+        addButton(page, "กลับหน้าหลัก", this::renderHome);
+        addHeading(page, "จัดการร้านค้า", 22);
+
+        addMenuSection(page, "การขาย",
+                "ขายเงินสด", "ขายเชื่อ", "บัญชีลูกค้าเชื่อ");
+        addInventorySection(page);
+        addMenuSection(page, "สร้างบาร์โค้ด",
+                "สร้างบาร์โค้ด", "คลังบาร์โค้ด");
+        addMenuSection(page, "ประวัติการขาย",
+                "บิลจ่ายแล้ว", "บิลค้างชำระ", "บัญชีลูกค้าเชื่อทั้งหมด",
+                "รายละเอียดบิลและการคืนสินค้า");
+        addMenuSection(page, "จัดการร้านค้า",
+                "แก้ไขราคาขาย", "ประวัติราคา");
+        addMenuSection(page, "รายงานยอดขาย",
+                "รายวัน", "รายสัปดาห์", "รายเดือน/เลือกวัน",
+                "ขายดี 20 อันดับ", "ขายน้อยสุด 20 อันดับ");
+
+        addHeading(page, "เครื่องมือและการเชื่อมต่อ", 18);
         driveStatus = new TextView(this);
         driveStatus.setTextSize(14);
         driveStatus.setGravity(Gravity.CENTER);
-        driveStatus.setPadding(0, 0, 0, 12);
+        driveStatus.setPadding(0, 8, 0, 8);
+        page.addView(driveStatus);
+        addButton(page, "เลือกบัญชี Google Drive", this::launchDriveAccountPicker);
+        refreshDriveStatus();
 
-        Button connectDrive = new Button(this);
-        connectDrive.setText("เลือกบัญชี Google Drive");
-        connectDrive.setOnClickListener(view -> launchDriveAccountPicker());
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(page);
+        setContentView(scroll);
+    }
 
-        root.addView(title);
-        root.addView(status);
-        root.addView(driveStatus);
-        root.addView(connectDrive);
-        setContentView(root);
+    private void addInventorySection(LinearLayout parent) {
+        TextView heading = new TextView(this);
+        heading.setText("คลังสินค้า");
+        heading.setTextSize(17);
+        heading.setPadding(0, 16, 0, 4);
+        parent.addView(heading);
+        addButton(parent, "เพิ่มสินค้าเข้าคลัง/รับสินค้า", () -> openInventory("receive"));
+        addButton(parent, "สินค้าทั้งหมด", () -> openInventory("all"));
+        addButton(parent, "ตรวจนับสต๊อก", () -> openInventory("count"));
+        addButton(parent, "ลิมิตสต๊อก", () -> openInventory("limit"));
+    }
+
+    private void openInventory(String screen) {
+        Intent intent = new Intent(InventoryRoute.ACTION);
+        intent.setPackage(getPackageName());
+        intent.putExtra(InventoryRoute.EXTRA_SCREEN, screen);
+        startActivity(intent);
+    }
+
+    private void openBarcode(String screen) {
+        Intent intent = new Intent(BarcodeRoute.ACTION);
+        intent.setPackage(getPackageName());
+        intent.putExtra(BarcodeRoute.EXTRA_SCREEN, screen);
+        startActivity(intent);
+    }
+
+    private void openSales(String screen) { openRoute(SalesRoute.ACTION, SalesRoute.EXTRA_SCREEN, screen); }
+    private void openHistory(String screen) { openRoute(HistoryRoute.ACTION, HistoryRoute.EXTRA_SCREEN, screen); }
+    private void openStore(String screen) { openRoute(StoreRoute.ACTION, StoreRoute.EXTRA_SCREEN, screen); }
+    private void openReports(String screen) { openRoute(ReportsRoute.ACTION, ReportsRoute.EXTRA_SCREEN, screen); }
+    private void openRoute(String action, String extra, String screen) {
+        Intent intent = new Intent(action);
+        intent.setPackage(getPackageName());
+        intent.putExtra(extra, screen);
+        startActivity(intent);
+    }
+
+    private void addMenuSection(LinearLayout parent, String title, String... items) {
+        TextView heading = new TextView(this);
+        heading.setText(title);
+        heading.setTextSize(17);
+        heading.setPadding(0, 16, 0, 4);
+        parent.addView(heading);
+        for (String item : items) {
+            Runnable action = this::showNotImplemented;
+            switch (item) {
+                case "ขายเงินสด": action = () -> openSales("cash"); break;
+                case "ขายเชื่อ": action = () -> openSales("credit"); break;
+                case "บัญชีลูกค้าเชื่อ":
+                case "บัญชีลูกค้าเชื่อทั้งหมด": action = () -> openSales("customers"); break;
+                case "สร้างบาร์โค้ด": action = () -> openBarcode("create"); break;
+                case "คลังบาร์โค้ด": action = () -> openBarcode("catalog"); break;
+                case "บิลจ่ายแล้ว": action = () -> openHistory("paid"); break;
+                case "บิลค้างชำระ": action = () -> openHistory("unpaid"); break;
+                case "รายละเอียดบิลและการคืนสินค้า": action = () -> openHistory("all"); break;
+                case "แก้ไขราคาขาย": action = () -> openStore("price"); break;
+                case "ประวัติราคา": action = () -> openStore("history"); break;
+                case "รายวัน": action = () -> openReports("daily"); break;
+                case "รายสัปดาห์": action = () -> openReports("weekly"); break;
+                case "รายเดือน/เลือกวัน": action = () -> openReports("monthly"); break;
+                case "ขายดี 20 อันดับ": action = () -> openReports("top"); break;
+                case "ขายน้อยสุด 20 อันดับ": action = () -> openReports("bottom"); break;
+                default: break;
+            }
+            addButton(parent, item, action);
+        }
+    }
+
+    private void showNotImplemented() {
+        Toast.makeText(this, "เมนูนี้ยังอยู่ระหว่างพัฒนา", Toast.LENGTH_SHORT).show();
+    }
+
+    @Override public void onBackPressed() {
+        if (showingStoreManagement) {
+            renderHome();
+        } else {
+            super.onBackPressed();
+        }
     }
 
     private void launchDriveAccountPicker() {

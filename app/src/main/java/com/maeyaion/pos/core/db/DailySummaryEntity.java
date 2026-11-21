@@ -1,0 +1,14 @@
+package com.maeyaion.pos.core.db;
+import androidx.annotation.NonNull;
+import androidx.room.Entity;
+import androidx.room.ColumnInfo;
+import androidx.room.PrimaryKey;
+@Entity(tableName="daily_summary")
+public final class DailySummaryEntity {
+ @PrimaryKey @NonNull public final String business_date;
+ public final long cash_sales_satang,credit_sales_satang,fees_satang,cash_returned_goods_satang,credit_returned_goods_satang,cash_returned_fee_satang,credit_returned_fee_satang,cash_cancelled_goods_satang,credit_cancelled_goods_satang,cash_cancelled_fee_satang,credit_cancelled_fee_satang,net_sales_satang;
+ @NonNull public final String updated_at_utc;
+ public DailySummaryEntity(@NonNull String business_date,long cash_sales_satang,long credit_sales_satang,long fees_satang,long cash_returned_goods_satang,long credit_returned_goods_satang,long cash_returned_fee_satang,long credit_returned_fee_satang,long cash_cancelled_goods_satang,long credit_cancelled_goods_satang,long cash_cancelled_fee_satang,long credit_cancelled_fee_satang,long net_sales_satang,@NonNull String updated_at_utc){
+ this.business_date=business_date;this.cash_sales_satang=cash_sales_satang;this.credit_sales_satang=credit_sales_satang;this.fees_satang=fees_satang;this.cash_returned_goods_satang=cash_returned_goods_satang;this.credit_returned_goods_satang=credit_returned_goods_satang;this.cash_returned_fee_satang=cash_returned_fee_satang;this.credit_returned_fee_satang=credit_returned_fee_satang;this.cash_cancelled_goods_satang=cash_cancelled_goods_satang;this.credit_cancelled_goods_satang=credit_cancelled_goods_satang;this.cash_cancelled_fee_satang=cash_cancelled_fee_satang;this.credit_cancelled_fee_satang=credit_cancelled_fee_satang;this.net_sales_satang=net_sales_satang;this.updated_at_utc=updated_at_utc;
+ }
+}

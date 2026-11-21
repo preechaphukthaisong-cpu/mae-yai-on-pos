@@ -61,6 +61,7 @@ public class BarcodeAllocatorTest {
     private static final class FakeRegistry implements BarcodeRegistryDao {
         final Map<String, BarcodeRegistryEntity> values = new HashMap<>();
         @Override public BarcodeRegistryEntity findByBarcode(String barcode) { return values.get(barcode); }
+        @Override public java.util.List<BarcodeRegistryEntity> listAll() { return new java.util.ArrayList<>(values.values()); }
         @Override public void insert(BarcodeRegistryEntity entry) {
             if (values.putIfAbsent(entry.barcode, entry) != null) throw new IllegalStateException("duplicate");
         }
