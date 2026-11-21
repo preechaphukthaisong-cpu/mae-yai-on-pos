@@ -58,23 +58,27 @@ public final class AppDatabaseMigrationTest {
 
         database = Room.databaseBuilder(context, AppDatabase.class, databaseName)
                 .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
-                .addMigrations(Migration1To2.INSTANCE, Migration2To3.INSTANCE, Migration3To4.INSTANCE, Migration4To5.INSTANCE)
+                .addMigrations(Migration1To2.INSTANCE, Migration2To3.INSTANCE, Migration3To4.INSTANCE, Migration4To5.INSTANCE, Migration5To6.INSTANCE)
                 .addCallback(AppDatabase.databaseCallback())
                 .allowMainThreadQueries()
                 .build();
 
         SupportSQLiteDatabase sql = database.getOpenHelper().getWritableDatabase();
-        assertEquals(5, sql.getVersion());
+        assertEquals(6, sql.getVersion());
         assertEquals("preserved_value", database.appMetaDao().findValue("legacy_key"));
         assertNotNull(database.barcodeCounterDao().get());
         assertEquals(2_000_001L, database.barcodeCounterDao().get().nextValue);
-        assertEquals(5, database.getOpenHelper().getWritableDatabase().getVersion());
+        assertEquals(6, database.getOpenHelper().getWritableDatabase().getVersion());
         assertTableExists(sql, "barcode_registry");
         assertTableExists(sql, "product");
         assertTableExists(sql, "customer");
         assertTableExists(sql, "stock_log");
         assertTableExists(sql, "op_log");
         assertTableExists(sql, "backup_journal");
+        assertTableExists(sql, "sync_outbox");
+        assertTableExists(sql, "sync_inbox");
+        assertTableExists(sql, "sync_cursor");
+        assertTableExists(sql, "sync_entity_version");
         assertCoreGuardsExist(sql);
         assertTriggerExists(sql, "backup_journal_insert_guard");
         assertTriggerExists(sql, "backup_journal_update_guard");
@@ -116,13 +120,17 @@ public final class AppDatabaseMigrationTest {
 
         database = Room.databaseBuilder(context, AppDatabase.class, databaseName)
                 .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
-                .addMigrations(Migration3To4.INSTANCE, Migration4To5.INSTANCE)
+                .addMigrations(Migration3To4.INSTANCE, Migration4To5.INSTANCE, Migration5To6.INSTANCE)
                 .addCallback(AppDatabase.databaseCallback())
                 .allowMainThreadQueries()
                 .build();
         SupportSQLiteDatabase sql = database.getOpenHelper().getWritableDatabase();
-        assertEquals(5, sql.getVersion());
+        assertEquals(6, sql.getVersion());
         assertEquals("v3_value", database.appMetaDao().findValue("legacy_key"));
+        assertTableExists(sql, "sync_outbox");
+        assertTableExists(sql, "sync_inbox");
+        assertTableExists(sql, "sync_cursor");
+        assertTableExists(sql, "sync_entity_version");
         assertCoreGuardsExist(sql);
         assertEquals(2500L, database.productDao().findBySku("SKU-LEGACY").stockQtyMilli);
         try (Cursor cursor = sql.query("SELECT before_qty_milli, after_qty_milli, diff_qty_milli FROM stock_log WHERE sku = 'SKU-LEGACY' AND ref_id = 'MIGRATION_V3_BASELINE'")) {

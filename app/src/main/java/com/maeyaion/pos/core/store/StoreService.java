@@ -7,6 +7,9 @@ import com.maeyaion.pos.core.db.OpLogEntity;
 import com.maeyaion.pos.core.db.PriceHistoryEntity;
 import com.maeyaion.pos.core.db.ProductEntity;
 import com.maeyaion.pos.core.tx.TransactionRunner;
+import com.maeyaion.pos.core.sync.SyncOutboxWriter;
+import com.maeyaion.pos.core.sync.SyncException;
+import org.json.JSONException;
 import org.json.JSONObject;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -17,8 +20,8 @@ import java.util.UUID;
 
 /** Store maintenance use cases. Price changes are atomic and leave immutable history. */
 public final class StoreService {
- private final AppDatabase db; private final TransactionRunner tx;
- public StoreService(@NonNull AppDatabase db,@NonNull TransactionRunner tx){this.db=Objects.requireNonNull(db);this.tx=Objects.requireNonNull(tx);}
+ private final AppDatabase db; private final TransactionRunner tx; private final SyncOutboxWriter syncOutbox;
+ public StoreService(@NonNull AppDatabase db,@NonNull TransactionRunner tx){this.db=Objects.requireNonNull(db);this.tx=Objects.requireNonNull(tx);this.syncOutbox=new SyncOutboxWriter(db);}
  public ProductEntity updateSalePrice(@NonNull String sku,long newPriceSatang,@NonNull String changedAtUtc){
   if(sku.trim().isEmpty()||!sku.equals(sku.trim()))throw new IllegalArgumentException("SKU ไม่ถูกต้อง");
   if(newPriceSatang<0)throw new IllegalArgumentException("ราคาต้องไม่ติดลบ");
@@ -37,6 +40,18 @@ public final class StoreService {
    db.opLogDao().append(new OpLogEntity(UUID.randomUUID().toString(),"PRICE_CHANGED","PRODUCT",sku,payload,changedAtUtc));
    db.backupJournalDao().append(new BackupJournalEntity(0,UUID.randomUUID().toString(),
     "PRICE_CHANGED",payload,sha256(payload),5,changedAtUtc,0));
+   try {
+    JSONObject snapshot=new JSONObject();
+    snapshot.put("sku",changed.sku); snapshot.put("barcode",changed.barcode);
+    snapshot.put("name",changed.name); snapshot.put("price_satang",changed.priceSatang);
+    snapshot.put("cost_satang",changed.costSatang); snapshot.put("unit",changed.unit);
+    snapshot.put("stock_limit_qty_milli",changed.stockLimitQtyMilli==null?JSONObject.NULL:changed.stockLimitQtyMilli);
+    snapshot.put("stock_qty_milli",changed.stockQtyMilli); snapshot.put("is_active",changed.isActive);
+    snapshot.put("created_at_utc",changed.createdAtUtc); snapshot.put("updated_at_utc",changed.updatedAtUtc);
+    syncOutbox.appendUnboundInTransaction("upsert","product",changed.sku,snapshot,changedAtUtc);
+   } catch(JSONException | SyncException error) {
+    throw new IllegalStateException("Unable to append price sync event",error);
+   }
    return changed;
   });
  }

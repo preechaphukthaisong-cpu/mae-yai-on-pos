@@ -16,6 +16,10 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import com.maeyaion.pos.core.db.AppDatabase;
 import com.maeyaion.pos.core.db.ProductEntity;
 import com.maeyaion.pos.core.db.StockLogEntity;
+import com.maeyaion.pos.core.db.SyncOutboxEntity;
+import com.maeyaion.pos.core.sync.SyncOutboxWriter;
+
+import org.json.JSONObject;
 
 import org.junit.After;
 import org.junit.Before;
@@ -82,6 +86,32 @@ public final class InventoryServiceTest {
         assertEquals("RECEIVE", history.get(2).reason);
         assertEquals(3000L, history.get(2).diff_qty_milli);
         assertTrue(database.backupJournalDao().pendingCount() >= 5L);
+    }
+
+
+    @Test public void inventoryMutationsAppendOrderedFullSnapshotsToOutboxAtomically() throws Exception {
+        ProductEntity created = service.createAndReceive(UUID.randomUUID().toString(),
+                "SKU-SYNC-1", "สินค้าทดสอบ", 1200L, 700L, "ชิ้น",
+                9000L, 3000L, NOW);
+        service.receive(UUID.randomUUID().toString(), created.barcode, 500L, NOW);
+        service.replaceCount(UUID.randomUUID().toString(), created.barcode, 4200L, NOW);
+        service.updateStockLimit(UUID.randomUUID().toString(), created.sku, 8000L, NOW);
+
+        List<SyncOutboxEntity> events = database.syncQueueDao()
+                .pendingOutbox(SyncOutboxWriter.UNBOUND_STORE_ID, 20);
+        assertEquals(4, events.size());
+        for (int i = 0; i < events.size(); i++) {
+            SyncOutboxEntity event = events.get(i);
+            assertEquals("product", event.entity_type);
+            assertEquals(created.sku, event.entity_id);
+            assertEquals(i, event.base_version);
+            assertEquals("PENDING", event.delivery_state);
+            assertEquals(64, event.payload_sha256.length());
+        }
+        assertEquals(4200L, new JSONObject(events.get(2).payload_json)
+                .getJSONObject("data").getLong("stock_qty_milli"));
+        assertEquals(8000L, new JSONObject(events.get(3).payload_json)
+                .getJSONObject("data").getLong("stock_limit_qty_milli"));
     }
 
     @Test public void countCannotCreateNegativeStockAndFailedOperationLeavesLedgerUnchanged() {

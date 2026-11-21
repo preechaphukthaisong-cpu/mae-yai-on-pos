@@ -11,6 +11,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import com.maeyaion.pos.core.db.*;
 import com.maeyaion.pos.core.inventory.InventoryServiceFactory;
+import com.maeyaion.pos.core.sync.SyncOutboxWriter;
 import com.maeyaion.pos.core.tx.RoomTransactionRunner;
 import org.junit.After;
 import org.junit.Before;
@@ -41,6 +42,9 @@ public final class StoreServiceTest {
   store.updateSalePrice(p.sku,2750,NOW);
   assertEquals(1,store.priceHistory(p.sku).size());
   assertNotNull(db.backupJournalDao().pendingBatch(20));
+  java.util.List<SyncOutboxEntity> events=db.syncQueueDao().pendingOutbox(SyncOutboxWriter.UNBOUND_STORE_ID,20);
+  assertEquals(2,events.size());
+  assertEquals(1L,events.get(1).base_version);
   assertTrue(db.opLogDao().latest(20).stream().anyMatch(row->"PRICE_CHANGED".equals(row.action)));
  }
  @Test public void invalidPriceDoesNotChangeProductOrHistory(){

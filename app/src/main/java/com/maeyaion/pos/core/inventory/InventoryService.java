@@ -13,6 +13,10 @@ import com.maeyaion.pos.core.db.ProductEntity;
 import com.maeyaion.pos.core.db.StockLogDao;
 import com.maeyaion.pos.core.db.StockLogEntity;
 import com.maeyaion.pos.core.tx.TransactionRunner;
+import com.maeyaion.pos.core.sync.SyncOutboxWriter;
+import com.maeyaion.pos.core.sync.SyncException;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -32,16 +36,25 @@ public final class InventoryService {
     private final OpLogDao opLogs;
     private final BackupJournalDao backupJournal;
     private final TransactionRunner transactions;
+    private final SyncOutboxWriter syncOutbox;
 
     public InventoryService(@NonNull BarcodeAllocator barcodes, @NonNull ProductDao products,
             @NonNull StockLogDao stockLogs, @NonNull OpLogDao opLogs,
             @NonNull BackupJournalDao backupJournal, @NonNull TransactionRunner transactions) {
+        this(barcodes, products, stockLogs, opLogs, backupJournal, transactions, null);
+    }
+
+    public InventoryService(@NonNull BarcodeAllocator barcodes, @NonNull ProductDao products,
+            @NonNull StockLogDao stockLogs, @NonNull OpLogDao opLogs,
+            @NonNull BackupJournalDao backupJournal, @NonNull TransactionRunner transactions,
+            SyncOutboxWriter syncOutbox) {
         this.barcodes = Objects.requireNonNull(barcodes);
         this.products = Objects.requireNonNull(products);
         this.stockLogs = Objects.requireNonNull(stockLogs);
         this.opLogs = Objects.requireNonNull(opLogs);
         this.backupJournal = Objects.requireNonNull(backupJournal);
         this.transactions = Objects.requireNonNull(transactions);
+        this.syncOutbox = syncOutbox;
     }
 
     /** A new product, its generated barcode, opening receipt and audit evidence commit atomically. */
@@ -66,7 +79,9 @@ public final class InventoryService {
                             + ",\"cost_satang\":" + costSatang + ",\"unit\":\"" + escape(unit)
                             + "\",\"stock_limit_qty_milli\":" + (stockLimitQtyMilli == null ? "null" : stockLimitQtyMilli) + "}", nowUtc);
             appendStock(UUID.randomUUID().toString(), product, receivedQtyMilli, "RECEIVE", nowUtc);
-            return products.findBySku(sku);
+            ProductEntity result = products.findBySku(sku);
+            appendProductSyncEvent(result, nowUtc);
+            return result;
         });
     }
 
@@ -102,7 +117,9 @@ public final class InventoryService {
                     + "\",\"stock_limit_qty_milli\":" + stockLimitQtyMilli + "}";
             appendOperation(operationId, "INVENTORY_PRODUCT_CREATE", "PRODUCT", sku, payload, nowUtc);
             appendStock(UUID.randomUUID().toString(), product, receivedQtyMilli, "RECEIVE", nowUtc);
-            return products.findBySku(sku);
+            ProductEntity result = products.findBySku(sku);
+            appendProductSyncEvent(result, nowUtc);
+            return result;
         });
     }
 
@@ -121,7 +138,9 @@ public final class InventoryService {
             if (product == null || product.isActive != 1) throw new IllegalArgumentException("PRODUCT_NOT_FOUND");
             long after = Math.addExact(product.stockQtyMilli, quantityMilli);
             appendStock(operationId, product, quantityMilli, "RECEIVE", nowUtc);
-            return products.findBySku(product.sku);
+            ProductEntity result = products.findBySku(product.sku);
+            appendProductSyncEvent(result, nowUtc);
+            return result;
         });
     }
 
@@ -140,7 +159,9 @@ public final class InventoryService {
             if (product == null || product.isActive != 1) throw new IllegalArgumentException("PRODUCT_NOT_FOUND");
             long diff = Math.subtractExact(countedQtyMilli, product.stockQtyMilli);
             appendStock(operationId, product, diff, "COUNT_REPLACE", nowUtc);
-            return products.findBySku(product.sku);
+            ProductEntity result = products.findBySku(product.sku);
+            appendProductSyncEvent(result, nowUtc);
+            return result;
         });
     }
 
@@ -162,6 +183,7 @@ public final class InventoryService {
             String payload = "{\"sku\":\"" + escape(sku) + "\",\"stock_limit_qty_milli\":"
                     + (stockLimitQtyMilli == null ? "null" : stockLimitQtyMilli) + "}";
             appendOperation(operationId, "INVENTORY_STOCK_LIMIT_UPDATE", "PRODUCT", sku, payload, nowUtc);
+            appendProductSyncEvent(updated, nowUtc);
             return null;
         });
     }
@@ -173,6 +195,30 @@ public final class InventoryService {
     }
     @NonNull public List<StockLogEntity> history(@NonNull String sku) {
         return stockLogs.historyForSku(sku);
+    }
+
+
+    /** Appends a complete product aggregate snapshot in the same Room transaction. */
+    private void appendProductSyncEvent(ProductEntity product, String nowUtc) {
+        if (syncOutbox == null) return;
+        try {
+            JSONObject data = new JSONObject();
+            data.put("sku", product.sku);
+            data.put("barcode", product.barcode);
+            data.put("name", product.name);
+            data.put("price_satang", product.priceSatang);
+            data.put("cost_satang", product.costSatang);
+            data.put("unit", product.unit);
+            data.put("stock_limit_qty_milli", product.stockLimitQtyMilli == null
+                    ? JSONObject.NULL : product.stockLimitQtyMilli);
+            data.put("stock_qty_milli", product.stockQtyMilli);
+            data.put("is_active", product.isActive);
+            data.put("created_at_utc", product.createdAtUtc);
+            data.put("updated_at_utc", product.updatedAtUtc);
+            syncOutbox.appendUnboundInTransaction("upsert", "product", product.sku, data, nowUtc);
+        } catch (JSONException | SyncException error) {
+            throw new IllegalStateException("Unable to append inventory sync event", error);
+        }
     }
 
     private void appendStock(String operationId, ProductEntity product, long diff,
