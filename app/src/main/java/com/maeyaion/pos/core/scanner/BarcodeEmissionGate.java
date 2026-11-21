@@ -13,12 +13,15 @@ public final class BarcodeEmissionGate {
 
     public synchronized boolean shouldEmit(String value, long nowMs) {
         if (value == null || value.trim().isEmpty()) return false;
-        if (value.equals(lastValue) && nowMs >= lastEmittedAtMs
-                && nowMs - lastEmittedAtMs < duplicateWindowMs) {
-            return false;
-        }
+        if (value.equals(lastValue)) return false;
         lastValue = value;
         lastEmittedAtMs = nowMs;
         return true;
+    }
+
+    /** Allows the same physical code to be scanned again after it leaves the camera view. */
+    public synchronized void reset() {
+        lastValue = null;
+        lastEmittedAtMs = Long.MIN_VALUE;
     }
 }
