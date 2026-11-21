@@ -3,9 +3,15 @@ package com.maeyaion.pos.app;
 import android.app.Activity;
 import android.content.SharedPreferences;
 import android.content.Intent;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.view.Gravity;
+import android.view.View;
 import android.widget.Button;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -71,74 +77,175 @@ public final class MainActivity extends Activity {
         return button;
     }
 
+    /**
+     * Native, accessible implementation of the approved Canva home-screen design.
+     * Menu tiles remain real Android controls and continue to open the existing features.
+     */
     private void renderHome() {
         showingStoreManagement = false;
-        LinearLayout page = createPage();
-        page.setPadding(dp(18), dp(22), dp(18), dp(28));
-        page.setBackgroundColor(getColor(R.color.pos_background));
 
-        TextView brand = addHeading(page, getString(R.string.app_name), 25);
+        FrameLayout root = new FrameLayout(this);
+        root.setBackgroundColor(getColor(R.color.pos_background));
+        root.addView(new HomeBackgroundView(), new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
+
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(18), dp(24), dp(18), dp(22));
+
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        TextView brand = new TextView(this);
+        brand.setText(getString(R.string.app_name));
         brand.setTextColor(getColor(R.color.pos_forest));
-        brand.setPadding(0, dp(10), 0, dp(4));
+        brand.setTextSize(27);
+        brand.setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD);
+        brand.setGravity(Gravity.CENTER_VERTICAL);
+        brand.setMaxLines(2);
+        LinearLayout.LayoutParams brandParams = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        header.addView(brand, brandParams);
+
+        TextView profile = new TextView(this);
+        profile.setText("👤");
+        profile.setTextSize(24);
+        profile.setGravity(Gravity.CENTER);
+        profile.setContentDescription("จัดการร้านค้าและการตั้งค่า");
+        GradientDrawable profileShape = new GradientDrawable();
+        profileShape.setShape(GradientDrawable.OVAL);
+        profileShape.setColor(Color.TRANSPARENT);
+        profileShape.setStroke(dp(2), getColor(R.color.pos_forest));
+        profile.setBackground(profileShape);
+        profile.setElevation(dp(1));
+        profile.setOnClickListener(view -> renderStoreManagement());
+        header.addView(profile, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        page.addView(header);
+
         TextView subtitle = new TextView(this);
-        subtitle.setText("ระบบขายหน้าร้าน · ใช้งานได้แม้ไม่มีอินเทอร์เน็ต");
-        subtitle.setTextSize(13);
+        subtitle.setText("ระบบขายหน้าร้าน  ·  ใช้งานได้แม้ไม่มีอินเทอร์เน็ต  ☁̸");
+        subtitle.setTextSize(14);
         subtitle.setTextColor(getColor(R.color.pos_text_secondary));
         subtitle.setGravity(Gravity.CENTER);
-        subtitle.setPadding(0, 0, 0, dp(22));
+        subtitle.setPadding(0, dp(8), 0, dp(22));
         page.addView(subtitle);
 
         addMenuRow(page,
-                new String[]{"▣\nการขาย\nขายสินค้าและรับชำระ", "▦\nคลังสินค้า\nสินค้าและสต๊อก"},
+                new String[]{"🧾", "📦"},
+                new String[]{"การขาย", "คลังสินค้า"},
+                new String[]{"ขายสินค้าและรับชำระ", "สินค้าและสต็อก"},
                 new Runnable[]{() -> openSales("cash"), () -> openInventory("menu")});
         addMenuRow(page,
-                new String[]{"▤\nสร้างบาร์โค้ด\nลงทะเบียนและพิมพ์", "↻\nประวัติการขาย\nค้นหาบิลและคืนสินค้า"},
+                new String[]{"🏷️", "🔎"},
+                new String[]{"สร้างบาร์โค้ด", "ประวัติการขาย"},
+                new String[]{"ลงทะเบียนและพิมพ์", "ค้นหาบิลและคืนสินค้า"},
                 new Runnable[]{() -> openBarcode("create"), () -> openHistory("paid")});
         addMenuRow(page,
-                new String[]{"⚙\nจัดการร้านค้า\nตั้งค่าและเครื่องมือ", "▥\nรายงานยอดขาย\nสรุปผลประกอบการ"},
+                new String[]{"⚙️", "📊"},
+                new String[]{"จัดการร้านค้า", "รายงานยอดขาย"},
+                new String[]{"ตั้งค่าและเครื่องมือ", "สรุปผลประกอบการ"},
                 new Runnable[]{this::renderStoreManagement, () -> openReports("daily")});
 
         TextView footer = new TextView(this);
         footer.setText("MAEYAI-ON POS  ·  OFFLINE FIRST");
-        footer.setTextSize(11);
-        footer.setLetterSpacing(0.08f);
+        footer.setTextSize(12);
+        footer.setLetterSpacing(0.06f);
         footer.setTextColor(getColor(R.color.pos_muted));
         footer.setGravity(Gravity.CENTER);
-        footer.setPadding(0, dp(22), 0, dp(8));
+        footer.setPadding(0, dp(18), 0, dp(8));
         page.addView(footer);
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
-        scroll.setBackgroundColor(getColor(R.color.pos_background));
+        scroll.setClipToPadding(false);
         scroll.addView(page);
-        setContentView(scroll);
+        root.addView(scroll, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
+        setContentView(root);
     }
 
-    private void addMenuRow(LinearLayout parent, String[] labels, Runnable[] actions) {
+    private void addMenuRow(LinearLayout parent, String[] icons, String[] titles,
+            String[] descriptions, Runnable[] actions) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        rowParams.bottomMargin = dp(12);
+        rowParams.bottomMargin = dp(14);
         parent.addView(row, rowParams);
-        for (int i = 0; i < labels.length; i++) {
+
+        for (int i = 0; i < titles.length; i++) {
             final Runnable action = actions[i];
-            Button tile = new Button(this);
-            tile.setText(labels[i]);
-            tile.setTextSize(15);
-            tile.setTextColor(getColor(R.color.pos_white));
+            LinearLayout tile = new LinearLayout(this);
+            tile.setOrientation(LinearLayout.VERTICAL);
             tile.setGravity(Gravity.CENTER);
-            tile.setAllCaps(false);
-            tile.setSingleLine(false);
-            tile.setMinHeight(dp(142));
-            tile.setPadding(dp(8), dp(12), dp(8), dp(12));
-            tile.setBackgroundResource(R.drawable.bg_pos_menu_tile);
-            tile.setElevation(dp(2));
+            tile.setPadding(dp(8), dp(14), dp(8), dp(12));
+            tile.setClickable(true);
+            tile.setFocusable(true);
+            tile.setContentDescription(titles[i] + ". " + descriptions[i]);
+            GradientDrawable tileBackground = new GradientDrawable(
+                    GradientDrawable.Orientation.TL_BR,
+                    new int[]{0xFF08A77B, 0xFF087D60, 0xFF075B46});
+            tileBackground.setCornerRadius(dp(24));
+            tileBackground.setStroke(dp(1), 0x45FFFFFF);
+            tile.setBackground(tileBackground);
+            tile.setElevation(dp(6));
             tile.setOnClickListener(view -> action.run());
+
+            TextView icon = new TextView(this);
+            icon.setText(icons[i]);
+            icon.setTextSize(43);
+            icon.setGravity(Gravity.CENTER);
+            icon.setShadowLayer(dp(2), 0, dp(2), 0x66000000);
+            LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, dp(66));
+            tile.addView(icon, iconParams);
+
+            TextView title = new TextView(this);
+            title.setText(titles[i]);
+            title.setTextSize(20);
+            title.setTypeface(android.graphics.Typeface.DEFAULT,
+                    android.graphics.Typeface.BOLD);
+            title.setTextColor(Color.WHITE);
+            title.setGravity(Gravity.CENTER);
+            title.setMaxLines(2);
+            title.setPadding(0, dp(4), 0, dp(3));
+            tile.addView(title);
+
+            TextView description = new TextView(this);
+            description.setText(descriptions[i]);
+            description.setTextSize(14);
+            description.setTextColor(0xFFE5F0EC);
+            description.setGravity(Gravity.CENTER);
+            description.setMaxLines(2);
+            tile.addView(description);
+
             LinearLayout.LayoutParams tileParams = new LinearLayout.LayoutParams(
-                    0, dp(142), 1f);
-            tileParams.setMargins(dp(5), 0, dp(5), 0);
+                    0, dp(168), 1f);
+            tileParams.setMargins(dp(5), dp(2), dp(5), dp(4));
             row.addView(tile, tileParams);
+        }
+    }
+
+    private final class HomeBackgroundView extends View {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        HomeBackgroundView() {
+            super(MainActivity.this);
+            setWillNotDraw(false);
+        }
+
+        @Override protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(dp(2));
+            paint.setColor(0x0D075B46);
+            float originX = -dp(82);
+            float originY = dp(36);
+            for (int i = 0; i < 4; i++) {
+                canvas.drawCircle(originX, originY, dp(118 + i * 28), paint);
+            }
         }
     }
 
