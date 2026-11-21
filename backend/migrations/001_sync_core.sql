@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS sync_conflicts (
   resolved_at TIMESTAMPTZ,
   resolution_event_seq BIGINT
 );
+CREATE UNIQUE INDEX IF NOT EXISTS sync_conflicts_event_unique_idx ON sync_conflicts(store_id, event_id);
 CREATE INDEX IF NOT EXISTS sync_conflicts_open_idx
   ON sync_conflicts(store_id, created_at) WHERE resolved_at IS NULL;
 
