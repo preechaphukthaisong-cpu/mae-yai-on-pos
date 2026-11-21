@@ -22,6 +22,7 @@ import androidx.core.content.ContextCompat;
 import com.maeyaion.pos.app.PosApplication;
 import com.maeyaion.pos.core.db.ProductEntity;
 import com.maeyaion.pos.core.db.StockLogEntity;
+import com.maeyaion.pos.core.navigation.InventoryRoute;
 import com.maeyaion.pos.core.inventory.InventoryService;
 import com.maeyaion.pos.core.inventory.InventoryServiceFactory;
 import com.maeyaion.pos.core.scanner.OfflineBarcodeScanner;
@@ -54,7 +55,7 @@ public final class InventoryActivity extends ComponentActivity {
         cameraExecutor = Executors.newSingleThreadExecutor();
         speech = new ThaiSpeechService(this, null);
         speech.initialize();
-        initialScreen = getIntent().getStringExtra("inventory_screen");
+        initialScreen = getIntent().getStringExtra(InventoryRoute.EXTRA_SCREEN);
         if (initialScreen == null) initialScreen = "menu";
         render(initialScreen);
     }
