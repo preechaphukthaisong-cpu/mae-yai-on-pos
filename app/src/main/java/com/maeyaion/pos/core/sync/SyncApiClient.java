@@ -115,6 +115,9 @@ public final class SyncApiClient {
                 || sha256 == null || !sha256.matches("(?i)[0-9a-f]{64}")) {
             throw new SyncException("Encrypted backup metadata or size is invalid");
         }
+        if (!sha256.equalsIgnoreCase(sha256Hex(encryptedBackup))) {
+            throw new SyncException("Encrypted backup checksum does not match its content");
+        }
         return requestBytes("POST", "/v1/backups", encryptedBackup, true,
                 throughSequence, sha256);
     }
