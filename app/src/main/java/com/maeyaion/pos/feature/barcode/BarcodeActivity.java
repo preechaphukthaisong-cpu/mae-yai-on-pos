@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.view.Gravity;
+import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -17,6 +18,7 @@ import com.maeyaion.pos.core.barcode.BarcodeImageGenerator;
 import com.maeyaion.pos.core.barcode.ProductRegistrationService;
 import com.maeyaion.pos.core.db.AppDatabase;
 import com.maeyaion.pos.core.db.BarcodeRegistryEntity;
+import com.maeyaion.pos.core.navigation.BarcodeRoute;
 import com.maeyaion.pos.core.tx.RoomTransactionRunner;
 
 import java.time.Instant;
@@ -33,6 +35,7 @@ public final class BarcodeActivity extends Activity {
     private EditText nameInput;
     private EditText priceInput;
     private EditText costInput;
+    private Button createButton;
     private TextView resultText;
     private ImageView barcodeImage;
 
@@ -50,8 +53,9 @@ public final class BarcodeActivity extends Activity {
         scroll.addView(content);
         setContentView(scroll);
 
+        boolean catalogOnly = "catalog".equals(getIntent().getStringExtra(BarcodeRoute.EXTRA_SCREEN));
         TextView title = new TextView(this);
-        title.setText("สร้างบาร์โค้ดสินค้า");
+        title.setText(catalogOnly ? "คลังบาร์โค้ด" : "สร้างบาร์โค้ดสินค้า");
         title.setTextSize(23);
         title.setGravity(Gravity.CENTER);
         content.addView(title);
@@ -59,10 +63,10 @@ public final class BarcodeActivity extends Activity {
         nameInput = field("ชื่อสินค้า");
         priceInput = field("ราคาขาย (บาท)");
         costInput = field("ต้นทุน (บาท)");
-        Button create = new Button(this);
-        create.setText("สร้างบาร์โค้ดอัตโนมัติ");
-        create.setOnClickListener(v -> createProduct());
-        content.addView(create);
+        createButton = new Button(this);
+        createButton.setText("สร้างบาร์โค้ดอัตโนมัติ");
+        createButton.setOnClickListener(v -> createProduct());
+        content.addView(createButton);
 
         resultText = new TextView(this);
         resultText.setTextSize(16);
@@ -73,10 +77,19 @@ public final class BarcodeActivity extends Activity {
         content.addView(barcodeImage);
 
         TextView catalogTitle = new TextView(this);
-        catalogTitle.setText("คลังบาร์โค้ด");
+        catalogTitle.setText("รายการบาร์โค้ดที่ลงทะเบียน");
         catalogTitle.setTextSize(20);
         catalogTitle.setPadding(0, 24, 0, 8);
         content.addView(catalogTitle);
+
+        if (catalogOnly) {
+            nameInput.setVisibility(View.GONE);
+            priceInput.setVisibility(View.GONE);
+            costInput.setVisibility(View.GONE);
+            createButton.setVisibility(View.GONE);
+            resultText.setVisibility(View.GONE);
+            barcodeImage.setVisibility(View.GONE);
+        }
     }
 
     private EditText field(String hint) {
@@ -100,7 +113,7 @@ public final class BarcodeActivity extends Activity {
             return;
         }
 
-        Toast.makeText(this, "กำลังสร้างบาร์โค้ด", Toast.LENGTH_SHORT).show();
+        createButton.setEnabled(false);
         worker.execute(() -> {
             try {
                 AppDatabase db = AppDatabase.getInstance(getApplicationContext());
@@ -115,6 +128,7 @@ public final class BarcodeActivity extends Activity {
                         UUID.randomUUID().toString(), sku, name, price, cost, "ชิ้น", null, now, now);
                 Bitmap image = BarcodeImageGenerator.renderCode128(product.barcode);
                 runOnUiThread(() -> {
+                    createButton.setEnabled(true);
                     resultText.setText("สินค้า: " + product.name + "\nบาร์โค้ด: " + product.barcode
                             + "\nราคาขาย: " + formatBaht(product.priceSatang) + " บาท"
                             + "\nสถานะ: เพิ่มเข้าคลังแล้ว (สต๊อกเริ่มต้น 0)");
@@ -125,8 +139,11 @@ public final class BarcodeActivity extends Activity {
                     loadCatalog();
                 });
             } catch (RuntimeException failure) {
-                runOnUiThread(() -> Toast.makeText(this,
-                        "สร้างบาร์โค้ดไม่สำเร็จ: " + safeMessage(failure), Toast.LENGTH_LONG).show());
+                runOnUiThread(() -> {
+                    createButton.setEnabled(true);
+                    Toast.makeText(this, "สร้างบาร์โค้ดไม่สำเร็จ: "
+                            + safeMessage(failure), Toast.LENGTH_LONG).show();
+                });
             }
         });
     }
