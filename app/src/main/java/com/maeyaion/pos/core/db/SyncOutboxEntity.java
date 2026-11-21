@@ -6,7 +6,7 @@ import androidx.room.Entity;
 import androidx.room.Index;
 import androidx.room.PrimaryKey;
 
-/** Durable local events. Rows are deleted only after the server acknowledges eventId. */
+/** Durable local events. Rows are retained after acknowledgement for echo suppression. */
 @Entity(tableName = "sync_outbox",
         indices = {@Index(value = {"delivery_state", "created_at_utc", "event_id"}),
                 @Index(value = "event_id", unique = true)})
@@ -20,7 +20,7 @@ public final class SyncOutboxEntity {
     @NonNull @ColumnInfo(name = "payload_json") public final String payload_json;
     @NonNull @ColumnInfo(name = "payload_sha256") public final String payload_sha256;
     @NonNull @ColumnInfo(name = "created_at_utc") public final String created_at_utc;
-    @ColumnInfo(name = "delivery_state", defaultValue = "PENDING") public final String delivery_state;
+    @ColumnInfo(name = "delivery_state", defaultValue = "'PENDING'") public final String delivery_state;
     @ColumnInfo(name = "attempt_count", defaultValue = "0") public final int attempt_count;
     @ColumnInfo(name = "last_attempt_at_utc") public final String last_attempt_at_utc;
     @ColumnInfo(name = "last_error") public final String last_error;
