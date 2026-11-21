@@ -421,7 +421,11 @@ async function sweepPendingDriveMirrors() {
   }
 }
 
-const server = http.createServer(async (req, res) => {
+const server = http.createServer({
+  requestTimeout: 120_000,
+  headersTimeout: 15_000,
+  keepAliveTimeout: 5_000
+}, async (req, res) => {
   try {
     await handle(req, res);
   } catch (error) {
