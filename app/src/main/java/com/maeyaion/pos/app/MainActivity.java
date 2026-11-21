@@ -18,6 +18,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.common.api.Scope;
 import com.maeyaion.pos.R;
+import com.maeyaion.pos.core.navigation.BarcodeRoute;
 import com.maeyaion.pos.core.navigation.InventoryRoute;
 
 public final class MainActivity extends Activity {
@@ -67,7 +68,7 @@ public final class MainActivity extends Activity {
 
         addButton(page, "การขาย", this::showNotImplemented);
         addButton(page, "คลังสินค้า", () -> openInventory("menu"));
-        addButton(page, "สร้างบาร์โค้ด", this::showNotImplemented);
+        addButton(page, "สร้างบาร์โค้ด", () -> openBarcode("create"));
         addButton(page, "ประวัติการขาย", this::showNotImplemented);
         addButton(page, "จัดการร้านค้า", this::renderStoreManagement);
         addButton(page, "รายงานยอดขาย", this::showNotImplemented);
@@ -129,6 +130,14 @@ public final class MainActivity extends Activity {
         intent.putExtra(InventoryRoute.EXTRA_SCREEN, screen);
         startActivity(intent);
     }
+
+    private void openBarcode(String screen) {
+        Intent intent = new Intent(BarcodeRoute.ACTION);
+        intent.setPackage(getPackageName());
+        intent.putExtra(BarcodeRoute.EXTRA_SCREEN, screen);
+        startActivity(intent);
+    }
+
     private void addMenuSection(LinearLayout parent, String title, String... items) {
         TextView heading = new TextView(this);
         heading.setText(title);
@@ -136,7 +145,10 @@ public final class MainActivity extends Activity {
         heading.setPadding(0, 16, 0, 4);
         parent.addView(heading);
         for (String item : items) {
-            addButton(parent, item, this::showNotImplemented);
+            Runnable action = this::showNotImplemented;
+            if ("สร้างบาร์โค้ด".equals(item)) action = () -> openBarcode("create");
+            else if ("คลังบาร์โค้ด".equals(item)) action = () -> openBarcode("catalog");
+            addButton(parent, item, action);
         }
     }
 
