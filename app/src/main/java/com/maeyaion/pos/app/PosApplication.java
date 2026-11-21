@@ -9,6 +9,7 @@ public final class PosApplication extends Application {
     public void onCreate() {
         super.onCreate();
         AppDatabase.getInstance(this);
+        registerActivityLifecycleCallbacks(new FullscreenMode());
     }
 
     /**
