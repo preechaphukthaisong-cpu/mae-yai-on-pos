@@ -45,8 +45,8 @@ public final class SalesActivity extends ComponentActivity {
  private ThaiSpeechService speech;
  private final ExecutorService worker=Executors.newSingleThreadExecutor();
  private final Map<String,Long> cart=new LinkedHashMap<>();
- private EditText quantity,cashReceived,customerName,customerIdentity;
- private TextView cartText,resultText;
+ private EditText cashReceived,customerName,customerIdentity;
+ private TextView cartText,resultText,scannerCartText;
  private Button checkoutButton;
  private boolean checkoutInFlight;
  private String checkoutIdempotencyKey=UUID.randomUUID().toString();
@@ -76,7 +76,6 @@ public final class SalesActivity extends ComponentActivity {
   ScrollView scroll=new ScrollView(this);scroll.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,0,1f));scroll.addView(root);screenRoot.addView(scroll);setContentView(screenRoot);
   Button backButton=new Button(this);backButton.setText("ย้อนกลับ");backButton.setOnClickListener(v->{cart.clear();renderScanLanding();});LinearLayout.LayoutParams backParams=new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,dp(56));backParams.setMargins(dp(16),dp(8),dp(16),dp(12));screenRoot.addView(backButton,backParams);
   TextView title=new TextView(this);title.setText(credit?"ขายเชื่อ":"ขายเงินสด");title.setTextSize(23);title.setTextColor(getColor(com.maeyaion.pos.R.color.pos_forest));title.setTypeface(android.graphics.Typeface.DEFAULT,android.graphics.Typeface.BOLD);title.setGravity(Gravity.CENTER);title.setPadding(0,dp(12),0,dp(18));root.addView(title);
-  quantity=field(root,"จำนวนสินค้า");quantity.setText("1");
   Button scanButton=new Button(this);scanButton.setText("สแกนบาร์โค้ด");scanButton.setTextSize(20);scanButton.setMinHeight(dp(64));root.addView(scanButton);scanButton.setOnClickListener(v->startScan());
   cartText=new TextView(this);cartText.setPadding(dp(14),dp(14),dp(14),dp(14));cartText.setBackgroundResource(com.maeyaion.pos.R.drawable.bg_pos_card);root.addView(cartText);refreshCart();
   if(credit){customerName=field(root,"ชื่อลูกค้า");customerIdentity=field(root,"ข้อมูลแยกบุคคล เช่น เบอร์โทร");}
@@ -87,19 +86,20 @@ public final class SalesActivity extends ComponentActivity {
  private int dp(float value){return (int)(value*getResources().getDisplayMetrics().density+0.5f);}
  private EditText field(LinearLayout root,String hint){EditText e=new EditText(this);e.setSingleLine(true);e.setHint(hint);root.addView(e);return e;}
  private void addScannedItem(String code){
-  final long qty;
-  try{qty=parseQuantity(quantity.getText().toString());if(code==null||code.trim().isEmpty())throw new IllegalArgumentException("อ่านบาร์โค้ดไม่สำเร็จ");}
-  catch(RuntimeException e){toast(e.getMessage());return;}
+  final long qty=1000L;
+  if(code==null||code.trim().isEmpty()){toast("อ่านบาร์โค้ดไม่สำเร็จ");return;}
   worker.execute(()->{
    try{AppDatabase db=AppDatabase.getInstance(getApplicationContext());ProductEntity p=db.productDao().findByBarcode(code.trim());if(p==null)p=db.productDao().findBySku(code.trim());if(p==null||p.isActive!=1)throw new IllegalArgumentException("ไม่พบสินค้าที่ใช้งานได้");
-    final ProductEntity found=p;runOnUiThread(()->{try{cart.merge(found.sku,qty,Math::addExact);quantity.setText("1");refreshCart();if(speech!=null)speech.speak(found.name+" จำนวน "+formatQty(qty),"sale-item-"+UUID.randomUUID());}catch(RuntimeException invalid){toast(message(invalid));}});
+    final ProductEntity found=p;runOnUiThread(()->{try{cart.merge(found.sku,qty,Math::addExact);refreshCart();if(speech!=null)speech.speak(found.name+" จำนวน "+formatQty(qty),"sale-item-"+UUID.randomUUID());}catch(RuntimeException invalid){toast(message(invalid));}});
    }catch(RuntimeException e){runOnUiThread(()->toast(message(e)));}
   });
  }
  private void refreshCart(){
-  if(cartText==null)return;
-  if(cart.isEmpty()){cartText.setText("ยังไม่มีสินค้าในบิล");return;}
-  StringBuilder b=new StringBuilder("รายการสินค้า\n");for(Map.Entry<String,Long> e:cart.entrySet())b.append(e.getKey()).append(" × ").append(formatQty(e.getValue())).append('\n');cartText.setText(b.toString());
+  StringBuilder b=new StringBuilder();
+  if(cart.isEmpty())b.append("ยังไม่มีสินค้าในตะกร้า");
+  else{b.append("สินค้าในตะกร้า (").append(cart.size()).append(" รายการ)\n");for(Map.Entry<String,Long> e:cart.entrySet())b.append(e.getKey()).append(" × ").append(formatQty(e.getValue())).append('\n');}
+  if(cartText!=null)cartText.setText(b.toString());
+  if(scannerCartText!=null)scannerCartText.setText(b.toString());
  }
  private void checkout(){checkout(false);}
  private void checkout(boolean confirmDuplicate){
@@ -188,20 +188,18 @@ public final class SalesActivity extends ComponentActivity {
   }
  }
  private void showScanner(){
-  LinearLayout scanPage=new LinearLayout(this);scanPage.setOrientation(LinearLayout.VERTICAL);scanPage.setPadding(20,20,20,20);
-  TextView title=new TextView(this);title.setText("สแกนบาร์โค้ดสินค้า");title.setTextSize(22);scanPage.addView(title);
+  LinearLayout scanPage=new LinearLayout(this);scanPage.setOrientation(LinearLayout.VERTICAL);scanPage.setPadding(dp(16),dp(12),dp(16),dp(12));scanPage.setBackgroundColor(getColor(com.maeyaion.pos.R.color.pos_background));
+  TextView title=new TextView(this);title.setText("สแกนบาร์โค้ดสินค้า");title.setTextSize(22);title.setGravity(Gravity.CENTER);scanPage.addView(title,new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,dp(48)));
   PreviewView preview=new PreviewView(this);preview.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,0,1f));scanPage.addView(preview);
-  Button cancel=new Button(this);cancel.setText("ยกเลิก");cancel.setOnClickListener(v->{closeScanner();render();});scanPage.addView(cancel);setContentView(scanPage);
+  scannerCartText=new TextView(this);scannerCartText.setPadding(dp(12),dp(10),dp(12),dp(10));scannerCartText.setBackgroundResource(com.maeyaion.pos.R.drawable.bg_pos_card);scanPage.addView(scannerCartText,new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,dp(112)));refreshCart();
+  Button finish=new Button(this);finish.setText("เสร็จสิ้น — ตรวจสอบตะกร้า");finish.setOnClickListener(v->{closeScanner();scannerCartText=null;renderCheckoutPage();});scanPage.addView(finish,new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,dp(56)));
+  setContentView(scanPage);
   scanner=new OfflineBarcodeScanner(this,this,preview,cameraExecutor,ContextCompat.getMainExecutor(this),new OfflineBarcodeScanner.Listener(){
-   private boolean delivered;
-   @Override public void onBarcode(String rawValue,int format){
-    if(delivered)return;delivered=true;closeScanner();renderCheckoutPage();addScannedItem(rawValue);
-   }
+   @Override public void onBarcode(String rawValue,int format){addScannedItem(rawValue);}
    @Override public void onFailure(Exception error){runOnUiThread(()->toast("สแกนไม่สำเร็จ: "+message(error)));}
   });
  }
  private void closeScanner(){if(scanner!=null){scanner.close();scanner=null;}}
- private static long parseQuantity(String raw){String s=raw==null?"":raw.trim();if(!s.matches("[0-9]{1,9}(\\.[0-9]{1,3})?"))throw new IllegalArgumentException("จำนวนไม่ถูกต้อง");long qty=new BigDecimal(s).multiply(BigDecimal.valueOf(1000)).longValueExact();if(qty<=0)throw new IllegalArgumentException("จำนวนสินค้าต้องมากกว่า 0");return qty;}
  private static String formatQty(long milli){return String.format(Locale.ROOT,"%d.%03d",milli/1000,milli%1000);}
  private static long parseMoney(String raw){String s=raw==null?"":raw.trim();if(!s.matches("[0-9]{1,12}(\\.[0-9]{1,2})?"))throw new IllegalArgumentException("จำนวนเงินไม่ถูกต้อง");return new BigDecimal(s).multiply(BigDecimal.valueOf(100)).longValueExact();}
  private static String formatMoney(long satang){return String.format(Locale.ROOT,"%d.%02d",satang/100,satang%100);}
