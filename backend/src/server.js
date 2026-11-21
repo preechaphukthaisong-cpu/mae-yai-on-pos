@@ -341,26 +341,34 @@ async function handle(req, res) {
   }
   if (req.method === 'POST' && url.pathname === '/v1/drive/connect') {
     const body = await readJson(req);
-    if (typeof body.refreshToken !== 'string' || body.refreshToken.length < 20) throw new HttpError(400, 'A valid Google Drive refresh token is required');
-    const credentials = encryptRefreshToken(body.refreshToken);
+    if (typeof body.serverAuthCode !== 'string' || body.serverAuthCode.length < 20
+        || body.serverAuthCode.length > 4096) {
+      throw new HttpError(400, 'A valid one-time Google server authorization code is required');
+    }
     const tokenForm = new URLSearchParams({
+      code: body.serverAuthCode,
       client_id: process.env.GOOGLE_OAUTH_CLIENT_ID || '',
       client_secret: process.env.GOOGLE_DRIVE_OAUTH_CLIENT_SECRET || '',
-      refresh_token: body.refreshToken || '',
-      grant_type: 'refresh_token'
+      grant_type: 'authorization_code',
+      redirect_uri: ''
     });
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: tokenForm
     });
-    if (!tokenResponse.ok) throw new HttpError(400, 'Google Drive authorization could not be verified');
+    if (!tokenResponse.ok) throw new HttpError(400, 'Google server authorization code exchange failed');
     const token = await tokenResponse.json();
+    if (!token.refresh_token || !token.access_token
+        || !String(token.scope || '').includes('drive.appdata')) {
+      throw new HttpError(403, 'Google did not grant offline Drive appData access; reconnect with consent');
+    }
     const profileResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
       headers: { authorization: 'Bearer ' + token.access_token }
     });
     const profile = profileResponse.ok ? await profileResponse.json() : {};
-    if (profile.sub !== identity.sub || !String(token.scope || '').includes('drive.appdata')) {
-      throw new HttpError(403, 'Connect the same Google account and grant the Drive appData permission');
+    if (profile.sub !== identity.sub) {
+      throw new HttpError(403, 'Connected Google Drive account does not match the signed-in store owner');
     }
+    const credentials = encryptRefreshToken(token.refresh_token);
     await pool.query(
       `INSERT INTO drive_connections(store_id, refresh_token_ciphertext, refresh_token_iv,
          refresh_token_tag, connected_by_google_sub)
