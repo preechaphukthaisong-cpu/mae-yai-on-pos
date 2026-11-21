@@ -39,6 +39,9 @@ public final class GoogleSignInTokenProvider implements SyncAuthTokenProvider {
             return account.getIdToken();
         } catch (SyncException error) {
             throw error;
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw new SyncException("Google sign-in refresh was interrupted", error);
         } catch (Exception error) {
             throw new SyncException("Unable to refresh Google sign-in for sync", error);
         }
