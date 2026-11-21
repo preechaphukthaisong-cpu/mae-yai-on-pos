@@ -121,10 +121,12 @@ public final class EncryptedBackupFileStore {
             throw new IOException("Local Keystore key sidecar is missing or invalid; use Recovery Password or Recovery Key");
         }
         byte[] protectedKey = readBounded(localKey);
+        File decrypted = new File(privateStagingDirectory, "." + UUID.randomUUID() + ".payload" + TEMP_SUFFIX);
         File temporary = new File(privateStagingDirectory, "." + UUID.randomUUID() + TEMP_SUFFIX);
         File staged = new File(privateStagingDirectory, UUID.randomUUID() + ".restore.db");
         try {
-            BackupCrypto.decryptFileToLocalKey(encryptedBackup, temporary, protectedKey, protector);
+            BackupCrypto.decryptFileToLocalKey(encryptedBackup, decrypted, protectedKey, protector);
+            BackupCompression.expandIfCompressed(decrypted, temporary);
             if (validator == null || !validator.isValid(temporary)) {
                 throw new IOException("Staged database failed integrity/schema validation");
             }
@@ -135,6 +137,7 @@ public final class EncryptedBackupFileStore {
         } finally {
             wipe(protectedKey);
             if (temporary.exists()) temporary.delete();
+            if (decrypted.exists()) decrypted.delete();
         }
     }
 
@@ -144,10 +147,12 @@ public final class EncryptedBackupFileStore {
             throws IOException, GeneralSecurityException {
         requireDirectory(privateStagingDirectory);
         requireBackupFile(encryptedBackup);
+        File decrypted = new File(privateStagingDirectory, "." + UUID.randomUUID() + ".payload" + TEMP_SUFFIX);
         File temporary = new File(privateStagingDirectory, "." + UUID.randomUUID() + TEMP_SUFFIX);
         File staged = new File(privateStagingDirectory, UUID.randomUUID() + ".restore.db");
         try {
-            BackupCrypto.decryptFileTo(encryptedBackup, temporary, recoveryPassword, recoveryKey);
+            BackupCrypto.decryptFileTo(encryptedBackup, decrypted, recoveryPassword, recoveryKey);
+            BackupCompression.expandIfCompressed(decrypted, temporary);
             if (validator == null || !validator.isValid(temporary)) {
                 throw new IOException("Staged database failed integrity/schema validation");
             }
@@ -157,6 +162,7 @@ public final class EncryptedBackupFileStore {
             return staged;
         } finally {
             if (temporary.exists()) temporary.delete();
+            if (decrypted.exists()) decrypted.delete();
         }
     }
 
