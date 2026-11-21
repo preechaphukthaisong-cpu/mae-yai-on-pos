@@ -16,6 +16,7 @@ import com.maeyaion.pos.core.money.SaleCalculator;
 import com.maeyaion.pos.core.navigation.SalesRoute;
 import com.maeyaion.pos.core.sales.CustomerService;
 import com.maeyaion.pos.core.sales.SaleService;
+import com.maeyaion.pos.core.sales.DebtPaymentService;
 import com.maeyaion.pos.core.tx.RoomTransactionRunner;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -96,14 +97,40 @@ public final class SalesActivity extends Activity {
    try{
     AppDatabase db=AppDatabase.getInstance(getApplicationContext());
     java.util.List<CustomerEntity> customers=db.customerDao().listAll();
-    java.util.List<String> labels=new java.util.ArrayList<>();
+    java.util.Map<String,java.util.List<SaleEntity>> debts=new LinkedHashMap<>();
+    java.util.Map<String,Long> balances=new LinkedHashMap<>();
     for(CustomerEntity customer:customers){
-     long balance=0;
-     for(com.maeyaion.pos.core.db.SaleEntity sale:db.saleDao().creditForCustomer(customer.id))
-      if("UNPAID".equals(sale.payment_status))balance=Math.addExact(balance,db.saleBalanceDao().outstanding(sale.id));
-     labels.add(customer.name+"\\nยอดค้าง: "+formatMoney(balance)+" บาท");
+     java.util.List<SaleEntity> bills=db.saleDao().creditForCustomer(customer.id);
+     java.util.List<SaleEntity> unpaid=new java.util.ArrayList<>();long balance=0;
+     for(SaleEntity sale:bills)if("UNPAID".equals(sale.payment_status)){
+      long outstanding=db.saleBalanceDao().outstanding(sale.id);
+      if(outstanding>0){unpaid.add(sale);balance=Math.addExact(balance,outstanding);}
+     }
+     debts.put(customer.id,unpaid);balances.put(customer.id,balance);
     }
-    runOnUiThread(()->{for(String label:labels){TextView row=new TextView(this);row.setText(label);row.setPadding(4,12,4,12);root.addView(row);}});
+    runOnUiThread(()->{
+     for(CustomerEntity customer:customers){
+      TextView heading=new TextView(this);
+      heading.setText(customer.name+"\nยอดค้างรวม: "+formatMoney(balances.get(customer.id))+" บาท");
+      heading.setTextSize(18);heading.setPadding(4,14,4,6);root.addView(heading);
+      for(SaleEntity sale:debts.get(customer.id)){
+       long outstanding=db.saleBalanceDao().outstanding(sale.id);
+       Button bill=new Button(this);
+       bill.setText("บิล "+sale.id.substring(0,8)+" · ค้าง "+formatMoney(outstanding)+" บาท · รับชำระเต็มบิล");
+       bill.setOnClickListener(v->payCustomerBill(sale.id));root.addView(bill);
+      }
+     }
+     if(customers.isEmpty())toast("ยังไม่มีบัญชีลูกค้าเชื่อ");
+    });
+   }catch(RuntimeException e){runOnUiThread(()->toast(message(e)));}
+  });
+ }
+ private void payCustomerBill(String saleId){
+  worker.execute(()->{
+   try{
+    AppDatabase db=AppDatabase.getInstance(getApplicationContext());
+    long paid=new DebtPaymentService(db,new RoomTransactionRunner(db)).payBills(java.util.Collections.singletonList(saleId),Instant.now().toString());
+    runOnUiThread(()->{toast("รับชำระแล้ว "+formatMoney(paid)+" บาท");render();});
    }catch(RuntimeException e){runOnUiThread(()->toast(message(e)));}
   });
  }
