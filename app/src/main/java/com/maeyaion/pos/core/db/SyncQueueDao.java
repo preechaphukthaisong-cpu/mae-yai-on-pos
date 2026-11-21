@@ -24,6 +24,9 @@ public interface SyncQueueDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     long receiveRemote(SyncInboxEntity event);
 
+    @Query("SELECT * FROM sync_inbox WHERE event_id=:eventId LIMIT 1")
+    SyncInboxEntity inboxEvent(String eventId);
+
     @Query("SELECT * FROM sync_inbox WHERE store_id=:storeId AND applied=0 ORDER BY server_sequence ASC LIMIT :limit")
     List<SyncInboxEntity> unappliedInbox(String storeId, int limit);
 
