@@ -30,6 +30,9 @@ public interface SyncQueueDao {
     @Query("UPDATE sync_inbox SET applied=1 WHERE event_id=:eventId AND applied=0")
     int markRemoteApplied(String eventId);
 
+    @Query("SELECT store_id FROM sync_cursor ORDER BY updated_at_utc DESC LIMIT 1")
+    String boundStoreId();
+
     @Query("SELECT * FROM sync_cursor WHERE store_id=:storeId LIMIT 1")
     SyncCursorEntity cursor(String storeId);
 
