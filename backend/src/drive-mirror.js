@@ -92,7 +92,11 @@ async function deleteDriveFile(accessToken, fileId) {
 
 export async function mirrorSnapshot(pool, storeId, snapshotId) {
   const client = await pool.connect();
+  let lockAcquired = false;
   try {
+    const lock = await client.query('SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS locked', [snapshotId]);
+    lockAcquired = lock.rows[0]?.locked === true;
+    if (!lockAcquired) return { mirrored: false, reason: 'already_processing' };
     const result = await client.query(
       `SELECT b.*, s.owner_google_sub, d.refresh_token_ciphertext,
               d.refresh_token_iv, d.refresh_token_tag
@@ -104,6 +108,7 @@ export async function mirrorSnapshot(pool, storeId, snapshotId) {
     );
     if (!result.rowCount || !result.rows[0].refresh_token_ciphertext) return { mirrored: false, reason: 'drive_not_connected' };
     const snapshot = result.rows[0];
+    if (snapshot.drive_file_id) return { mirrored: true, driveFileId: snapshot.drive_file_id, alreadyMirrored: true };
     const refreshToken = decryptRefreshToken(snapshot);
     const accessToken = await getDriveAccessToken(refreshToken);
     await assertDriveAccount(accessToken, snapshot.owner_google_sub);
@@ -127,6 +132,7 @@ export async function mirrorSnapshot(pool, storeId, snapshotId) {
     }
     return { mirrored: true, driveFileId, rotated: expired.rowCount };
   } finally {
+    if (lockAcquired) await client.query('SELECT pg_advisory_unlock(hashtextextended($1, 0))', [snapshotId]).catch(() => {});
     client.release();
   }
 }
