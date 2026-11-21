@@ -6,7 +6,7 @@ import androidx.room.ForeignKey;
 import androidx.room.Index;
 import androidx.room.PrimaryKey;
 
-@Entity(tableName="sale_cancel_line", foreignKeys=@ForeignKey(entity=SaleCancelEntity.class,parentColumns="id",childColumns="cancel_id",onDelete=ForeignKey.RESTRICT), indices={@Index(value={"sale_line_id"})})
+@Entity(tableName="sale_cancel_line", foreignKeys={@ForeignKey(entity=SaleCancelEntity.class,parentColumns="id",childColumns="cancel_id",onDelete=ForeignKey.RESTRICT),@ForeignKey(entity=SaleLineEntity.class,parentColumns="id",childColumns="sale_line_id",onDelete=ForeignKey.RESTRICT)}, indices={@Index(value={"sale_line_id"})})
 public final class SaleCancelLineEntity {
     @PrimaryKey @NonNull public final String id;
     @NonNull public final String cancel_id;
