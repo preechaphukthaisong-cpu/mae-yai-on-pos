@@ -2,12 +2,17 @@ name: Android Release Signing Verification
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Android CI"]
+    types: [completed]
+    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
   release:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     name: Build and verify signed release APK
     runs-on: ubuntu-latest
     timeout-minutes: 35
