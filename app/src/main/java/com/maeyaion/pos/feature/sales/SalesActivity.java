@@ -54,14 +54,30 @@ public final class SalesActivity extends ComponentActivity {
  private String screen;
  @Override protected void onCreate(Bundle state){super.onCreate(state);cameraExecutor=Executors.newSingleThreadExecutor();speech=new ThaiSpeechService(this,null);speech.initialize();screen=getIntent().getStringExtra(SalesRoute.EXTRA_SCREEN);credit="credit".equals(screen);render();}
  private void render(){
+  if("customers".equals(screen)){
+   LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(18),dp(16),dp(18),dp(24));root.setBackgroundColor(getColor(com.maeyaion.pos.R.color.pos_background));
+   LinearLayout screenRoot=new LinearLayout(this);screenRoot.setOrientation(LinearLayout.VERTICAL);
+   ScrollView scroll=new ScrollView(this);scroll.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,0,1f));scroll.addView(root);screenRoot.addView(scroll);setContentView(screenRoot);
+   Button backButton=new Button(this);backButton.setText("ย้อนกลับ");backButton.setOnClickListener(v->finish());LinearLayout.LayoutParams backParams=new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,dp(56));backParams.setMargins(dp(16),dp(8),dp(16),dp(12));screenRoot.addView(backButton,backParams);
+   TextView title=new TextView(this);title.setText("บัญชีลูกค้าเชื่อ");title.setTextSize(23);title.setTextColor(getColor(com.maeyaion.pos.R.color.pos_forest));title.setTypeface(android.graphics.Typeface.DEFAULT,android.graphics.Typeface.BOLD);title.setGravity(Gravity.CENTER);title.setPadding(0,dp(12),0,dp(18));root.addView(title);
+   loadCustomers(root);return;
+  }
+  renderScanLanding();
+ }
+ private void renderScanLanding(){
+  LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setGravity(Gravity.CENTER);root.setPadding(dp(24),dp(24),dp(24),dp(24));root.setBackgroundColor(getColor(com.maeyaion.pos.R.color.pos_background));
+  Button scanButton=new Button(this);scanButton.setText("สแกนบาร์โค้ด");scanButton.setTextSize(20);scanButton.setMinHeight(dp(72));
+  LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,dp(76));params.setMargins(dp(24),0,dp(24),0);root.addView(scanButton,params);
+  scanButton.setOnClickListener(v->startScan());setContentView(root);
+ }
+ private void renderCheckoutPage(){
   LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(18),dp(16),dp(18),dp(24));root.setBackgroundColor(getColor(com.maeyaion.pos.R.color.pos_background));
   LinearLayout screenRoot=new LinearLayout(this);screenRoot.setOrientation(LinearLayout.VERTICAL);
   ScrollView scroll=new ScrollView(this);scroll.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,0,1f));scroll.addView(root);screenRoot.addView(scroll);setContentView(screenRoot);
-  Button backButton=new Button(this);backButton.setText("ย้อนกลับ");backButton.setOnClickListener(v->finish());LinearLayout.LayoutParams backParams=new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,dp(56));backParams.setMargins(dp(16),dp(8),dp(16),dp(12));screenRoot.addView(backButton,backParams);
-  TextView title=new TextView(this);title.setText("customers".equals(screen)?"บัญชีลูกค้าเชื่อ":credit?"ขายเชื่อ":"ขายเงินสด");title.setTextSize(23);title.setTextColor(getColor(com.maeyaion.pos.R.color.pos_forest));title.setTypeface(android.graphics.Typeface.DEFAULT,android.graphics.Typeface.BOLD);title.setGravity(Gravity.CENTER);title.setPadding(0,dp(12),0,dp(18));root.addView(title);
-  if("customers".equals(screen)){loadCustomers(root);return;}
-  quantity=field(root,"จำนวนสินค้าก่อนสแกน (สูงสุด 3 ตำแหน่ง)");quantity.setText("1");
-  Button scanButton=new Button(this);scanButton.setText("สแกนบาร์โค้ด");scanButton.setTextSize(20);scanButton.setMinHeight((int)(64*getResources().getDisplayMetrics().density));root.addView(scanButton);scanButton.setOnClickListener(v->startScan());
+  Button backButton=new Button(this);backButton.setText("ย้อนกลับ");backButton.setOnClickListener(v->{cart.clear();renderScanLanding();});LinearLayout.LayoutParams backParams=new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,dp(56));backParams.setMargins(dp(16),dp(8),dp(16),dp(12));screenRoot.addView(backButton,backParams);
+  TextView title=new TextView(this);title.setText(credit?"ขายเชื่อ":"ขายเงินสด");title.setTextSize(23);title.setTextColor(getColor(com.maeyaion.pos.R.color.pos_forest));title.setTypeface(android.graphics.Typeface.DEFAULT,android.graphics.Typeface.BOLD);title.setGravity(Gravity.CENTER);title.setPadding(0,dp(12),0,dp(18));root.addView(title);
+  quantity=field(root,"จำนวนสินค้า");quantity.setText("1");
+  Button scanButton=new Button(this);scanButton.setText("สแกนบาร์โค้ด");scanButton.setTextSize(20);scanButton.setMinHeight(dp(64));root.addView(scanButton);scanButton.setOnClickListener(v->startScan());
   cartText=new TextView(this);cartText.setPadding(dp(14),dp(14),dp(14),dp(14));cartText.setBackgroundResource(com.maeyaion.pos.R.drawable.bg_pos_card);root.addView(cartText);refreshCart();
   if(credit){customerName=field(root,"ชื่อลูกค้า");customerIdentity=field(root,"ข้อมูลแยกบุคคล เช่น เบอร์โทร");}
   else cashReceived=field(root,"รับเงิน (บาท)");
@@ -179,7 +195,7 @@ public final class SalesActivity extends ComponentActivity {
   scanner=new OfflineBarcodeScanner(this,this,preview,cameraExecutor,ContextCompat.getMainExecutor(this),new OfflineBarcodeScanner.Listener(){
    private boolean delivered;
    @Override public void onBarcode(String rawValue,int format){
-    if(delivered)return;delivered=true;closeScanner();render();addScannedItem(rawValue);
+    if(delivered)return;delivered=true;closeScanner();renderCheckoutPage();addScannedItem(rawValue);
    }
    @Override public void onFailure(Exception error){runOnUiThread(()->toast("สแกนไม่สำเร็จ: "+message(error)));}
   });
