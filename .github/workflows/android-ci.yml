@@ -3,7 +3,7 @@ on:
   push:
     branches: [main, phase-3-foundation]
   pull_request:
-    branches: [main]
+    branches: [main, feature/complete-google-drive-backup]
 permissions:
   contents: read
 concurrency:
