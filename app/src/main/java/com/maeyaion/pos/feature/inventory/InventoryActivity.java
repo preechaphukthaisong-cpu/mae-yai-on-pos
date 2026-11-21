@@ -67,7 +67,8 @@ public final class InventoryActivity extends ComponentActivity {
         closeScanner();
         page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(24, 20, 24, 24);
+        page.setPadding(dp(20), dp(18), dp(20), dp(24));
+        page.setBackgroundColor(getColor(com.maeyaion.pos.R.color.pos_background));
         addButton("menu".equals(screen) ? "ย้อนกลับหน้าหลัก" : "ย้อนกลับเมนูคลังสินค้า",
                 () -> { if ("menu".equals(screen)) finish(); else render("menu"); });
         switch (screen) {
@@ -272,8 +273,12 @@ public final class InventoryActivity extends ComponentActivity {
                 + " · ราคาขาย " + moneyText(product.priceSatang) + " บาท"
                 + (product.stockLimitQtyMilli == null ? "" :
                 " · ลิมิต " + quantityText(product.stockLimitQtyMilli)));
-        card.setPadding(8, 14, 8, 14);
-        page.addView(card);
+        card.setPadding(dp(14), dp(14), dp(14), dp(14));
+        card.setBackgroundResource(com.maeyaion.pos.R.drawable.bg_pos_card);
+        LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        cardParams.setMargins(0, dp(5), 0, dp(7));
+        page.addView(card, cardParams);
     }
 
     private void editLimit(ProductEntity product) {
@@ -369,10 +374,16 @@ public final class InventoryActivity extends ComponentActivity {
 
     private void heading(String value) {
         TextView title = text(value);
-        title.setTextSize(22);
+        title.setTextSize(23);
+        title.setTextColor(getColor(com.maeyaion.pos.R.color.pos_forest));
+        title.setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD);
         title.setGravity(Gravity.CENTER);
-        title.setPadding(0, 12, 0, 18);
+        title.setPadding(0, dp(14), 0, dp(20));
         page.addView(title);
+    }
+
+    private int dp(float value) {
+        return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 
     private TextView text(String value) {
