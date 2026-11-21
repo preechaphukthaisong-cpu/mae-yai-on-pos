@@ -2,9 +2,28 @@
 <resources>
     <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
-        <item name="android:colorAccent">#315C4B</item>
+        <item name="android:colorAccent">@color/pos_emerald</item>
+        <item name="android:colorControlActivated">@color/pos_emerald</item>
+        <item name="android:colorControlHighlight">@color/pos_mint</item>
+        <item name="android:colorControlNormal">@color/pos_muted</item>
+        <item name="android:colorButtonNormal">@color/pos_emerald</item>
+        <item name="android:textColorPrimary">@color/pos_text</item>
+        <item name="android:textColorSecondary">@color/pos_text_secondary</item>
+        <item name="android:windowBackground">@color/pos_background</item>
         <item name="android:windowLightStatusBar">true</item>
-        <item name="android:navigationBarColor">#FFFFFF</item>
-        <item name="android:statusBarColor">#FFFFFF</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:navigationBarColor">@color/pos_white</item>
+        <item name="android:statusBarColor">@color/pos_white</item>
+        <item name="android:buttonStyle">@style/PosPrimaryButton</item>
+        <item name="android:editTextColor">@color/pos_text</item>
+    </style>
+
+    <style name="PosPrimaryButton" parent="@android:style/Widget.Material.Button">
+        <item name="android:backgroundTint">@color/pos_emerald</item>
+        <item name="android:textColor">@color/pos_white</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:paddingStart">20dp</item>
+        <item name="android:paddingEnd">20dp</item>
     </style>
 </resources>
