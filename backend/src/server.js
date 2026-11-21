@@ -237,15 +237,20 @@ async function handleBackupUpload(req, res, context) {
     await client.query('BEGIN');
     const store = await client.query('SELECT last_event_seq FROM stores WHERE id = $1 FOR UPDATE', [context.store_id]);
     if (!store.rowCount) throw new HttpError(404, 'Store not found');
-    if (BigInt(throughSeq) > BigInt(store.rows[0].last_event_seq)) {
-      throw new HttpError(409, 'Backup sequence is ahead of the authoritative sync log');
+    if (BigInt(throughSeq) !== BigInt(store.rows[0].last_event_seq)) {
+      throw new HttpError(409, 'A full snapshot must include the latest authoritative event sequence', {
+        expectedSequence: String(store.rows[0].last_event_seq), submittedSequence: throughSeq
+      });
     }
-    snapshotId = crypto.randomUUID();
-    await client.query(
+    const inserted = await client.query(
       `INSERT INTO backup_snapshots(id, store_id, created_by_device, through_seq, sha256, byte_length, encrypted_blob)
-       VALUES($1,$2,$3,$4,$5,$6,$7)`,
-      [snapshotId, context.store_id, context.device_id, throughSeq, claimedSha.toLowerCase(), blob.length, blob]
+       VALUES($1,$2,$3,$4,$5,$6,$7)
+       ON CONFLICT(store_id, through_seq, sha256) DO UPDATE
+         SET created_by_device = EXCLUDED.created_by_device
+       RETURNING id`,
+      [crypto.randomUUID(), context.store_id, context.device_id, throughSeq, claimedSha.toLowerCase(), blob.length, blob]
     );
+    snapshotId = inserted.rows[0].id;
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
