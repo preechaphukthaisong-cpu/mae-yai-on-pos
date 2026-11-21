@@ -17,6 +17,7 @@ Android native application written in Java. Single-device, offline-first POS.
 - Google Drive is backup storage only, never a live database or sync backend.
 - v1 has no in-app printer implementation.
 - Plaintext database or backup payloads must never be uploaded to Google Drive.
+- **Mandatory update compatibility:** every release must update over the installed version without uninstalling or clearing app data; keep applicationId and the approved release signing certificate unchanged, strictly increase versionCode, and preserve all POS data through tested Room migrations. See `docs/UPDATE_COMPATIBILITY_POLICY.md`.
 
 ## Documents
 - `docs/SPEC.md` — approved requirements and phase plan.
@@ -25,6 +26,7 @@ Android native application written in Java. Single-device, offline-first POS.
 - `docs/SCHEMA.md` — authoritative database design.
 - `docs/MENU_LOCK.json` — locked navigation contract.
 - `docs/phase-3-progress.md` — implementation progress and security gates.
+- `docs/UPDATE_COMPATIBILITY_POLICY.md` — mandatory rules for signed in-place updates, versioning, and data preservation.
 
 ## CI
 Pull requests targeting `main` run unit tests, Android emulator instrumentation tests and a debug APK build. The emulator test script is a single command because android-emulator-runner executes script lines independently. CI verifies and uploads the generated Room v4 schema JSON and debug APK as artifacts. A green CI run does not replace physical-device acceptance.
