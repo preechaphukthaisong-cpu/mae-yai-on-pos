@@ -107,32 +107,31 @@ public final class InventoryActivity extends ComponentActivity {
                 } catch (RuntimeException error) { toast(message(error)); }
             } else {
                 toast("ไม่พบสินค้า เปิดแบบฟอร์มเพิ่มสินค้าใหม่");
-                renderNewProduct(quantity.getText().toString());
+                renderNewProduct(barcode, quantity.getText().toString());
             }
         }));
     }
 
-    private void renderNewProduct(String defaultQty) {
+    private void renderNewProduct(String scannedBarcode, String defaultQty) {
         heading("ลงทะเบียนสินค้าใหม่");
-        addText("ระบบจะสร้างบาร์โค้ด Code 128 ให้อัตโนมัติ เริ่มที่ 2000001");
+        addText("บาร์โค้ดที่สแกน: " + scannedBarcode);
         EditText name = field("ชื่อสินค้า *", "");
         EditText price = field("ราคาขาย (บาท) *", "");
-        EditText cost = field("ต้นทุน (บาท) *", "");
         EditText unit = field("หน่วยนับ *", "ชิ้น");
-        EditText limit = field("ลิมิตสต๊อก (เว้นว่าง = ไม่กำหนด)", "");
+        EditText limit = field("สต็อกขั้นต่ำ *", "");
         EditText qty = field("จำนวนรับเข้า *", defaultQty);
         addButton("บันทึกสินค้าและรับเข้าคลัง", () -> {
             try {
                 String productName = required(name, "กรอกชื่อสินค้า");
                 String productUnit = required(unit, "กรอกหน่วยนับ");
                 long priceSatang = moneySatang(price.getText().toString());
-                long costSatang = moneySatang(cost.getText().toString());
-                Long limitMilli = limit.getText().toString().trim().isEmpty()
-                        ? null : quantityMilli(limit.getText().toString());
+                long costSatang = 0L;
+                long limitMilli = quantityMilli(required(limit, "กรอกสต็อกขั้นต่ำ"));
+                if (limitMilli <= 0) throw new IllegalArgumentException("สต็อกขั้นต่ำต้องมากกว่า 0");
                 long receivedMilli = quantityMilli(qty.getText().toString());
                 String sku = "SKU-" + UUID.randomUUID().toString().toUpperCase(Locale.ROOT);
-                ProductEntity created = inventory.createAndReceive(UUID.randomUUID().toString(),
-                        sku, productName, priceSatang, costSatang, productUnit,
+                ProductEntity created = inventory.createAndReceiveWithBarcode(UUID.randomUUID().toString(),
+                        sku, scannedBarcode, productName, priceSatang, costSatang, productUnit,
                         limitMilli, receivedMilli, now());
                 speakNewProduct();
                 toast("บันทึกสินค้าแล้ว บาร์โค้ด " + created.barcode);
@@ -235,7 +234,6 @@ public final class InventoryActivity extends ComponentActivity {
         TextView card = text(product.name + " · " + product.barcode
                 + "\nคงเหลือ " + quantityText(product.stockQtyMilli) + " " + product.unit
                 + " · ราคาขาย " + moneyText(product.priceSatang) + " บาท"
-                + " · ต้นทุน " + moneyText(product.costSatang) + " บาท"
                 + (product.stockLimitQtyMilli == null ? "" :
                 " · ลิมิต " + quantityText(product.stockLimitQtyMilli)));
         card.setPadding(8, 14, 8, 14);
@@ -246,12 +244,14 @@ public final class InventoryActivity extends ComponentActivity {
         render("limit");
         heading("ตั้งค่าลิมิตสต๊อก");
         addText(product.name + " · คงเหลือ " + quantityText(product.stockQtyMilli));
-        EditText value = field("ลิมิตใหม่ (เว้นว่างเพื่อล้างลิมิต)", product.stockLimitQtyMilli == null
+        EditText value = field("สต็อกขั้นต่ำใหม่ *", product.stockLimitQtyMilli == null
                 ? "" : quantityText(product.stockLimitQtyMilli));
         addButton("บันทึกลิมิต", () -> {
             try {
                 String raw = value.getText().toString().trim();
-                Long limit = raw.isEmpty() ? null : quantityMilli(raw);
+                if (raw.isEmpty()) throw new IllegalArgumentException("กรอกสต็อกขั้นต่ำ");
+                Long limit = quantityMilli(raw);
+                if (limit <= 0) throw new IllegalArgumentException("สต็อกขั้นต่ำต้องมากกว่า 0");
                 inventory.updateStockLimit(UUID.randomUUID().toString(), product.sku, limit, now());
                 toast("บันทึกลิมิตแล้ว");
                 render("limit");
