@@ -56,6 +56,7 @@ public final class SalesActivity extends ComponentActivity {
  private void render(){
   LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(20,16,20,20);
   ScrollView scroll=new ScrollView(this);scroll.addView(root);setContentView(scroll);
+  Button backButton=new Button(this);backButton.setText("ย้อนกลับ");backButton.setOnClickListener(v->finish());root.addView(backButton);
   TextView title=new TextView(this);title.setText("customers".equals(screen)?"บัญชีลูกค้าเชื่อ":credit?"ขายเชื่อ":"ขายเงินสด");title.setTextSize(23);title.setGravity(Gravity.CENTER);root.addView(title);
   if("customers".equals(screen)){loadCustomers(root);return;}
   quantity=field(root,"จำนวนสินค้าก่อนสแกน (สูงสุด 3 ตำแหน่ง)");quantity.setText("1");
