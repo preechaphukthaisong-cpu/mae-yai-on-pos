@@ -3,11 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "node src/server.js",
     "test": "node --test",
-    "check": "node --check src/server.js && node --check src/security.js && node --check src/drive-mirror.js"
+    "check": "node --check src/server.js && node --check src/security.js && node --check src/drive-mirror.js",
+    "migrate": "node src/migrate.js"
   },
   "dependencies": {
     "google-auth-library": "^10.3.0",
