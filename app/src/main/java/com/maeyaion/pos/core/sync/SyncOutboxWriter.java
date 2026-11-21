@@ -28,7 +28,9 @@ public final class SyncOutboxWriter {
             @NonNull String entityType, @NonNull String entityId,
             @NonNull org.json.JSONObject domainData, @NonNull String createdAtUtc)
             throws SyncException {
-        return appendInTransaction(UNBOUND_STORE_ID, operation, entityType, entityId,
+        String storeId = database.syncQueueDao().boundStoreId();
+        if (storeId == null || storeId.trim().isEmpty()) storeId = UNBOUND_STORE_ID;
+        return appendInTransaction(storeId, operation, entityType, entityId,
                 domainData, createdAtUtc);
     }
 
