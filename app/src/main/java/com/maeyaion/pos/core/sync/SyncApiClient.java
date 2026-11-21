@@ -12,6 +12,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
@@ -40,8 +42,16 @@ public final class SyncApiClient {
         }
         String normalized = baseUrl.trim();
         while (normalized.endsWith("/")) normalized = normalized.substring(0, normalized.length() - 1);
-        if (!normalized.startsWith("https://")) {
-            throw new SyncException("Sync server must use HTTPS");
+        try {
+            URI parsed = new URI(normalized);
+            if (!"https".equalsIgnoreCase(parsed.getScheme()) || parsed.getHost() == null
+                    || parsed.getUserInfo() != null || parsed.getQuery() != null
+                    || parsed.getFragment() != null || parsed.getPath() == null
+                    || (parsed.getPort() != -1 && (parsed.getPort() < 1 || parsed.getPort() > 65535))) {
+                throw new SyncException("Sync server URL must be a valid HTTPS origin with no credentials, query, or fragment");
+            }
+        } catch (URISyntaxException error) {
+            throw new SyncException("Sync server URL is invalid", error);
         }
         this.baseUrl = normalized;
         this.tokenProvider = tokenProvider;
@@ -85,6 +95,15 @@ public final class SyncApiClient {
                 null, true);
     }
 
+    @NonNull public JSONObject listConflicts() throws SyncException {
+        return requestJson("GET", "/v1/conflicts", null, true);
+    }
+
+    public void revokeDevice(@NonNull String deviceId) throws SyncException {
+        if (!isUuid(deviceId)) throw new SyncException("Invalid device ID");
+        requestJson("DELETE", "/v1/devices/" + deviceId, null, false);
+    }
+
     @NonNull public JSONObject listBackups() throws SyncException {
         return requestJson("GET", "/v1/backups", null, true);
     }
@@ -109,7 +128,12 @@ public final class SyncApiClient {
     private JSONObject requestJson(String method, String path, JSONObject body,
             boolean deviceScoped) throws SyncException {
         byte[] bytes = null;
-        if (body != null) bytes = body.toString().getBytes(StandardCharsets.UTF_8);
+        if (body != null) {
+            bytes = body.toString().getBytes(StandardCharsets.UTF_8);
+            if (bytes.length > MAX_JSON_RESPONSE_BYTES) {
+                throw new SyncException("Sync request exceeds the 2 MiB payload limit");
+            }
+        }
         byte[] response = execute(method, path, bytes, "application/json; charset=utf-8",
                 deviceScoped, null, null, MAX_JSON_RESPONSE_BYTES, false);
         try { return new JSONObject(new String(response, StandardCharsets.UTF_8)); }
@@ -144,7 +168,12 @@ public final class SyncApiClient {
             connection.setInstanceFollowRedirects(false);
             connection.setRequestProperty("Accept", binaryResponse
                     ? "application/octet-stream" : "application/json");
-            connection.setRequestProperty("Authorization", "Bearer " + tokenProvider.getGoogleIdToken());
+            String idToken = tokenProvider.getGoogleIdToken();
+            if (idToken == null || idToken.trim().isEmpty() || idToken.length() > 8192
+                    || idToken.indexOf('\\r') >= 0 || idToken.indexOf('\\n') >= 0) {
+                throw new SyncException("Google sign-in token is missing or invalid");
+            }
+            connection.setRequestProperty("Authorization", "Bearer " + idToken);
             if (deviceScoped) {
                 connection.setRequestProperty("X-Device-ID", identityStore.getOrCreateDeviceId());
             }
