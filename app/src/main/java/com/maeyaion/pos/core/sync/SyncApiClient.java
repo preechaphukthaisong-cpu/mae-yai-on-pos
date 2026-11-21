@@ -15,6 +15,8 @@ import java.net.URL;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.UUID;
 
 /**
@@ -215,13 +217,13 @@ public final class SyncApiClient {
                 throw new SyncException(message, status);
             }
             if (binaryResponse) {
-                String contentType = connection.getContentType();
+                String responseContentType = connection.getContentType();
                 String claimedSha = connection.getHeaderField("X-Backup-SHA256");
-                String throughSequence = connection.getHeaderField("X-Through-Seq");
-                if (contentType == null || !contentType.toLowerCase(java.util.Locale.ROOT)
+                String responseSequence = connection.getHeaderField("X-Through-Seq");
+                if (responseContentType == null || !responseContentType.toLowerCase(java.util.Locale.ROOT)
                         .startsWith("application/octet-stream")
                         || claimedSha == null || !claimedSha.matches("(?i)[0-9a-f]{64}")
-                        || throughSequence == null || !throughSequence.matches("[0-9]{1,19}")
+                        || responseSequence == null || !responseSequence.matches("[0-9]{1,19}")
                         || !claimedSha.equalsIgnoreCase(sha256Hex(response))) {
                     throw new SyncException("Downloaded encrypted backup failed metadata or SHA-256 verification");
                 }
