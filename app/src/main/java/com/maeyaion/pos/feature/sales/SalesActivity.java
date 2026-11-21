@@ -55,8 +55,9 @@ public final class SalesActivity extends ComponentActivity {
  @Override protected void onCreate(Bundle state){super.onCreate(state);cameraExecutor=Executors.newSingleThreadExecutor();speech=new ThaiSpeechService(this,null);speech.initialize();screen=getIntent().getStringExtra(SalesRoute.EXTRA_SCREEN);credit="credit".equals(screen);render();}
  private void render(){
   LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(18),dp(16),dp(18),dp(24));root.setBackgroundColor(getColor(com.maeyaion.pos.R.color.pos_background));
-  ScrollView scroll=new ScrollView(this);scroll.addView(root);setContentView(scroll);
-  Button backButton=new Button(this);backButton.setText("ย้อนกลับ");backButton.setOnClickListener(v->finish());root.addView(backButton);
+  LinearLayout screenRoot=new LinearLayout(this);screenRoot.setOrientation(LinearLayout.VERTICAL);
+  ScrollView scroll=new ScrollView(this);scroll.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,0,1f));scroll.addView(root);screenRoot.addView(scroll);setContentView(screenRoot);
+  Button backButton=new Button(this);backButton.setText("ย้อนกลับ");backButton.setOnClickListener(v->finish());LinearLayout.LayoutParams backParams=new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,dp(56));backParams.setMargins(dp(16),dp(8),dp(16),dp(12));screenRoot.addView(backButton,backParams);
   TextView title=new TextView(this);title.setText("customers".equals(screen)?"บัญชีลูกค้าเชื่อ":credit?"ขายเชื่อ":"ขายเงินสด");title.setTextSize(23);title.setTextColor(getColor(com.maeyaion.pos.R.color.pos_forest));title.setTypeface(android.graphics.Typeface.DEFAULT,android.graphics.Typeface.BOLD);title.setGravity(Gravity.CENTER);title.setPadding(0,dp(12),0,dp(18));root.addView(title);
   if("customers".equals(screen)){loadCustomers(root);return;}
   quantity=field(root,"จำนวนสินค้าก่อนสแกน (สูงสุด 3 ตำแหน่ง)");quantity.setText("1");
