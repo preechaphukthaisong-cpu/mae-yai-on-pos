@@ -23,9 +23,9 @@ public final class ReportsActivity extends Activity {
  private final ExecutorService worker=Executors.newSingleThreadExecutor();private LinearLayout content,results;private int loadGeneration;private String screen;private android.widget.EditText fromInput,toInput;
  @Override protected void onCreate(Bundle state){super.onCreate(state);screen=getIntent().getStringExtra(ReportsRoute.EXTRA_SCREEN);render();}
  private void render(){
-  ScrollView scroll=new ScrollView(this);content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(20,16,20,24);scroll.addView(content);setContentView(scroll);
+  ScrollView scroll=new ScrollView(this);content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(18),dp(16),dp(18),dp(24));content.setBackgroundColor(getColor(com.maeyaion.pos.R.color.pos_background));scroll.addView(content);setContentView(scroll);
   android.widget.Button backButton=new android.widget.Button(this);backButton.setText("ย้อนกลับ");backButton.setOnClickListener(v->finish());content.addView(backButton);
-  TextView title=new TextView(this);title.setText("รายงานยอดขาย · "+label(screen));title.setTextSize(22);title.setGravity(Gravity.CENTER);content.addView(title);
+  TextView title=new TextView(this);title.setText("รายงานยอดขาย · "+label(screen));title.setTextSize(23);title.setTextColor(getColor(com.maeyaion.pos.R.color.pos_forest));title.setTypeface(android.graphics.Typeface.DEFAULT,android.graphics.Typeface.BOLD);title.setGravity(Gravity.CENTER);title.setPadding(0,dp(12),0,dp(18));content.addView(title);
   results=new LinearLayout(this);results.setOrientation(LinearLayout.VERTICAL);content.addView(results);
   if("monthly".equals(screen)){
    LocalDate today=LocalDate.now(ZoneId.of("Asia/Bangkok"));
@@ -61,8 +61,9 @@ public final class ReportsActivity extends Activity {
    }
   }catch(RuntimeException e){runOnUiThread(()->{if(generation==loadGeneration&&!isFinishing())Toast.makeText(this,e.getMessage()==null?"โหลดรายงานไม่สำเร็จ":e.getMessage(),Toast.LENGTH_LONG).show();});}});
  }
+ private int dp(float value){return (int)(value*getResources().getDisplayMetrics().density+0.5f);}
  private void clearResults(){if(results!=null)results.removeAllViews();}
- private void addText(String s){TextView t=new TextView(this);t.setText(s);t.setTextSize(16);t.setPadding(4,10,4,10);results.addView(t);}
+ private void addText(String s){TextView t=new TextView(this);t.setText(s);t.setTextSize(15);t.setPadding(dp(14),dp(12),dp(14),dp(12));t.setBackgroundResource(com.maeyaion.pos.R.drawable.bg_pos_card);LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,LinearLayout.LayoutParams.WRAP_CONTENT);p.setMargins(0,dp(4),0,dp(4));results.addView(t,p);}
  private static String label(String s){if("weekly".equals(s))return "รายสัปดาห์";if("monthly".equals(s))return "รายเดือน";if("top".equals(s))return "ขายดี 20 อันดับ";if("bottom".equals(s))return "ขายน้อยสุด 20 อันดับ";return "รายวัน";}
  private static String money(long n){return String.format(Locale.ROOT,"%d.%02d",n/100,n%100);}
  private static String qty(long n){return String.format(Locale.ROOT,"%d.%03d",n/1000,n%1000);}
