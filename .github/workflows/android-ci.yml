@@ -58,16 +58,9 @@ jobs:
       - name: Install Android SDK packages
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
       - name: Run unit tests
-        run: gradle --no-daemon :app:testDebugUnitTest
+        run: gradle --no-daemon --no-build-cache --rerun-tasks :app:testDebugUnitTest
       - name: Assemble debug APK
-        run: gradle --no-daemon :app:assembleDebug
-      - name: Upload generated Room schema v5 for review
-        uses: actions/upload-artifact@v4
-        with:
-          name: mae-yai-on-pos-room-schema-v5-generated
-          path: app/schemas/com.maeyaion.pos.core.db.AppDatabase/5.json
-          if-no-files-found: error
-          retention-days: 7
+        run: gradle --no-daemon --no-build-cache :app:assembleDebug
       - name: Verify Room schema export
         shell: bash
         run: |
@@ -88,6 +81,13 @@ jobs:
           if schema.get("database", {}).get("version") != 5:
               raise SystemExit("::error::Generated Room schema is not version 5.")
           PY
+      - name: Upload generated Room schema v5 for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: mae-yai-on-pos-room-schema-v5-generated
+          path: app/schemas/com.maeyaion.pos.core.db.AppDatabase/5.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Upload Room schema
         uses: actions/upload-artifact@v4
         with:
