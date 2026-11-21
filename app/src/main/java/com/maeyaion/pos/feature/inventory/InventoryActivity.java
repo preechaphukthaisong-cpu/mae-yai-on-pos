@@ -66,7 +66,8 @@ public final class InventoryActivity extends ComponentActivity {
         page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
         page.setPadding(24, 20, 24, 24);
-        addButton("กลับเมนูคลังสินค้า", () -> render("menu"));
+        addButton("menu".equals(screen) ? "ย้อนกลับหน้าหลัก" : "ย้อนกลับเมนูคลังสินค้า",
+                () -> { if ("menu".equals(screen)) finish(); else render("menu"); });
         switch (screen) {
             case "receive": renderReceive(); break;
             case "all": renderAll(); break;
