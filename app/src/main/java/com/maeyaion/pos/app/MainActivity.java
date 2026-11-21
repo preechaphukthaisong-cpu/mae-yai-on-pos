@@ -20,6 +20,10 @@ import com.google.android.gms.common.api.Scope;
 import com.maeyaion.pos.R;
 import com.maeyaion.pos.core.navigation.BarcodeRoute;
 import com.maeyaion.pos.core.navigation.InventoryRoute;
+import com.maeyaion.pos.core.navigation.SalesRoute;
+import com.maeyaion.pos.core.navigation.HistoryRoute;
+import com.maeyaion.pos.core.navigation.StoreRoute;
+import com.maeyaion.pos.core.navigation.ReportsRoute;
 
 public final class MainActivity extends Activity {
     private static final int REQUEST_DRIVE_ACCOUNT = 4102;
@@ -66,12 +70,12 @@ public final class MainActivity extends Activity {
         LinearLayout page = createPage();
         addHeading(page, getString(R.string.app_name), 24);
 
-        addButton(page, "การขาย", this::showNotImplemented);
+        addButton(page, "การขาย", () -> openSales("cash"));
         addButton(page, "คลังสินค้า", () -> openInventory("menu"));
         addButton(page, "สร้างบาร์โค้ด", () -> openBarcode("create"));
-        addButton(page, "ประวัติการขาย", this::showNotImplemented);
+        addButton(page, "ประวัติการขาย", () -> openHistory("paid"));
         addButton(page, "จัดการร้านค้า", this::renderStoreManagement);
-        addButton(page, "รายงานยอดขาย", this::showNotImplemented);
+        addButton(page, "รายงานยอดขาย", () -> openReports("daily"));
 
         ScrollView scroll = new ScrollView(this);
         scroll.addView(page);
@@ -138,6 +142,17 @@ public final class MainActivity extends Activity {
         startActivity(intent);
     }
 
+    private void openSales(String screen) { openRoute(SalesRoute.ACTION, SalesRoute.EXTRA_SCREEN, screen); }
+    private void openHistory(String screen) { openRoute(HistoryRoute.ACTION, HistoryRoute.EXTRA_SCREEN, screen); }
+    private void openStore(String screen) { openRoute(StoreRoute.ACTION, StoreRoute.EXTRA_SCREEN, screen); }
+    private void openReports(String screen) { openRoute(ReportsRoute.ACTION, ReportsRoute.EXTRA_SCREEN, screen); }
+    private void openRoute(String action, String extra, String screen) {
+        Intent intent = new Intent(action);
+        intent.setPackage(getPackageName());
+        intent.putExtra(extra, screen);
+        startActivity(intent);
+    }
+
     private void addMenuSection(LinearLayout parent, String title, String... items) {
         TextView heading = new TextView(this);
         heading.setText(title);
@@ -146,8 +161,25 @@ public final class MainActivity extends Activity {
         parent.addView(heading);
         for (String item : items) {
             Runnable action = this::showNotImplemented;
-            if ("สร้างบาร์โค้ด".equals(item)) action = () -> openBarcode("create");
-            else if ("คลังบาร์โค้ด".equals(item)) action = () -> openBarcode("catalog");
+            switch (item) {
+                case "ขายเงินสด": action = () -> openSales("cash"); break;
+                case "ขายเชื่อ": action = () -> openSales("credit"); break;
+                case "บัญชีลูกค้าเชื่อ":
+                case "บัญชีลูกค้าเชื่อทั้งหมด": action = () -> openSales("customers"); break;
+                case "สร้างบาร์โค้ด": action = () -> openBarcode("create"); break;
+                case "คลังบาร์โค้ด": action = () -> openBarcode("catalog"); break;
+                case "บิลจ่ายแล้ว": action = () -> openHistory("paid"); break;
+                case "บิลค้างชำระ": action = () -> openHistory("unpaid"); break;
+                case "รายละเอียดบิลและการคืนสินค้า": action = () -> openHistory("all"); break;
+                case "แก้ไขราคาขาย": action = () -> openStore("price"); break;
+                case "ประวัติราคา": action = () -> openStore("history"); break;
+                case "รายวัน": action = () -> openReports("daily"); break;
+                case "รายสัปดาห์": action = () -> openReports("weekly"); break;
+                case "รายเดือน/เลือกวัน": action = () -> openReports("monthly"); break;
+                case "ขายดี 20 อันดับ": action = () -> openReports("top"); break;
+                case "ขายน้อยสุด 20 อันดับ": action = () -> openReports("bottom"); break;
+                default: break;
+            }
             addButton(parent, item, action);
         }
     }
