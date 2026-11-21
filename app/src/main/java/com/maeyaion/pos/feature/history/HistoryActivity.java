@@ -30,10 +30,10 @@ import java.util.concurrent.Executors;
 /** Searchable paid/unpaid bill lists and immutable bill detail snapshots. */
 public final class HistoryActivity extends Activity {
  private final ExecutorService worker=Executors.newSingleThreadExecutor();
- private LinearLayout content; private String screen;
+ private LinearLayout content, screenRoot; private String screen;
  @Override protected void onCreate(Bundle state){super.onCreate(state);screen=getIntent().getStringExtra(HistoryRoute.EXTRA_SCREEN);renderList();}
  private void renderList(){
-  LinearLayout screenRoot=new LinearLayout(this);screenRoot.setOrientation(LinearLayout.VERTICAL);
+  screenRoot=new LinearLayout(this);screenRoot.setOrientation(LinearLayout.VERTICAL);
   ScrollView scroll=new ScrollView(this);scroll.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,0,1f));content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(18),dp(16),dp(18),dp(24));content.setBackgroundColor(getColor(com.maeyaion.pos.R.color.pos_background));scroll.addView(content);screenRoot.addView(scroll);setContentView(screenRoot);
   Button backButton=new Button(this);backButton.setText("ย้อนกลับหน้าก่อน");backButton.setOnClickListener(v->finish());LinearLayout.LayoutParams backParams=new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,dp(56));backParams.setMargins(dp(16),dp(8),dp(16),dp(12));screenRoot.addView(backButton,backParams);
   TextView title=new TextView(this);title.setText("unpaid".equals(screen)?"บิลค้างชำระ":"all".equals(screen)?"ประวัติการขายทั้งหมด":"บิลจ่ายแล้ว");title.setTextSize(23);title.setTextColor(getColor(com.maeyaion.pos.R.color.pos_forest));title.setTypeface(android.graphics.Typeface.DEFAULT,android.graphics.Typeface.BOLD);title.setGravity(Gravity.CENTER);title.setPadding(0,dp(12),0,dp(18));content.addView(title);
