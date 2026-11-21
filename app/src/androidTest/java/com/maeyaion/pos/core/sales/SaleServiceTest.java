@@ -92,4 +92,22 @@ public final class SaleServiceTest {
   DailySummaryEntity summary=db.dailySummaryDao().find("2026-11-21");
   assertNotNull(summary);assertEquals(5000L,summary.cash_sales_satang);assertEquals(5000L,summary.net_sales_satang);
  }
+
+ @Test public void duplicateBillWithinSixtyMinutesRequiresExplicitConfirmation(){
+  ProductEntity p=InventoryServiceFactory.create(db).createAndReceive(UUID.randomUUID().toString(),
+   "SKU-DUPLICATE","สบู่",1000,500,"ก้อน",null,5000,NOW);
+  SaleService sales=new SaleService(db,tx);
+  Map<String,Long> items=Collections.singletonMap(p.sku,1000L);
+  SaleEntity first=sales.checkout("duplicate-first",SaleCalculator.SaleType.CASH,null,items,1000L,NOW);
+  try{
+   sales.checkout("duplicate-second",SaleCalculator.SaleType.CASH,null,items,1000L,"2026-11-21T04:01:00Z");
+   fail("matching bill within 60 minutes must require confirmation");
+  }catch(DuplicateSaleException expected){assertEquals(first.id,expected.existingSaleId);}
+  assertEquals(1,db.saleDao().latest(10).size());
+  SaleEntity confirmed=sales.checkout("duplicate-second",SaleCalculator.SaleType.CASH,null,items,1000L,"2026-11-21T04:01:00Z",true);
+  assertNotEquals(first.id,confirmed.id);
+  SaleEntity outsideWindow=sales.checkout("duplicate-third",SaleCalculator.SaleType.CASH,null,items,1000L,"2026-11-21T05:01:01Z");
+  assertNotEquals(confirmed.id,outsideWindow.id);
+  assertEquals(3,db.saleDao().latest(10).size());
+ }
 }
