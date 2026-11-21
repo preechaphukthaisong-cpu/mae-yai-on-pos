@@ -4,6 +4,9 @@ import android.app.Activity;
 import android.content.Intent;
 import java.io.OutputStream;
 import android.graphics.Bitmap;
+import android.graphics.pdf.PdfDocument;
+import android.graphics.Paint;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
@@ -39,6 +42,8 @@ public final class BarcodeActivity extends Activity {
     private EditText costInput;
     private EditText manufacturerBarcodeInput;
     private Button exportButton;
+    private Button exportPdfButton;
+    private static final int REQUEST_EXPORT_PDF = 5202;
     private Bitmap lastBarcodeBitmap;
     private static final int REQUEST_EXPORT_BARCODE = 5201;
     private Button createButton;
@@ -87,6 +92,11 @@ public final class BarcodeActivity extends Activity {
         exportButton.setEnabled(false);
         exportButton.setOnClickListener(v -> exportBarcode());
         content.addView(exportButton);
+        exportPdfButton = new Button(this);
+        exportPdfButton.setText("ส่งออกบาร์โค้ด PDF");
+        exportPdfButton.setEnabled(false);
+        exportPdfButton.setOnClickListener(v -> exportBarcodePdf());
+        content.addView(exportPdfButton);
 
         TextView catalogTitle = new TextView(this);
         catalogTitle.setText("รายการบาร์โค้ดที่ลงทะเบียน");
@@ -103,6 +113,7 @@ public final class BarcodeActivity extends Activity {
             resultText.setVisibility(View.GONE);
             barcodeImage.setVisibility(View.GONE);
             exportButton.setVisibility(View.GONE);
+            exportPdfButton.setVisibility(View.GONE);
         }
     }
 
@@ -152,6 +163,7 @@ public final class BarcodeActivity extends Activity {
                     barcodeImage.setImageBitmap(image);
                     lastBarcodeBitmap = image;
                     exportButton.setEnabled(true);
+                    exportPdfButton.setEnabled(true);
                     nameInput.setText("");
                     priceInput.setText("");
                     costInput.setText("");
@@ -211,10 +223,50 @@ public final class BarcodeActivity extends Activity {
         startActivityForResult(intent, REQUEST_EXPORT_BARCODE);
     }
 
+    private void exportBarcodePdf() {
+        if (lastBarcodeBitmap == null) {
+            Toast.makeText(this, "ยังไม่มีภาพบาร์โค้ด", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("application/pdf");
+        intent.putExtra(Intent.EXTRA_TITLE, "maeyai-barcode.pdf");
+        startActivityForResult(intent, REQUEST_EXPORT_PDF);
+    }
+
+    private void writeBarcodePdf(android.net.Uri uri) throws Exception {
+        PdfDocument document = new PdfDocument();
+        try {
+            PdfDocument.Page page = document.startPage(new PdfDocument.PageInfo.Builder(612, 792, 1).create());
+            android.graphics.Canvas canvas = page.getCanvas();
+            Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            paint.setColor(Color.BLACK);
+            paint.setTextSize(22f);
+            canvas.drawText(resultText.getText().toString().split("\\n")[0], 36, 60, paint);
+            paint.setTextSize(18f);
+            canvas.drawText("บาร์โค้ดสินค้า", 36, 100, paint);
+            android.graphics.Rect dst = new android.graphics.Rect(36, 130, 576, 330);
+            canvas.drawBitmap(lastBarcodeBitmap, null, dst, paint);
+            document.finishPage(page);
+            try (OutputStream output = getContentResolver().openOutputStream(uri)) {
+                if (output == null) throw new IllegalStateException("เปิดไฟล์ปลายทางไม่ได้");
+                document.writeTo(output);
+            }
+        } finally {
+            document.close();
+        }
+    }
+
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode != REQUEST_EXPORT_BARCODE || resultCode != RESULT_OK || data == null
-                || data.getData() == null || lastBarcodeBitmap == null) return;
+        if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
+        if (requestCode == REQUEST_EXPORT_PDF) {
+            try { writeBarcodePdf(data.getData()); Toast.makeText(this, "ส่งออก PDF แล้ว", Toast.LENGTH_SHORT).show(); }
+            catch (Exception failure) { Toast.makeText(this, "ส่งออก PDF ไม่สำเร็จ: " + safeMessage(failure), Toast.LENGTH_LONG).show(); }
+            return;
+        }
+        if (requestCode != REQUEST_EXPORT_BARCODE || lastBarcodeBitmap == null) return;
         try (OutputStream output = getContentResolver().openOutputStream(data.getData())) {
             if (output == null || !lastBarcodeBitmap.compress(Bitmap.CompressFormat.PNG, 100, output)) {
                 throw new IllegalStateException("ไม่สามารถส่งออกภาพ PNG ได้");
