@@ -1,6 +1,8 @@
 package com.maeyaion.pos.feature.barcode;
 
 import android.app.Activity;
+import android.content.Intent;
+import java.io.OutputStream;
 import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.view.Gravity;
@@ -35,6 +37,10 @@ public final class BarcodeActivity extends Activity {
     private EditText nameInput;
     private EditText priceInput;
     private EditText costInput;
+    private EditText manufacturerBarcodeInput;
+    private Button exportButton;
+    private Bitmap lastBarcodeBitmap;
+    private static final int REQUEST_EXPORT_BARCODE = 5201;
     private Button createButton;
     private TextView resultText;
     private ImageView barcodeImage;
@@ -63,6 +69,7 @@ public final class BarcodeActivity extends Activity {
         nameInput = field("ชื่อสินค้า");
         priceInput = field("ราคาขาย (บาท)");
         costInput = field("ต้นทุน (บาท)");
+        manufacturerBarcodeInput = field("บาร์โค้ดโรงงาน (ถ้าไม่มีให้เว้นว่าง)");
         createButton = new Button(this);
         createButton.setText("สร้างบาร์โค้ดอัตโนมัติ");
         createButton.setOnClickListener(v -> createProduct());
@@ -75,6 +82,11 @@ public final class BarcodeActivity extends Activity {
         barcodeImage = new ImageView(this);
         barcodeImage.setAdjustViewBounds(true);
         content.addView(barcodeImage);
+        exportButton = new Button(this);
+        exportButton.setText("ส่งออกภาพบาร์โค้ด PNG");
+        exportButton.setEnabled(false);
+        exportButton.setOnClickListener(v -> exportBarcode());
+        content.addView(exportButton);
 
         TextView catalogTitle = new TextView(this);
         catalogTitle.setText("รายการบาร์โค้ดที่ลงทะเบียน");
@@ -86,6 +98,7 @@ public final class BarcodeActivity extends Activity {
             nameInput.setVisibility(View.GONE);
             priceInput.setVisibility(View.GONE);
             costInput.setVisibility(View.GONE);
+            manufacturerBarcodeInput.setVisibility(View.GONE);
             createButton.setVisibility(View.GONE);
             resultText.setVisibility(View.GONE);
             barcodeImage.setVisibility(View.GONE);
@@ -102,6 +115,7 @@ public final class BarcodeActivity extends Activity {
 
     private void createProduct() {
         final String name = nameInput.getText().toString().trim();
+        final String manufacturerBarcode = manufacturerBarcodeInput.getText().toString().trim();
         final long price;
         final long cost;
         try {
@@ -124,8 +138,10 @@ public final class BarcodeActivity extends Activity {
                         allocator, db.productDao(), db.opLogDao(), db.backupJournalDao(), tx);
                 String now = Instant.now().toString();
                 String sku = "SKU-" + UUID.randomUUID().toString().toUpperCase(Locale.ROOT);
-                com.maeyaion.pos.core.db.ProductEntity product = service.createWithSystemBarcode(
-                        UUID.randomUUID().toString(), sku, name, price, cost, "ชิ้น", null, now, now);
+                String operationId = UUID.randomUUID().toString();
+                com.maeyaion.pos.core.db.ProductEntity product = manufacturerBarcode.isEmpty()
+                        ? service.createWithSystemBarcode(operationId, sku, name, price, cost, "ชิ้น", null, now, now)
+                        : service.createWithManufacturerBarcode(operationId, manufacturerBarcode, sku, name, price, cost, "ชิ้น", null, now, now);
                 Bitmap image = BarcodeImageGenerator.renderCode128(product.barcode);
                 runOnUiThread(() -> {
                     createButton.setEnabled(true);
@@ -133,9 +149,12 @@ public final class BarcodeActivity extends Activity {
                             + "\nราคาขาย: " + formatBaht(product.priceSatang) + " บาท"
                             + "\nสถานะ: เพิ่มเข้าคลังแล้ว (สต๊อกเริ่มต้น 0)");
                     barcodeImage.setImageBitmap(image);
+                    lastBarcodeBitmap = image;
+                    exportButton.setEnabled(true);
                     nameInput.setText("");
                     priceInput.setText("");
                     costInput.setText("");
+                    manufacturerBarcodeInput.setText("");
                     loadCatalog();
                 });
             } catch (RuntimeException failure) {
@@ -177,6 +196,32 @@ public final class BarcodeActivity extends Activity {
                         "โหลดคลังบาร์โค้ดไม่สำเร็จ: " + safeMessage(failure), Toast.LENGTH_LONG).show());
             }
         });
+    }
+
+    private void exportBarcode() {
+        if (lastBarcodeBitmap == null) {
+            Toast.makeText(this, "ยังไม่มีภาพบาร์โค้ด", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("image/png");
+        intent.putExtra(Intent.EXTRA_TITLE, "maeyai-barcode.png");
+        startActivityForResult(intent, REQUEST_EXPORT_BARCODE);
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQUEST_EXPORT_BARCODE || resultCode != RESULT_OK || data == null
+                || data.getData() == null || lastBarcodeBitmap == null) return;
+        try (OutputStream output = getContentResolver().openOutputStream(data.getData())) {
+            if (output == null || !lastBarcodeBitmap.compress(Bitmap.CompressFormat.PNG, 100, output)) {
+                throw new IllegalStateException("ไม่สามารถส่งออกภาพ PNG ได้");
+            }
+            Toast.makeText(this, "ส่งออกภาพบาร์โค้ดแล้ว", Toast.LENGTH_SHORT).show();
+        } catch (Exception failure) {
+            Toast.makeText(this, "ส่งออกไม่สำเร็จ: " + safeMessage(failure), Toast.LENGTH_LONG).show();
+        }
     }
 
     private static long parseBaht(String raw) {
