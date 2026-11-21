@@ -2,6 +2,7 @@ package com.maeyaion.pos.app;
 
 import android.app.Activity;
 import android.content.SharedPreferences;
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.widget.Button;
@@ -64,7 +65,7 @@ public final class MainActivity extends Activity {
         addHeading(page, getString(R.string.app_name), 24);
 
         addButton(page, "การขาย", this::showNotImplemented);
-        addButton(page, "คลังสินค้า", this::showNotImplemented);
+        addButton(page, "คลังสินค้า", () -> openInventory("menu"));
         addButton(page, "สร้างบาร์โค้ด", this::showNotImplemented);
         addButton(page, "ประวัติการขาย", this::showNotImplemented);
         addButton(page, "จัดการร้านค้า", this::renderStoreManagement);
@@ -83,9 +84,7 @@ public final class MainActivity extends Activity {
 
         addMenuSection(page, "การขาย",
                 "ขายเงินสด", "ขายเชื่อ", "บัญชีลูกค้าเชื่อ");
-        addMenuSection(page, "คลังสินค้า",
-                "เพิ่มสินค้าเข้าคลัง/รับสินค้า", "สินค้าทั้งหมด",
-                "ตรวจนับสต๊อก", "ลิมิตสต๊อก");
+        addInventorySection(page);
         addMenuSection(page, "สร้างบาร์โค้ด",
                 "สร้างบาร์โค้ด", "คลังบาร์โค้ด");
         addMenuSection(page, "ประวัติการขาย",
@@ -111,6 +110,23 @@ public final class MainActivity extends Activity {
         setContentView(scroll);
     }
 
+    private void addInventorySection(LinearLayout parent) {
+        TextView heading = new TextView(this);
+        heading.setText("คลังสินค้า");
+        heading.setTextSize(17);
+        heading.setPadding(0, 16, 0, 4);
+        parent.addView(heading);
+        addButton(parent, "เพิ่มสินค้าเข้าคลัง/รับสินค้า", () -> openInventory("receive"));
+        addButton(parent, "สินค้าทั้งหมด", () -> openInventory("all"));
+        addButton(parent, "ตรวจนับสต๊อก", () -> openInventory("count"));
+        addButton(parent, "ลิมิตสต๊อก", () -> openInventory("limit"));
+    }
+
+    private void openInventory(String screen) {
+        Intent intent = new Intent(this, com.maeyaion.pos.feature.inventory.InventoryActivity.class);
+        intent.putExtra("inventory_screen", screen);
+        startActivity(intent);
+    }
     private void addMenuSection(LinearLayout parent, String title, String... items) {
         TextView heading = new TextView(this);
         heading.setText(title);
