@@ -1,6 +1,7 @@
 package com.maeyaion.pos.core.db;
 import androidx.annotation.NonNull;
 import androidx.room.Entity;
+import androidx.room.ColumnInfo;
 import androidx.room.ForeignKey;
 import androidx.room.Index;
 @Entity(tableName="product_daily",primaryKeys={"business_date","sku"},foreignKeys=@ForeignKey(entity=ProductEntity.class,parentColumns="sku",childColumns="sku",onDelete=ForeignKey.RESTRICT),indices=@Index(value={"business_date","sku"}))
