@@ -149,7 +149,8 @@ async function handlePush(req, res, context) {
         await client.query(
           `INSERT INTO sync_conflicts(id, store_id, device_id, event_id, entity_type, entity_id,
              expected_version, actual_version, submitted_payload)
-           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`,
+           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)
+           ON CONFLICT (store_id, event_id) DO NOTHING`,
           [conflictId, context.store_id, context.device_id, event.eventId, event.entityType,
             event.entityId, String(event.baseVersion), String(actualVersion), JSON.stringify(event.payload)]
         );
@@ -304,6 +305,26 @@ async function handle(req, res) {
   if (req.method === 'GET' && url.pathname === '/v1/sync/pull') return handlePull(req, res, context, url);
   if (req.method === 'POST' && url.pathname === '/v1/backups') return handleBackupUpload(req, res, context);
 
+  const backupDownloadMatch = url.pathname.match(/^\\/v1\\/backups\\/([0-9a-f-]{36})$/i);
+  if (req.method === 'GET' && backupDownloadMatch) {
+    const result = await pool.query(
+      'SELECT id, through_seq, sha256, encrypted_blob FROM backup_snapshots WHERE store_id = $1 AND id = $2',
+      [context.store_id, backupDownloadMatch[1]]
+    );
+    if (!result.rowCount) throw new HttpError(404, 'Backup snapshot not found');
+    const backup = result.rows[0];
+    res.writeHead(200, {
+      'content-type': 'application/octet-stream',
+      'content-length': backup.encrypted_blob.length,
+      'content-disposition': 'attachment; filename="maeyai-pos-' + backup.id + '.myobak"',
+      'x-backup-sha256': backup.sha256,
+      'x-through-seq': String(backup.through_seq),
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff'
+    });
+    res.end(backup.encrypted_blob);
+    return;
+  }
   if (req.method === 'GET' && url.pathname === '/v1/backups') {
     const result = await pool.query(
       `SELECT id, through_seq, sha256, byte_length, drive_file_id, drive_uploaded_at, created_at
@@ -315,6 +336,7 @@ async function handle(req, res) {
   }
   if (req.method === 'POST' && url.pathname === '/v1/drive/connect') {
     const body = await readJson(req);
+    if (typeof body.refreshToken !== 'string' || body.refreshToken.length < 20) throw new HttpError(400, 'A valid Google Drive refresh token is required');
     const credentials = encryptRefreshToken(body.refreshToken);
     const tokenForm = new URLSearchParams({
       client_id: process.env.GOOGLE_OAUTH_CLIENT_ID || '',
