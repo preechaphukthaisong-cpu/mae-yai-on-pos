@@ -48,6 +48,17 @@ public final class SaleService {
             @NonNull SaleCalculator.SaleType type, String customerId,
             @NonNull Map<String, Long> requestedQuantities,
             Long cashReceivedSatang, @NonNull String createdAtUtc) {
+        return checkout(idempotencyKey,type,customerId,requestedQuantities,
+                cashReceivedSatang,createdAtUtc,false);
+    }
+
+    /** Set allowRecentDuplicate only after the operator confirms the warning dialog. */
+    @NonNull
+    public SaleEntity checkout(@NonNull String idempotencyKey,
+            @NonNull SaleCalculator.SaleType type, String customerId,
+            @NonNull Map<String, Long> requestedQuantities,
+            Long cashReceivedSatang, @NonNull String createdAtUtc,
+            boolean allowRecentDuplicate) {
         requireText(idempotencyKey,"idempotencyKey");
         requireText(createdAtUtc,"createdAtUtc");
         final String businessDate = Instant.parse(createdAtUtc)
@@ -83,6 +94,11 @@ public final class SaleService {
             SaleCalculator.Result bill=SaleCalculator.calculate(cart,type,cashReceivedSatang);
             String saleId=UUID.randomUUID().toString();
             String contentHash=contentHash(type,customerId,bill);
+            if(!allowRecentDuplicate){
+                String duplicateWindowStart=Instant.parse(createdAtUtc).minusSeconds(60L*60L).toString();
+                SaleEntity duplicate=db.saleDao().findRecentDuplicate(contentHash,duplicateWindowStart,createdAtUtc);
+                if(duplicate!=null)throw new DuplicateSaleException(duplicate.id);
+            }
             String paidAt=type==SaleCalculator.SaleType.CASH?createdAtUtc:null;
             SaleEntity sale=new SaleEntity(saleId,idempotencyKey,type.name(),
                     type==SaleCalculator.SaleType.CASH?"PAID":"UNPAID","COMPLETED",customerId,
