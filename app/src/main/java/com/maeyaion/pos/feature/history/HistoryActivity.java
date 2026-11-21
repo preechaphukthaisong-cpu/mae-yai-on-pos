@@ -34,7 +34,7 @@ public final class HistoryActivity extends Activity {
  @Override protected void onCreate(Bundle state){super.onCreate(state);screen=getIntent().getStringExtra(HistoryRoute.EXTRA_SCREEN);renderList();}
  private void renderList(){
   ScrollView scroll=new ScrollView(this);content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(20,16,20,24);scroll.addView(content);setContentView(scroll);
-  TextView title=new TextView(this);title.setText("unpaid".equals(screen)?"บิลค้างชำระ":"บิลจ่ายแล้ว");title.setTextSize(22);title.setGravity(Gravity.CENTER);content.addView(title);
+  TextView title=new TextView(this);title.setText("unpaid".equals(screen)?"บิลค้างชำระ":"all".equals(screen)?"ประวัติการขายทั้งหมด":"บิลจ่ายแล้ว");title.setTextSize(22);title.setGravity(Gravity.CENTER);content.addView(title);
   worker.execute(()->{
    try{AppDatabase db=AppDatabase.getInstance(getApplicationContext());List<SaleEntity> rows="unpaid".equals(screen)?db.saleDao().unpaidCredit():"all".equals(screen)?db.saleDao().latest(200):db.saleDao().paid(200);
     runOnUiThread(()->{for(SaleEntity sale:rows){Button b=new Button(this);b.setText(sale.id+"\n"+sale.type+" · "+money(sale.total_satang)+" บาท · "+sale.created_at_utc);b.setOnClickListener(v->showDetail(sale.id));content.addView(b);}if(rows.isEmpty())addText("ไม่พบรายการ");});
