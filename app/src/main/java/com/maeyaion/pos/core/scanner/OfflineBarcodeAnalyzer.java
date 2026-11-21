@@ -27,6 +27,8 @@ final class OfflineBarcodeAnalyzer implements ImageAnalysis.Analyzer, AutoClosea
     private final Listener listener;
     private final BarcodeEmissionGate emissionGate = new BarcodeEmissionGate(1_000L);
     private volatile boolean closed;
+    private long lastBarcodeSeenAtMs = Long.MIN_VALUE;
+    private static final long BARCODE_ABSENCE_RESET_MS = 750L;
 
     OfflineBarcodeAnalyzer(@NonNull Executor callbackExecutor, @NonNull Listener listener) {
         this.callbackExecutor = callbackExecutor;
@@ -53,11 +55,21 @@ final class OfflineBarcodeAnalyzer implements ImageAnalysis.Analyzer, AutoClosea
             scanner.process(input)
                     .addOnSuccessListener(callbackExecutor, barcodes -> {
                         long now = SystemClock.elapsedRealtime();
+                        boolean hasReadableBarcode = false;
                         for (Barcode barcode : barcodes) {
                             String raw = barcode.getRawValue();
+                            if (raw == null || raw.trim().isEmpty()) continue;
+                            hasReadableBarcode = true;
                             if (emissionGate.shouldEmit(raw, now)) {
                                 listener.onBarcode(raw, barcode.getFormat());
                             }
+                        }
+                        if (hasReadableBarcode) {
+                            lastBarcodeSeenAtMs = now;
+                        } else if (lastBarcodeSeenAtMs != Long.MIN_VALUE
+                                && now - lastBarcodeSeenAtMs >= BARCODE_ABSENCE_RESET_MS) {
+                            emissionGate.reset();
+                            lastBarcodeSeenAtMs = Long.MIN_VALUE;
                         }
                     })
                     .addOnFailureListener(callbackExecutor, listener::onFailure)
