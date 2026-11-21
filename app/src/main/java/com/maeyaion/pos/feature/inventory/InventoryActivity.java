@@ -43,6 +43,7 @@ public final class InventoryActivity extends ComponentActivity {
     private InventoryService inventory;
     private LinearLayout page;
     private ExecutorService cameraExecutor;
+    private ExecutorService ioExecutor;
     private OfflineBarcodeScanner scanner;
     private Runnable afterScan;
     private ThaiSpeechService speech;
@@ -53,6 +54,7 @@ public final class InventoryActivity extends ComponentActivity {
         super.onCreate(state);
         inventory = InventoryServiceFactory.create(((PosApplication) getApplication()).database());
         cameraExecutor = Executors.newSingleThreadExecutor();
+        ioExecutor = Executors.newSingleThreadExecutor();
         speech = new ThaiSpeechService(this, null);
         speech.initialize();
         initialScreen = getIntent().getStringExtra(InventoryRoute.EXTRA_SCREEN);
@@ -149,9 +151,43 @@ public final class InventoryActivity extends ComponentActivity {
             if (found == null) toast("ไม่พบสินค้าในคลัง");
             else showProduct(found, false);
         }));
-        List<ProductEntity> products = inventory.allProducts();
-        if (products.isEmpty()) addText("ยังไม่มีสินค้า");
-        for (ProductEntity product : products) addProductCard(product, false);
+
+        // Room queries must never run on the UI thread. Keep the screen responsive
+        // and guard the callback so a stale result cannot update another screen.
+        LinearLayout targetPage = page;
+        TextView loading = text("กำลังโหลดรายการสินค้า...");
+        targetPage.addView(loading);
+        ioExecutor.execute(() -> {
+            List<ProductEntity> products;
+            RuntimeException failure = null;
+            try {
+                products = inventory.allProducts();
+            } catch (RuntimeException error) {
+                products = java.util.Collections.emptyList();
+                failure = error;
+            }
+            List<ProductEntity> result = products;
+            RuntimeException loadFailure = failure;
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()
+                        || !"all".equals(currentScreen) || page != targetPage) {
+                    return;
+                }
+                targetPage.removeView(loading);
+                if (loadFailure != null) {
+                    addText("โหลดรายการสินค้าไม่สำเร็จ กรุณาลองใหม่");
+                    android.util.Log.e("InventoryActivity", "Unable to load products", loadFailure);
+                    return;
+                }
+                if (result.isEmpty()) {
+                    addText("ยังไม่มีสินค้า");
+                    return;
+                }
+                for (ProductEntity product : result) {
+                    addProductCard(product, false);
+                }
+            });
+        });
     }
 
     private void renderCount() {
@@ -422,6 +458,7 @@ public final class InventoryActivity extends ComponentActivity {
     @Override protected void onDestroy() {
         closeScanner();
         if (cameraExecutor != null) cameraExecutor.shutdownNow();
+        if (ioExecutor != null) ioExecutor.shutdownNow();
         if (speech != null) speech.close();
         super.onDestroy();
     }
