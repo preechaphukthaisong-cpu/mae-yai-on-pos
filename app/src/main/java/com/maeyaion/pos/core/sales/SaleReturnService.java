@@ -94,7 +94,8 @@ public final class SaleReturnService {
   if(a<0||b<0||divisor<=0)throw new IllegalArgumentException("invalid allocation");
   BigInteger[] qr=BigInteger.valueOf(a).multiply(BigInteger.valueOf(b)).divideAndRemainder(BigInteger.valueOf(divisor));
   if(qr[1].shiftLeft(1).compareTo(BigInteger.valueOf(divisor))>=0)qr[0]=qr[0].add(BigInteger.ONE);
-  return qr[0].longValueExact();
+  if(qr[0].compareTo(BigInteger.valueOf(Long.MAX_VALUE))>0)throw new ArithmeticException("long overflow");
+  return qr[0].longValue();
  }
  private static void require(String s,String field){if(s==null||s.trim().isEmpty())throw new IllegalArgumentException(field+" is required");}
  private static String sha256(String s){try{byte[] d=MessageDigest.getInstance("SHA-256").digest(s.getBytes(StandardCharsets.UTF_8));StringBuilder b=new StringBuilder();for(byte v:d)b.append(String.format(Locale.ROOT,"%02x",v&255));return b.toString();}catch(Exception e){throw new IllegalStateException(e);}}
