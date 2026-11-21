@@ -198,7 +198,7 @@ async function handlePush(req, res, context) {
 
 async function handlePull(req, res, context, url) {
   const rawCursor = url.searchParams.get('after') || '0';
-  if (!/^\d{1,19}$/.test(rawCursor)) throw new HttpError(400, 'Invalid sync cursor');
+  if (!/^[0-9]{1,19}$/.test(rawCursor)) throw new HttpError(400, 'Invalid sync cursor');
   const after = BigInt(rawCursor);
   const limit = Math.max(1, Math.min(500, Number(url.searchParams.get('limit') || 200)));
   const result = await pool.query(
@@ -221,7 +221,7 @@ async function handlePull(req, res, context, url) {
 async function handleBackupUpload(req, res, context) {
   const throughSeq = req.headers['x-through-seq'];
   const claimedSha = req.headers['x-backup-sha256'];
-  if (!/^\d{1,19}$/.test(throughSeq || '') || !/^[a-f0-9]{64}$/i.test(claimedSha || '')) {
+  if (!/^[0-9]{1,19}$/.test(throughSeq || '') || !/^[a-f0-9]{64}$/i.test(claimedSha || '')) {
     throw new HttpError(400, 'Backup sequence and SHA-256 headers are required');
   }
   if (!String(req.headers['content-type'] || '').startsWith('application/octet-stream')) {
@@ -305,7 +305,7 @@ async function handle(req, res) {
   if (req.method === 'GET' && url.pathname === '/v1/sync/pull') return handlePull(req, res, context, url);
   if (req.method === 'POST' && url.pathname === '/v1/backups') return handleBackupUpload(req, res, context);
 
-  const backupDownloadMatch = url.pathname.match(/^\\/v1\\/backups\\/([0-9a-f-]{36})$/i);
+  const backupDownloadMatch = url.pathname.match(new RegExp('^/v1/backups/([0-9a-f-]{36})$', 'i'));
   if (req.method === 'GET' && backupDownloadMatch) {
     const result = await pool.query(
       'SELECT id, through_seq, sha256, encrypted_blob FROM backup_snapshots WHERE store_id = $1 AND id = $2',
