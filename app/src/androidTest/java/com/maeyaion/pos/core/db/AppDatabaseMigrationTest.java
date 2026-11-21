@@ -121,7 +121,7 @@ public final class AppDatabaseMigrationTest {
                 .allowMainThreadQueries()
                 .build();
         SupportSQLiteDatabase sql = database.getOpenHelper().getWritableDatabase();
-        assertEquals(4, sql.getVersion());
+        assertEquals(5, sql.getVersion());
         assertEquals("v3_value", database.appMetaDao().findValue("legacy_key"));
         assertCoreGuardsExist(sql);
         assertEquals(2500L, database.productDao().findBySku("SKU-LEGACY").stockQtyMilli);
