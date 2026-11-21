@@ -37,7 +37,7 @@ All authenticated requests use Authorization: Bearer <Google ID token>. Device-s
 - POST /v1/sync/push — submit 1–100 events. Event payload SHA-256 is calculated over canonical JSON.
 - GET /v1/sync/pull?after=<sequence>&limit=200 — fetch ordered events.
 - GET /v1/conflicts — list unresolved optimistic-concurrency conflicts.
-- POST /v1/drive/connect — store an encrypted Google Drive refresh token after validating account and appData scope.
+- POST /v1/drive/connect — exchange a one-time Google server authorization code and encrypt the returned refresh token.
 - POST /v1/backups — upload a device-encrypted full snapshot as raw application/octet-stream; provide X-Through-Seq and X-Backup-SHA256.
 - GET /v1/backups — list available encrypted snapshots.
 - GET /v1/backups/{snapshotId} — download an encrypted snapshot for cross-device restore.
