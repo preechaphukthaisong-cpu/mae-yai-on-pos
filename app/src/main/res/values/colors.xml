@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="pos_emerald">#009B72</color>
+    <color name="pos_forest">#075B46</color>
+    <color name="pos_white">#FFFFFF</color>
+    <color name="pos_mint">#EAF7F2</color>
+    <color name="pos_background">#F3F5F4</color>
+    <color name="pos_text">#26332F</color>
+    <color name="pos_text_secondary">#66736D</color>
+    <color name="pos_muted">#8C9993</color>
+</resources>
