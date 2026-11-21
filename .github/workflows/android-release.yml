@@ -1,6 +1,9 @@
 name: Android Release Signing Verification
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -92,8 +95,8 @@ jobs:
           test -s "$APK"
           "$APKSIGNER" verify --print-certs "$APK" | tee "$RUNNER_TEMP/apk-cert.txt"
           APK_SHA1="$(awk '/certificate SHA-1 digest:/{print tolower($NF)}' "$RUNNER_TEMP/apk-cert.txt")"
-          if [[ "$APK_SHA1" != "$MAEYAI_RELEASE_SHA1" ]]; then
-            echo "::error::Release APK certificate does not match the protected release keystore."
+          if [[ -z "$APK_SHA1" || "$APK_SHA1" != "$MAEYAI_RELEASE_SHA1" ]]; then
+            echo "::error::Release APK certificate is missing or does not match the protected release keystore."
             exit 1
           fi
           echo "Release APK signature verified. SHA-1: $APK_SHA1"
