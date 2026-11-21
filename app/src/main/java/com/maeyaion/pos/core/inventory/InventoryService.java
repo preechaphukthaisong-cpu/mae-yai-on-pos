@@ -117,7 +117,9 @@ public final class InventoryService {
                     + "\",\"stock_limit_qty_milli\":" + stockLimitQtyMilli + "}";
             appendOperation(operationId, "INVENTORY_PRODUCT_CREATE", "PRODUCT", sku, payload, nowUtc);
             appendStock(UUID.randomUUID().toString(), product, receivedQtyMilli, "RECEIVE", nowUtc);
-            return products.findBySku(sku);
+            ProductEntity result = products.findBySku(sku);
+            appendProductSyncEvent(result, nowUtc);
+            return result;
         });
     }
 
