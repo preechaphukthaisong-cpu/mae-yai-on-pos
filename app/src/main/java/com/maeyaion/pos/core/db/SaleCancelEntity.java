@@ -2,6 +2,7 @@ package com.maeyaion.pos.core.db;
 
 import androidx.annotation.NonNull;
 import androidx.room.Entity;
+import androidx.room.ColumnInfo;
 import androidx.room.ForeignKey;
 import androidx.room.Index;
 import androidx.room.PrimaryKey;
@@ -11,9 +12,9 @@ public final class SaleCancelEntity {
     @PrimaryKey @NonNull public final String id;
     @NonNull public final String sale_id;
     @NonNull public final String reason;
-    public final long cash_refund_satang;
-    public final long debt_reduction_satang;
-    public final long fee_reversal_satang;
+    @ColumnInfo(defaultValue="0") public final long cash_refund_satang;
+    @ColumnInfo(defaultValue="0") public final long debt_reduction_satang;
+    @ColumnInfo(defaultValue="0") public final long fee_reversal_satang;
     public final String recipient_name;
     @NonNull public final String operator_label;
     @NonNull public final String created_at_utc;
