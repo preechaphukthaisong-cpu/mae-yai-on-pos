@@ -36,7 +36,7 @@ public final class BarcodeAllocator {
     }
 
     @NonNull
-    BarcodeRegistryEntity registerManufacturerInTransaction(@NonNull String barcode,
+    public BarcodeRegistryEntity registerManufacturerInTransaction(@NonNull String barcode,
             @NonNull String displayName, long priceSatang, @NonNull String createdAtUtc) {
         validate(barcode, displayName, priceSatang, createdAtUtc);
         if (registryDao.findByBarcode(barcode) != null) {
