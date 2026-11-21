@@ -95,11 +95,11 @@ public final class InventoryService {
             ProductEntity product = new ProductEntity(sku, registered.barcode, name,
                     priceSatang, costSatang, unit, stockLimitQtyMilli, 0L, 1, nowUtc, nowUtc);
             products.insert(product);
-            String payload = "{\\"sku\\":\\"" + escape(sku) + "\\",\\"barcode\\":\\""
-                    + escape(registered.barcode) + "\\",\\"name\\":\\"" + escape(name)
-                    + "\\",\\"price_satang\\":" + priceSatang
-                    + ",\\"cost_satang\\":" + costSatang + ",\\"unit\\":\\"" + escape(unit)
-                    + "\\",\\"stock_limit_qty_milli\\":" + stockLimitQtyMilli + "}";
+            String payload = "{\"sku\":\"" + escape(sku) + "\",\"barcode\":\""
+                    + escape(registered.barcode) + "\",\"name\":\"" + escape(name)
+                    + "\",\"price_satang\":" + priceSatang
+                    + ",\"cost_satang\":" + costSatang + ",\"unit\":\"" + escape(unit)
+                    + "\",\"stock_limit_qty_milli\":" + stockLimitQtyMilli + "}";
             appendOperation(operationId, "INVENTORY_PRODUCT_CREATE", "PRODUCT", sku, payload, nowUtc);
             appendStock(UUID.randomUUID().toString(), product, receivedQtyMilli, "RECEIVE", nowUtc);
             return products.findBySku(sku);
