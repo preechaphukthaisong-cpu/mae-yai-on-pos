@@ -1,6 +1,7 @@
 package com.maeyaion.pos.core.db;
 import androidx.annotation.NonNull;
 import androidx.room.Entity;
+import androidx.room.ColumnInfo;
 import androidx.room.PrimaryKey;
 @Entity(tableName="daily_summary")
 public final class DailySummaryEntity {
