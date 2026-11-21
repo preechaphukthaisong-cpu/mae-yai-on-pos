@@ -1,6 +1,7 @@
 package com.maeyaion.pos.feature.sales;
 
 import androidx.activity.ComponentActivity;
+import android.app.AlertDialog;
 import android.Manifest;
 import android.content.pm.PackageManager;
 import androidx.camera.view.PreviewView;
@@ -24,6 +25,7 @@ import com.maeyaion.pos.core.speech.ThaiSpeechService;
 import com.maeyaion.pos.core.navigation.SalesRoute;
 import com.maeyaion.pos.core.sales.CustomerService;
 import com.maeyaion.pos.core.sales.SaleService;
+import com.maeyaion.pos.core.sales.DuplicateSaleException;
 import com.maeyaion.pos.core.sales.DebtPaymentService;
 import com.maeyaion.pos.core.tx.RoomTransactionRunner;
 import java.math.BigDecimal;
@@ -81,7 +83,8 @@ public final class SalesActivity extends ComponentActivity {
   if(cart.isEmpty()){cartText.setText("ยังไม่มีสินค้าในบิล");return;}
   StringBuilder b=new StringBuilder("รายการสินค้า\n");for(Map.Entry<String,Long> e:cart.entrySet())b.append(e.getKey()).append(" × ").append(formatQty(e.getValue())).append('\n');cartText.setText(b.toString());
  }
- private void checkout(){
+ private void checkout(){checkout(false);}
+ private void checkout(boolean confirmDuplicate){
   if(checkoutInFlight)return;
   if(cart.isEmpty()){toast("กรุณาเพิ่มสินค้า");return;}
   final Long received;
@@ -99,10 +102,16 @@ public final class SalesActivity extends ComponentActivity {
     String now=Instant.now().toString();String customerId=null;
     if(credit){CustomerEntity customer=new CustomerService(db,tx).register(name,identity,now);customerId=customer.id;}
     SaleCalculator.SaleType type=credit?SaleCalculator.SaleType.CREDIT:SaleCalculator.SaleType.CASH;
-    com.maeyaion.pos.core.db.SaleEntity sale=new SaleService(db,tx).checkout(idempotencyKey,type,customerId,items,received,now);
+    com.maeyaion.pos.core.db.SaleEntity sale=new SaleService(db,tx).checkout(idempotencyKey,type,customerId,items,received,now,confirmDuplicate);
     String summary="บันทึกบิลสำเร็จ\nเลขที่: "+sale.id+"\nยอดสินค้า: "+formatMoney(sale.subtotal_satang)+" บาท\nค่าบริการ: "+formatMoney(sale.fee_total_satang)+" บาท\nยอดรวม: "+formatMoney(sale.total_satang)+" บาท"+(sale.change_satang==null?"":"\nเงินทอน: "+formatMoney(sale.change_satang)+" บาท");
     runOnUiThread(()->{checkoutInFlight=false;checkoutButton.setEnabled(true);addButton.setEnabled(true);cart.clear();checkoutIdempotencyKey=UUID.randomUUID().toString();refreshCart();resultText.setText(summary);});
-   }catch(RuntimeException e){runOnUiThread(()->{checkoutInFlight=false;checkoutButton.setEnabled(true);addButton.setEnabled(true);toast(message(e));});}
+   }catch(DuplicateSaleException duplicate){runOnUiThread(()->{
+    checkoutInFlight=false;checkoutButton.setEnabled(true);addButton.setEnabled(true);
+    new AlertDialog.Builder(this).setTitle("ตรวจพบรายการขายซ้ำ")
+     .setMessage("พบบิล "+duplicate.existingSaleId.substring(0,8)+" ที่มีรายละเอียดเหมือนกันภายใน 60 นาที ต้องการบันทึกบิลซ้ำหรือไม่")
+     .setNegativeButton("ไม่บันทึกซ้ำ",null)
+     .setPositiveButton("ยืนยันขายซ้ำ",(dialog,which)->checkout(true)).show();
+   });}catch(RuntimeException e){runOnUiThread(()->{checkoutInFlight=false;checkoutButton.setEnabled(true);addButton.setEnabled(true);toast(message(e));});}
   });
  }
  private void loadCustomers(LinearLayout root){
