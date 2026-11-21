@@ -18,6 +18,12 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.common.api.Scope;
 import com.maeyaion.pos.R;
+import com.maeyaion.pos.feature.inventory.InventoryActivity;
+import com.maeyaion.pos.feature.barcode.BarcodeActivity;
+import com.maeyaion.pos.feature.sales.SalesActivity;
+import com.maeyaion.pos.feature.history.HistoryActivity;
+import com.maeyaion.pos.feature.store.StoreActivity;
+import com.maeyaion.pos.feature.reports.ReportsActivity;
 import com.maeyaion.pos.core.navigation.BarcodeRoute;
 import com.maeyaion.pos.core.navigation.InventoryRoute;
 import com.maeyaion.pos.core.navigation.SalesRoute;
@@ -128,27 +134,38 @@ public final class MainActivity extends Activity {
         addButton(parent, "ลิมิตสต๊อก", () -> openInventory("limit"));
     }
 
+    // Always use explicit in-app intents. Package-scoped implicit intents do not
+    // reliably resolve non-exported activities on modern Android releases.
     private void openInventory(String screen) {
-        Intent intent = new Intent(InventoryRoute.ACTION);
-        intent.setPackage(getPackageName());
+        Intent intent = new Intent(this, InventoryActivity.class);
         intent.putExtra(InventoryRoute.EXTRA_SCREEN, screen);
         startActivity(intent);
     }
 
     private void openBarcode(String screen) {
-        Intent intent = new Intent(BarcodeRoute.ACTION);
-        intent.setPackage(getPackageName());
+        Intent intent = new Intent(this, BarcodeActivity.class);
         intent.putExtra(BarcodeRoute.EXTRA_SCREEN, screen);
         startActivity(intent);
     }
 
-    private void openSales(String screen) { openRoute(SalesRoute.ACTION, SalesRoute.EXTRA_SCREEN, screen); }
-    private void openHistory(String screen) { openRoute(HistoryRoute.ACTION, HistoryRoute.EXTRA_SCREEN, screen); }
-    private void openStore(String screen) { openRoute(StoreRoute.ACTION, StoreRoute.EXTRA_SCREEN, screen); }
-    private void openReports(String screen) { openRoute(ReportsRoute.ACTION, ReportsRoute.EXTRA_SCREEN, screen); }
-    private void openRoute(String action, String extra, String screen) {
-        Intent intent = new Intent(action);
-        intent.setPackage(getPackageName());
+    private void openSales(String screen) {
+        openRoute(SalesActivity.class, SalesRoute.EXTRA_SCREEN, screen);
+    }
+
+    private void openHistory(String screen) {
+        openRoute(HistoryActivity.class, HistoryRoute.EXTRA_SCREEN, screen);
+    }
+
+    private void openStore(String screen) {
+        openRoute(StoreActivity.class, StoreRoute.EXTRA_SCREEN, screen);
+    }
+
+    private void openReports(String screen) {
+        openRoute(ReportsActivity.class, ReportsRoute.EXTRA_SCREEN, screen);
+    }
+
+    private void openRoute(Class<? extends Activity> destination, String extra, String screen) {
+        Intent intent = new Intent(this, destination);
         intent.putExtra(extra, screen);
         startActivity(intent);
     }
