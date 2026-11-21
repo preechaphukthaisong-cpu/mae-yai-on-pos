@@ -12,7 +12,7 @@ public interface SyncQueueDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     void enqueue(SyncOutboxEntity event);
 
-    @Query("SELECT * FROM sync_outbox WHERE store_id=:storeId AND delivery_state='PENDING' ORDER BY created_at_utc ASC, event_id ASC LIMIT :limit")
+    @Query("SELECT * FROM sync_outbox WHERE store_id=:storeId AND delivery_state='PENDING' ORDER BY created_at_utc ASC, rowid ASC LIMIT :limit")
     List<SyncOutboxEntity> pendingOutbox(String storeId, int limit);
 
     @Query("UPDATE sync_outbox SET delivery_state='CONFLICT', attempt_count=attempt_count+1, last_attempt_at_utc=:attemptedAt, last_error=:error WHERE event_id=:eventId AND delivery_state='PENDING'")
