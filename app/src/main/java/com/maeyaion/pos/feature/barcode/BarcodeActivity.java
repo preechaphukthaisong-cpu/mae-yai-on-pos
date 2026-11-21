@@ -65,6 +65,10 @@ public final class BarcodeActivity extends Activity {
         setContentView(scroll);
 
         boolean catalogOnly = "catalog".equals(getIntent().getStringExtra(BarcodeRoute.EXTRA_SCREEN));
+        Button backButton = new Button(this);
+        backButton.setText("ย้อนกลับ");
+        backButton.setOnClickListener(v -> finish());
+        content.addView(backButton);
         TextView title = new TextView(this);
         title.setText(catalogOnly ? "คลังบาร์โค้ด" : "สร้างบาร์โค้ดสินค้า");
         title.setTextSize(23);
