@@ -15,11 +15,21 @@ import java.util.UUID;
  * version increment and outbox insert must commit or roll back together.
  */
 public final class SyncOutboxWriter {
+    public static final String UNBOUND_STORE_ID = "__UNBOUND__";
     private final AppDatabase database;
 
     public SyncOutboxWriter(@NonNull AppDatabase database) {
         if (database == null) throw new IllegalArgumentException("Database is required");
         this.database = database;
+    }
+
+    @NonNull
+    public SyncEventEnvelope appendUnboundInTransaction(@NonNull String operation,
+            @NonNull String entityType, @NonNull String entityId,
+            @NonNull org.json.JSONObject domainData, @NonNull String createdAtUtc)
+            throws SyncException {
+        return appendInTransaction(UNBOUND_STORE_ID, operation, entityType, entityId,
+                domainData, createdAtUtc);
     }
 
     @NonNull
