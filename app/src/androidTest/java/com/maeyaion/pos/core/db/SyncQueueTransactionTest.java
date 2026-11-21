@@ -122,4 +122,54 @@ public final class SyncQueueTransactionTest {
         assertEquals(0L, db.syncQueueDao().unappliedInboxCount("store-1"));
         assertEquals(1L, db.syncQueueDao().entityVersion("product", "SKU-REMOTE").version);
     }
+
+    @Test public void acknowledgedLocalEventEchoAdvancesCursorWithoutApplyingTwice() throws Exception {
+        JSONObject data = new JSONObject();
+        data.put("sku", "SKU-LOCAL");
+        SyncOutboxWriter writer = new SyncOutboxWriter(db);
+        final SyncEventEnvelope[] event = new SyncEventEnvelope[1];
+        db.runInTransaction(() -> {
+            try {
+                event[0] = writer.appendUnboundInTransaction("upsert", "product",
+                        "SKU-LOCAL", data, "2026-11-21T00:00:00Z");
+            } catch (SyncException error) {
+                throw new IllegalStateException(error);
+            }
+        });
+        assertEquals(1, db.syncQueueDao().acknowledgeOutbox(event[0].eventId));
+        SyncInboxEntity echo = new SyncInboxEntity(event[0].eventId, "__UNBOUND__", 1,
+                "upsert", "product", "SKU-LOCAL", 0, 1, event[0].payload.toString(),
+                event[0].payloadSha256, "2026-11-21T00:00:01Z", 0);
+        SyncInboxProcessor processor = new SyncInboxProcessor(db);
+        assertTrue(processor.receive(echo));
+        final int[] calls = {0};
+        assertTrue(processor.applyNext("__UNBOUND__", "2026-11-21T00:00:02Z", remote -> calls[0]++));
+        assertEquals(0, calls[0]);
+        assertEquals(1L, db.syncQueueDao().cursor("__UNBOUND__").last_applied_sequence);
+    }
+
+    @Test public void reusedRemoteEventIdWithDifferentPayloadIsRejected() throws Exception {
+        JSONObject original = new JSONObject();
+        original.put("sku", "SKU-ORIGINAL");
+        SyncEventEnvelope first = SyncEventEnvelope.create("upsert", "product", "SKU-1", 0, original);
+        SyncInboxProcessor processor = new SyncInboxProcessor(db);
+        SyncInboxEntity firstRow = new SyncInboxEntity(first.eventId, "store-1", 1,
+                "upsert", "product", "SKU-1", 0, 1, first.payload.toString(),
+                first.payloadSha256, "2026-11-21T00:00:00Z", 0);
+        assertTrue(processor.receive(firstRow));
+
+        JSONObject altered = new JSONObject();
+        altered.put("sku", "SKU-ALTERED");
+        SyncEventEnvelope changed = SyncEventEnvelope.create("upsert", "product", "SKU-1", 0, altered);
+        SyncInboxEntity replay = new SyncInboxEntity(first.eventId, "store-1", 1,
+                "upsert", "product", "SKU-1", 0, 1, changed.payload.toString(),
+                changed.payloadSha256, "2026-11-21T00:00:01Z", 0);
+        try {
+            processor.receive(replay);
+            fail("Reused event ID with changed payload must be rejected");
+        } catch (IllegalArgumentException expected) {
+            assertTrue(expected.getMessage().contains("reused"));
+        }
+    }
+
 }
