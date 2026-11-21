@@ -1,8 +1,11 @@
 package com.maeyaion.pos.core.scanner;
 
-/** Suppresses repeated camera frames for the same code without hiding subsequent scans. */
+import java.util.HashSet;
+import java.util.Set;
+
+/** Suppresses repeated camera frames for every code currently visible to the camera. */
 public final class BarcodeEmissionGate {
-    private String lastValue;
+    private final Set<String> emittedWhileVisible = new HashSet<>();
 
     public BarcodeEmissionGate(long duplicateWindowMs) {
         if (duplicateWindowMs < 0) throw new IllegalArgumentException("Window cannot be negative");
@@ -10,13 +13,11 @@ public final class BarcodeEmissionGate {
 
     public synchronized boolean shouldEmit(String value, long nowMs) {
         if (value == null || value.trim().isEmpty()) return false;
-        if (value.equals(lastValue)) return false;
-        lastValue = value;
-        return true;
+        return emittedWhileVisible.add(value);
     }
 
-    /** Allows the same physical code to be scanned again after it leaves the camera view. */
+    /** Allows visible codes to be scanned again after the camera has seen no barcode. */
     public synchronized void reset() {
-        lastValue = null;
+        emittedWhileVisible.clear();
     }
 }
