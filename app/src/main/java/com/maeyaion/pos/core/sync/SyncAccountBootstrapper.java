@@ -16,7 +16,6 @@ public final class SyncAccountBootstrapper {
     private final AppDatabase database;
 
     public SyncAccountBootstrapper(@NonNull SyncApiClient api) {
-        if (api == null) throw new IllegalArgumentException("SyncApiClient is required");
         this(api, null);
     }
 
