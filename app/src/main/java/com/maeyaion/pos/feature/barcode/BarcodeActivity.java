@@ -137,7 +137,7 @@ public final class BarcodeActivity extends Activity {
                 List<BarcodeRegistryEntity> rows = AppDatabase.getInstance(getApplicationContext())
                         .barcodeRegistryDao().listAll();
                 runOnUiThread(() -> {
-                    int firstCatalogChild = 5;
+                    final int firstCatalogChild = 8;
                     while (content.getChildCount() > firstCatalogChild) {
                         content.removeViewAt(firstCatalogChild);
                     }
