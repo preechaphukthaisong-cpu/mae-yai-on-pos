@@ -27,6 +27,7 @@ final class OfflineBarcodeAnalyzer implements ImageAnalysis.Analyzer, AutoClosea
     private final Listener listener;
     private final BarcodeEmissionGate emissionGate = new BarcodeEmissionGate(1_000L);
     private volatile boolean closed;
+    private volatile boolean enabled = true;
     private long lastBarcodeSeenAtMs = Long.MIN_VALUE;
     private static final long BARCODE_ABSENCE_RESET_MS = 750L;
 
@@ -41,7 +42,7 @@ final class OfflineBarcodeAnalyzer implements ImageAnalysis.Analyzer, AutoClosea
 
     @Override
     public void analyze(@NonNull ImageProxy imageProxy) {
-        if (closed) {
+        if (closed || !enabled) {
             imageProxy.close();
             return;
         }
@@ -77,6 +78,14 @@ final class OfflineBarcodeAnalyzer implements ImageAnalysis.Analyzer, AutoClosea
         } catch (RuntimeException processingFailure) {
             imageProxy.close();
             listener.onFailure(processingFailure);
+        }
+    }
+
+    void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+        if (enabled) {
+            emissionGate.reset();
+            lastBarcodeSeenAtMs = Long.MIN_VALUE;
         }
     }
 
