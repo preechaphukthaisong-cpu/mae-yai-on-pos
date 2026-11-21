@@ -49,6 +49,7 @@ public abstract class AppDatabase extends RoomDatabase {
     public abstract PriceHistoryDao priceHistoryDao();
     public abstract DailySummaryDao dailySummaryDao();
     public abstract ProductDailyDao productDailyDao();
+    public abstract SaleBalanceDao saleBalanceDao();
 
     public static RoomDatabase.Callback databaseCallback() {
         return new RoomDatabase.Callback() {
