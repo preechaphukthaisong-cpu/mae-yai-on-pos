@@ -57,19 +57,25 @@ public final class BarcodeActivity extends Activity {
     }
 
     private void render() {
+        LinearLayout screenRoot = new LinearLayout(this);
+        screenRoot.setOrientation(LinearLayout.VERTICAL);
         ScrollView scroll = new ScrollView(this);
+        scroll.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
         content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(dp(20), dp(18), dp(20), dp(24));
         content.setBackgroundColor(getColor(com.maeyaion.pos.R.color.pos_background));
         scroll.addView(content);
-        setContentView(scroll);
+        screenRoot.addView(scroll);
+        setContentView(screenRoot);
 
         boolean catalogOnly = "catalog".equals(getIntent().getStringExtra(BarcodeRoute.EXTRA_SCREEN));
         Button backButton = new Button(this);
         backButton.setText("ย้อนกลับ");
         backButton.setOnClickListener(v -> finish());
-        content.addView(backButton);
+        LinearLayout.LayoutParams backParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(56));
+        backParams.setMargins(dp(16), dp(8), dp(16), dp(12));
+        screenRoot.addView(backButton, backParams);
         TextView title = new TextView(this);
         title.setText(catalogOnly ? "คลังบาร์โค้ด" : "สร้างบาร์โค้ดสินค้า");
         title.setTextSize(23);
