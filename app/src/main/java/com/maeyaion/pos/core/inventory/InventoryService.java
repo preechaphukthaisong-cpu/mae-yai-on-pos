@@ -25,7 +25,7 @@ import java.util.UUID;
 
 /** Transactional inventory operations. All quantities use thousandths; all money uses satang. */
 public final class InventoryService {
-    private static final int SCHEMA_VERSION = 4;
+    private static final int SCHEMA_VERSION = 5;
     private final BarcodeAllocator barcodes;
     private final ProductDao products;
     private final StockLogDao stockLogs;
