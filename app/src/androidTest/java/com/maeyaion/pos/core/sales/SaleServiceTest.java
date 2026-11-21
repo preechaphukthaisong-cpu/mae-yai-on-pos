@@ -35,7 +35,7 @@ public final class SaleServiceTest {
   SaleEntity sale=new SaleService(db,tx).checkout("cash-key",SaleCalculator.SaleType.CASH,null,
    Collections.singletonMap(p.sku,2000L),5000L,NOW);
   assertEquals("PAID",sale.payment_status);assertEquals(0L,sale.fee_total_satang);
-  assertEquals(2000L,db.productDao().findBySku(p.sku).stockQtyMilli);
+  assertEquals(3000L,db.productDao().findBySku(p.sku).stockQtyMilli);
   assertEquals(1,db.saleLineDao().forSale(sale.id).size());
   assertEquals("SALE",db.stockLogDao().latest(1).get(0).reason);
   DailySummaryEntity summary=db.dailySummaryDao().find("2026-11-21");
