@@ -103,7 +103,7 @@ public final class InventoryServiceTest {
         ProductEntity created = service.createAndReceive(UUID.randomUUID().toString(),
                 "SKU-INVENTORY-3", "น้ำดื่ม", 500L, 200L, "ขวด",
                 1000L, 1000L, NOW);
-        assertFalse(service.belowStockLimit().contains(created));
+        assertEquals(0, service.belowStockLimit().size());
         service.replaceCount(UUID.randomUUID().toString(), created.barcode, 999L, NOW);
         assertEquals(1, service.belowStockLimit().size());
         assertNotNull(service.findByBarcode(created.barcode));
