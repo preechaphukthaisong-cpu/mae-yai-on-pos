@@ -16,8 +16,12 @@ import com.maeyaion.pos.core.db.SaleLineEntity;
 import com.maeyaion.pos.core.db.StockLogEntity;
 import com.maeyaion.pos.core.money.SaleCalculator;
 import com.maeyaion.pos.core.tx.TransactionRunner;
+import com.maeyaion.pos.core.sync.SyncOutboxWriter;
+import com.maeyaion.pos.core.sync.SyncException;
 
 import org.json.JSONObject;
+import org.json.JSONArray;
+import org.json.JSONException;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -37,10 +41,12 @@ import java.util.UUID;
 public final class SaleService {
     private final AppDatabase db;
     private final TransactionRunner transactions;
+    private final SyncOutboxWriter syncOutbox;
 
     public SaleService(@NonNull AppDatabase db, @NonNull TransactionRunner transactions) {
         this.db=Objects.requireNonNull(db,"db");
         this.transactions=Objects.requireNonNull(transactions,"transactions");
+        this.syncOutbox=new SyncOutboxWriter(db);
     }
 
     @NonNull
@@ -131,6 +137,7 @@ public final class SaleService {
                 db.stockLogDao().append(new StockLogEntity(UUID.randomUUID().toString(),
                         line.sku,product.stockQtyMilli,after,-line.quantityMilli,"SALE",
                         saleId,createdAtUtc));
+                appendProductSyncEvent(product, after, createdAtUtc);
             }
 
             String payload=journalPayload(sale,lines);
@@ -138,8 +145,71 @@ public final class SaleService {
                     "SALE",saleId,payload,createdAtUtc));
             db.backupJournalDao().append(new BackupJournalEntity(0L,saleId,"SALE_CHECKOUT",
                     payload,sha256(payload),5,createdAtUtc,0));
+            appendSaleSyncEvent(sale, lines, createdAtUtc);
             return sale;
         });
+    }
+
+
+    /** Product stock projection and sale aggregate are appended in the same checkout transaction. */
+    private void appendProductSyncEvent(ProductEntity product, long resultingStock, String atUtc) {
+        try {
+            JSONObject data = new JSONObject();
+            data.put("sku", product.sku);
+            data.put("barcode", product.barcode);
+            data.put("name", product.name);
+            data.put("price_satang", product.priceSatang);
+            data.put("cost_satang", product.costSatang);
+            data.put("unit", product.unit);
+            data.put("stock_limit_qty_milli", product.stockLimitQtyMilli == null
+                    ? JSONObject.NULL : product.stockLimitQtyMilli);
+            data.put("stock_qty_milli", resultingStock);
+            data.put("is_active", product.isActive);
+            data.put("created_at_utc", product.createdAtUtc);
+            data.put("updated_at_utc", atUtc);
+            syncOutbox.appendUnboundInTransaction("upsert", "product", product.sku, data, atUtc);
+        } catch (JSONException | SyncException error) {
+            throw new IllegalStateException("Unable to append product sync event", error);
+        }
+    }
+
+    private void appendSaleSyncEvent(SaleEntity sale, List<SaleLineEntity> lines, String atUtc) {
+        try {
+            JSONObject data = new JSONObject();
+            data.put("sale_id", sale.id);
+            data.put("idempotency_key", sale.idem_key);
+            data.put("type", sale.type);
+            data.put("payment_status", sale.payment_status);
+            data.put("lifecycle_status", sale.lifecycle_status);
+            data.put("customer_id", sale.customer_id == null ? JSONObject.NULL : sale.customer_id);
+            data.put("subtotal_satang", sale.subtotal_satang);
+            data.put("fee_total_satang", sale.fee_total_satang);
+            data.put("total_satang", sale.total_satang);
+            data.put("cash_received_satang", sale.cash_received_satang == null
+                    ? JSONObject.NULL : sale.cash_received_satang);
+            data.put("change_satang", sale.change_satang == null
+                    ? JSONObject.NULL : sale.change_satang);
+            data.put("content_hash", sale.content_hash);
+            data.put("created_at_utc", sale.created_at_utc);
+            data.put("paid_at_utc", sale.paid_at_utc == null ? JSONObject.NULL : sale.paid_at_utc);
+            JSONArray lineArray = new JSONArray();
+            for (SaleLineEntity line : lines) {
+                JSONObject item = new JSONObject();
+                item.put("id", line.id);
+                item.put("line_no", line.line_no);
+                item.put("sku", line.sku);
+                item.put("name_snap", line.name_snap);
+                item.put("price_snap_satang", line.price_snap_satang);
+                item.put("cost_snap_satang", line.cost_snap_satang);
+                item.put("qty_milli", line.qty_milli);
+                item.put("line_total_satang", line.line_total_satang);
+                lineArray.put(item);
+            }
+            data.put("lines", lineArray);
+            syncOutbox.appendUnboundInTransaction("upsert", "sale", sale.id, data, atUtc);
+        } catch (JSONException | SyncException error) {
+            throw new IllegalStateException("Unable to append sale sync event", error);
+        }
     }
 
     private SaleEntity validateReplay(SaleEntity prior, SaleCalculator.SaleType type,
