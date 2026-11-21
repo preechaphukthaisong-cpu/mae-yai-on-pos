@@ -113,7 +113,7 @@ public final class ProductRegistrationService {
                 || !createdAtUtc.equals(existing.createdAtUtc)
                 || !updatedAtUtc.equals(existing.updatedAtUtc)
                 || !prior.payload.equals(canonicalPayload(existing, expectedOperation))
-                || prior.schema_version != 5
+                || (prior.schema_version != 4 && prior.schema_version != 5)
                 || !prior.payload_sha256.equals(sha256(prior.payload))) {
             throw new IllegalStateException("Idempotency key was already used for a different or inconsistent operation");
         }
