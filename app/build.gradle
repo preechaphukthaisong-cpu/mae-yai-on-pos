@@ -1,5 +1,7 @@
 plugins { id 'com.android.application' }
 
+def releaseStoreFile = System.getenv('MAEYAI_RELEASE_STORE_FILE')
+
 android {
     namespace 'com.maeyaion.pos'
     compileSdk 36
@@ -13,6 +15,24 @@ android {
         javaCompileOptions {
             annotationProcessorOptions {
                 arguments += ["room.schemaLocation": "$projectDir/schemas"]
+            }
+        }
+    }
+    signingConfigs {
+        release {
+            if (releaseStoreFile != null && !releaseStoreFile.trim().isEmpty()) {
+                storeFile file(releaseStoreFile)
+                storeType 'PKCS12'
+                storePassword System.getenv('MAEYAI_RELEASE_STORE_PASSWORD')
+                keyAlias System.getenv('MAEYAI_RELEASE_KEY_ALIAS')
+                keyPassword System.getenv('MAEYAI_RELEASE_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        release {
+            if (releaseStoreFile != null && !releaseStoreFile.trim().isEmpty()) {
+                signingConfig signingConfigs.release
             }
         }
     }
