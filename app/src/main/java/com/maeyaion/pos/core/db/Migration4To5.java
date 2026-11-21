@@ -59,6 +59,7 @@ public final class Migration4To5 {
             db.execSQL("CREATE TRIGGER stock_count_line_no_delete BEFORE DELETE ON stock_count_line BEGIN SELECT RAISE(ABORT,'stock_count_line_append_only'); END");
             DatabaseGuards.installCore(db);
             DatabaseGuards.installBackupJournal(db);
+            DatabaseGuards.installBusiness(db);
         }
     };
 }
