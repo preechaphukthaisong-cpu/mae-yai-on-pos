@@ -95,6 +95,18 @@ public final class SyncApiClient {
                 null, true);
     }
 
+    @NonNull public JSONObject connectGoogleDrive(@NonNull String serverAuthCode) throws SyncException {
+        if (serverAuthCode == null || serverAuthCode.trim().length() < 20
+                || serverAuthCode.length() > 4096
+                || serverAuthCode.indexOf('\\r') >= 0 || serverAuthCode.indexOf('\\n') >= 0) {
+            throw new SyncException("Google Drive authorization code is missing or invalid");
+        }
+        JSONObject body = new JSONObject();
+        try { body.put("serverAuthCode", serverAuthCode); }
+        catch (JSONException error) { throw new SyncException("Unable to prepare Google Drive connection", error); }
+        return requestJson("POST", "/v1/drive/connect", body, true);
+    }
+
     @NonNull public JSONObject listConflicts() throws SyncException {
         return requestJson("GET", "/v1/conflicts", null, true);
     }
