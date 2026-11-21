@@ -50,7 +50,22 @@ public final class SyncInboxProcessor {
         } catch (JSONException | SyncException error) {
             throw new IllegalArgumentException("Remote event payload is invalid", error);
         }
-        return database.syncQueueDao().receiveRemote(event) != -1L;
+        SyncQueueDao dao = database.syncQueueDao();
+        long inserted = dao.receiveRemote(event);
+        if (inserted != -1L) return true;
+        SyncInboxEntity existing = dao.inboxEvent(event.event_id);
+        if (existing == null || !existing.store_id.equals(event.store_id)
+                || existing.server_sequence != event.server_sequence
+                || !existing.payload_sha256.equalsIgnoreCase(event.payload_sha256)
+                || !existing.payload_json.equals(event.payload_json)
+                || !existing.entity_type.equals(event.entity_type)
+                || !existing.entity_id.equals(event.entity_id)
+                || existing.base_version != event.base_version
+                || existing.entity_version != event.entity_version
+                || !existing.operation.equals(event.operation)) {
+            throw new IllegalArgumentException("A remote event ID was reused with different content");
+        }
+        return false;
     }
 
     /**
