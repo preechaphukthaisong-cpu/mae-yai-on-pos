@@ -199,6 +199,18 @@ public final class SyncApiClient {
                 } catch (JSONException ignored) { }
                 throw new SyncException(message, status);
             }
+            if (binaryResponse) {
+                String contentType = connection.getContentType();
+                String claimedSha = connection.getHeaderField("X-Backup-SHA256");
+                String throughSequence = connection.getHeaderField("X-Through-Seq");
+                if (contentType == null || !contentType.toLowerCase(java.util.Locale.ROOT)
+                        .startsWith("application/octet-stream")
+                        || claimedSha == null || !claimedSha.matches("(?i)[0-9a-f]{64}")
+                        || throughSequence == null || !throughSequence.matches("[0-9]{1,19}")
+                        || !claimedSha.equalsIgnoreCase(sha256Hex(response))) {
+                    throw new SyncException("Downloaded encrypted backup failed metadata or SHA-256 verification");
+                }
+            }
             return response;
         } catch (SyncException error) {
             throw error;
@@ -206,6 +218,17 @@ public final class SyncApiClient {
             throw new SyncException("Unable to reach the sync server", error);
         } finally {
             if (connection != null) connection.disconnect();
+        }
+    }
+
+    private static String sha256Hex(byte[] value) throws SyncException {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(value);
+            StringBuilder result = new StringBuilder(64);
+            for (byte item : digest) result.append(String.format(java.util.Locale.ROOT, "%02x", item & 0xff));
+            return result.toString();
+        } catch (NoSuchAlgorithmException error) {
+            throw new SyncException("SHA-256 is unavailable on this device", error);
         }
     }
 
