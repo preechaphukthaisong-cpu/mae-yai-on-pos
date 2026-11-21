@@ -74,6 +74,6 @@ public final class SaleServiceTest {
   assertEquals(5000L,db.productDao().findBySku(p.sku).stockQtyMilli);
   assertEquals("CANCELLED",db.saleDao().findById(sale.id).lifecycle_status);
   assertEquals(0L,db.dailySummaryDao().find("2026-11-21").net_sales_satang);
-  assertEquals(2,db.stockLogDao().historyForSku(p.sku).size());
+  assertEquals(4,db.stockLogDao().historyForSku(p.sku).size());
  }
 }
