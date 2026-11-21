@@ -6,12 +6,14 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 public final class BarcodeEmissionGateTest {
-    @Test public void suppressesRepeatedFramesButAllowsNewScansAndLaterRescan() {
+    @Test public void suppressesRepeatedFramesUntilCodeLeavesCameraView() {
         BarcodeEmissionGate gate = new BarcodeEmissionGate(1_000L);
         assertTrue(gate.shouldEmit("2000001", 10_000L));
         assertFalse(gate.shouldEmit("2000001", 10_250L));
         assertTrue(gate.shouldEmit("2000002", 10_300L));
-        assertTrue(gate.shouldEmit("2000001", 11_400L));
+        assertFalse(gate.shouldEmit("2000001", 11_400L));
+        gate.reset();
+        assertTrue(gate.shouldEmit("2000001", 11_500L));
     }
 
     @Test public void rejectsNullAndBlankValues() {
