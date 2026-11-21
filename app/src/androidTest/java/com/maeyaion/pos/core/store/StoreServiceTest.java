@@ -41,7 +41,7 @@ public final class StoreServiceTest {
   store.updateSalePrice(p.sku,2750,NOW);
   assertEquals(1,store.priceHistory(p.sku).size());
   assertNotNull(db.backupJournalDao().pendingBatch(20));
-  assertTrue(db.opLogDao().countForEntity("PRODUCT",p.sku)>=2);
+  assertTrue(db.opLogDao().latest(20).stream().anyMatch(row->"PRICE_CHANGED".equals(row.action)));
  }
  @Test public void invalidPriceDoesNotChangeProductOrHistory(){
   ProductEntity p=InventoryServiceFactory.create(db).createAndReceive(UUID.randomUUID().toString(),
