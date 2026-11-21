@@ -58,7 +58,7 @@ public final class InventoryServiceTest {
         assertEquals("2000001", created.barcode);
         assertEquals(3000L, created.stockQtyMilli);
         assertEquals(1, service.allProducts().size());
-        assertTrue(service.belowStockLimit().isEmpty());
+        assertEquals(1, service.belowStockLimit().size());
 
         ProductEntity received = service.receive(UUID.randomUUID().toString(),
                 created.barcode, 1000L, NOW);
