@@ -74,18 +74,76 @@ public final class MainActivity extends Activity {
     private void renderHome() {
         showingStoreManagement = false;
         LinearLayout page = createPage();
-        addHeading(page, getString(R.string.app_name), 24);
+        page.setPadding(dp(18), dp(22), dp(18), dp(28));
+        page.setBackgroundColor(getColor(R.color.pos_background));
 
-        addButton(page, "การขาย", () -> openSales("cash"));
-        addButton(page, "คลังสินค้า", () -> openInventory("menu"));
-        addButton(page, "สร้างบาร์โค้ด", () -> openBarcode("create"));
-        addButton(page, "ประวัติการขาย", () -> openHistory("paid"));
-        addButton(page, "จัดการร้านค้า", this::renderStoreManagement);
-        addButton(page, "รายงานยอดขาย", () -> openReports("daily"));
+        TextView brand = addHeading(page, getString(R.string.app_name), 25);
+        brand.setTextColor(getColor(R.color.pos_forest));
+        brand.setPadding(0, dp(10), 0, dp(4));
+        TextView subtitle = new TextView(this);
+        subtitle.setText("ระบบขายหน้าร้าน · ใช้งานได้แม้ไม่มีอินเทอร์เน็ต");
+        subtitle.setTextSize(13);
+        subtitle.setTextColor(getColor(R.color.pos_text_secondary));
+        subtitle.setGravity(Gravity.CENTER);
+        subtitle.setPadding(0, 0, 0, dp(22));
+        page.addView(subtitle);
+
+        addMenuRow(page,
+                new String[]{"▣\\nการขาย\\nขายสินค้าและรับชำระ", "▦\\nคลังสินค้า\\nสินค้าและสต๊อก"},
+                new Runnable[]{() -> openSales("cash"), () -> openInventory("menu")});
+        addMenuRow(page,
+                new String[]{"▤\\nสร้างบาร์โค้ด\\nลงทะเบียนและพิมพ์", "↻\\nประวัติการขาย\\nค้นหาบิลและคืนสินค้า"},
+                new Runnable[]{() -> openBarcode("create"), () -> openHistory("paid")});
+        addMenuRow(page,
+                new String[]{"⚙\\nจัดการร้านค้า\\nตั้งค่าและเครื่องมือ", "▥\\nรายงานยอดขาย\\nสรุปผลประกอบการ"},
+                new Runnable[]{this::renderStoreManagement, () -> openReports("daily")});
+
+        TextView footer = new TextView(this);
+        footer.setText("MAEYAI-ON POS  ·  OFFLINE FIRST");
+        footer.setTextSize(11);
+        footer.setLetterSpacing(0.08f);
+        footer.setTextColor(getColor(R.color.pos_muted));
+        footer.setGravity(Gravity.CENTER);
+        footer.setPadding(0, dp(22), 0, dp(8));
+        page.addView(footer);
 
         ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.setBackgroundColor(getColor(R.color.pos_background));
         scroll.addView(page);
         setContentView(scroll);
+    }
+
+    private void addMenuRow(LinearLayout parent, String[] labels, Runnable[] actions) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        rowParams.bottomMargin = dp(12);
+        parent.addView(row, rowParams);
+        for (int i = 0; i < labels.length; i++) {
+            final Runnable action = actions[i];
+            Button tile = new Button(this);
+            tile.setText(labels[i]);
+            tile.setTextSize(15);
+            tile.setTextColor(getColor(R.color.pos_white));
+            tile.setGravity(Gravity.CENTER);
+            tile.setAllCaps(false);
+            tile.setSingleLine(false);
+            tile.setMinHeight(dp(142));
+            tile.setPadding(dp(8), dp(12), dp(8), dp(12));
+            tile.setBackgroundResource(R.drawable.bg_pos_menu_tile);
+            tile.setElevation(dp(2));
+            tile.setOnClickListener(view -> action.run());
+            LinearLayout.LayoutParams tileParams = new LinearLayout.LayoutParams(
+                    0, dp(142), 1f);
+            tileParams.setMargins(dp(5), 0, dp(5), 0);
+            row.addView(tile, tileParams);
+        }
+    }
+
+    private int dp(float value) {
+        return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 
     private void renderStoreManagement() {
