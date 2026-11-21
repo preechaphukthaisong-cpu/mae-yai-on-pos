@@ -37,6 +37,7 @@ async function uploadAppDataFile(accessToken, snapshot) {
     parents: ['appDataFolder'],
     appProperties: {
       storeId: snapshot.store_id,
+      snapshotId: snapshot.id,
       throughSeq: String(snapshot.through_seq),
       sha256: snapshot.sha256,
       format: 'maeyai-pos-full-v1'
@@ -67,6 +68,18 @@ function cryptoRandomBoundary() {
   return crypto.randomBytes(18).toString('hex');
 }
 
+async function findExistingSnapshot(accessToken, snapshotId) {
+  const query = "appProperties has { key='snapshotId' and value='" + snapshotId + "' } and trashed = false";
+  const url = 'https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&pageSize=1&fields=files(id)&q='
+    + encodeURIComponent(query);
+  const response = await fetch(url, {
+    headers: { authorization: 'Bearer ' + accessToken }
+  });
+  if (!response.ok) throw new Error('Google Drive snapshot reconciliation failed');
+  const body = await response.json();
+  return body.files?.[0]?.id || null;
+}
+
 async function deleteDriveFile(accessToken, fileId) {
   const response = await fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId), {
     method: 'DELETE',
@@ -94,7 +107,8 @@ export async function mirrorSnapshot(pool, storeId, snapshotId) {
     const refreshToken = decryptRefreshToken(snapshot);
     const accessToken = await getDriveAccessToken(refreshToken);
     await assertDriveAccount(accessToken, snapshot.owner_google_sub);
-    const driveFileId = await uploadAppDataFile(accessToken, snapshot);
+    const driveFileId = await findExistingSnapshot(accessToken, snapshot.id)
+      || await uploadAppDataFile(accessToken, snapshot);
     await client.query(
       'UPDATE backup_snapshots SET drive_file_id = $3, drive_uploaded_at = now() WHERE store_id = $1 AND id = $2',
       [storeId, snapshotId, driveFileId]
