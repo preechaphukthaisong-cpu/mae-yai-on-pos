@@ -132,7 +132,7 @@ public final class InventoryService {
 
     @NonNull public List<ProductEntity> allProducts() { return products.listActiveByStockAscending(); }
     @NonNull public List<ProductEntity> belowStockLimit() { return products.listBelowStockLimit(); }
-    @NonNull public ProductEntity findByBarcode(@NonNull String barcode) {
+    public ProductEntity findByBarcode(@NonNull String barcode) {
         return products.findByBarcode(barcode);
     }
     @NonNull public List<StockLogEntity> history(@NonNull String sku) {
