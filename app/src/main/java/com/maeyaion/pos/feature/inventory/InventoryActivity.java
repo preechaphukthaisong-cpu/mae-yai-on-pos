@@ -177,7 +177,7 @@ public final class InventoryActivity extends ComponentActivity {
                     render("count");
                 } catch (RuntimeException error) { toast(message(error)); }
             });
-            addButton("ดูประวัติการตรวจนับ", () -> showHistory(product));
+            addButton("ดูประวัติสต๊อก", () -> showHistory(product));
             });
         });
         addText("การตรวจนับจะแทนที่ยอดคงเหลือทันที และบันทึกประวัติทุกครั้ง");
@@ -195,14 +195,14 @@ public final class InventoryActivity extends ComponentActivity {
     }
 
     private void renderHistory() {
-        heading("ประวัติการตรวจนับ");
+        heading("ประวัติการเปลี่ยนแปลงสต๊อก");
         addButton("สแกนสินค้าเพื่อดูประวัติ", () -> startScan(barcode -> {
             render("history");
             ProductEntity product = inventory.findByBarcode(barcode);
             if (product == null) toast("ไม่พบสินค้าในคลัง");
             else showHistory(product);
         }));
-        addText("เลือกประวัติได้จากการสแกนสินค้าในหน้าตรวจนับ");
+        addText("ประวัติแสดงรายการรับเข้าและผลตรวจนับที่บันทึกไว้");
     }
 
     private void showHistory(ProductEntity product) {
