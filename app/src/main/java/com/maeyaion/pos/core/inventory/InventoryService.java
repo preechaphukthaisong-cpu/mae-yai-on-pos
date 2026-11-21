@@ -90,7 +90,7 @@ public final class InventoryService {
             if (backupJournal.findByOperationId(operationId) != null) {
                 throw new IllegalStateException("Operation id has already been used");
             }
-            BarcodeRegistryEntity registered = barcodes.registerManufacturerInTransaction(
+            BarcodeRegistryEntity registered = barcodes.registerOrGetManufacturerInTransaction(
                     barcode, name, priceSatang, nowUtc);
             ProductEntity product = new ProductEntity(sku, registered.barcode, name,
                     priceSatang, costSatang, unit, stockLimitQtyMilli, 0L, 1, nowUtc, nowUtc);
