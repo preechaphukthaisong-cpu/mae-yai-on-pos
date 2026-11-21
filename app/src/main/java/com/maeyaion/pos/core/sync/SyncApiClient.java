@@ -98,7 +98,7 @@ public final class SyncApiClient {
     @NonNull public JSONObject connectGoogleDrive(@NonNull String serverAuthCode) throws SyncException {
         if (serverAuthCode == null || serverAuthCode.trim().length() < 20
                 || serverAuthCode.length() > 4096
-                || serverAuthCode.indexOf('\\r') >= 0 || serverAuthCode.indexOf('\\n') >= 0) {
+                || serverAuthCode.indexOf('\r') >= 0 || serverAuthCode.indexOf('\n') >= 0) {
             throw new SyncException("Google Drive authorization code is missing or invalid");
         }
         JSONObject body = new JSONObject();
@@ -185,7 +185,7 @@ public final class SyncApiClient {
                     ? "application/octet-stream" : "application/json");
             String idToken = tokenProvider.getGoogleIdToken();
             if (idToken == null || idToken.trim().isEmpty() || idToken.length() > 8192
-                    || idToken.indexOf('\\r') >= 0 || idToken.indexOf('\\n') >= 0) {
+                    || idToken.indexOf('\r') >= 0 || idToken.indexOf('\n') >= 0) {
                 throw new SyncException("Google sign-in token is missing or invalid");
             }
             connection.setRequestProperty("Authorization", "Bearer " + idToken);
