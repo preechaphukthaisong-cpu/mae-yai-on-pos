@@ -76,6 +76,11 @@ public final class OfflineBarcodeScanner implements AutoCloseable {
         }, mainExecutor);
     }
 
+    /** Pause camera barcode callbacks while the cashier hears item confirmation. */
+    public void setScanningEnabled(boolean enabled) {
+        if (!closed) analyzer.setEnabled(enabled);
+    }
+
     @Override public void close() {
         closed = true;
         ProcessCameraProvider provider = cameraProvider;
