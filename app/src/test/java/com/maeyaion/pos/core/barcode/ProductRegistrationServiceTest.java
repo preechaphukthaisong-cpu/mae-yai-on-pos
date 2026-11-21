@@ -185,6 +185,7 @@ public final class ProductRegistrationServiceTest {
     private static final class FakeRegistry implements BarcodeRegistryDao {
         final Map<String, BarcodeRegistryEntity> values = new HashMap<>();
         @Override public BarcodeRegistryEntity findByBarcode(String barcode) { return values.get(barcode); }
+        @Override public List<BarcodeRegistryEntity> listAll() { return new ArrayList<>(values.values()); }
         @Override public void insert(BarcodeRegistryEntity entry) {
             if (values.putIfAbsent(entry.barcode, entry) != null) {
                 throw new IllegalStateException("duplicate_barcode");
