@@ -117,7 +117,7 @@ public final class RoomDatabaseRestorerTest {
         assertTrue(new SQLiteStagedRestoreValidator(5).isValid(staged));
 
         try {
-            new RoomDatabaseRestorer().activate(context, staged, safety.file, 4);
+            new RoomDatabaseRestorer().activate(context, staged, safety.file, 5);
             fail("Room identity mismatch must fail activation");
         } catch (java.io.IOException expected) {
             // Activation failed after replacement; the previous DB must be restored.
@@ -125,7 +125,7 @@ public final class RoomDatabaseRestorerTest {
 
         database = AppDatabase.getInstance(context);
         assertEquals("original-database", database.appMetaDao().findValue("rollback_probe"));
-        assertEquals(4, database.getOpenHelper().getWritableDatabase().getVersion());
+        assertEquals(5, database.getOpenHelper().getWritableDatabase().getVersion());
     }
 
     private static void deleteRecursively(File file) {
