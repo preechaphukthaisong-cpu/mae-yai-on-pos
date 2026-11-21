@@ -18,6 +18,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.common.api.Scope;
 import com.maeyaion.pos.R;
+import com.maeyaion.pos.core.navigation.InventoryRoute;
 
 public final class MainActivity extends Activity {
     private static final int REQUEST_DRIVE_ACCOUNT = 4102;
@@ -123,8 +124,9 @@ public final class MainActivity extends Activity {
     }
 
     private void openInventory(String screen) {
-        Intent intent = new Intent(this, com.maeyaion.pos.feature.inventory.InventoryActivity.class);
-        intent.putExtra("inventory_screen", screen);
+        Intent intent = new Intent(InventoryRoute.ACTION);
+        intent.setPackage(getPackageName());
+        intent.putExtra(InventoryRoute.EXTRA_SCREEN, screen);
         startActivity(intent);
     }
     private void addMenuSection(LinearLayout parent, String title, String... items) {
