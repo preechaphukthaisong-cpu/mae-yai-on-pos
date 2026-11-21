@@ -7,6 +7,8 @@ import androidx.annotation.NonNull;
 import com.maeyaion.pos.core.db.AppDatabase;
 import com.maeyaion.pos.core.db.BackupJournalEntity;
 import com.maeyaion.pos.core.db.CustomerEntity;
+import com.maeyaion.pos.core.db.DailySummaryEntity;
+import com.maeyaion.pos.core.db.ProductDailyEntity;
 import com.maeyaion.pos.core.db.OpLogEntity;
 import com.maeyaion.pos.core.db.ProductEntity;
 import com.maeyaion.pos.core.db.SaleEntity;
@@ -20,6 +22,7 @@ import org.json.JSONObject;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -47,6 +50,8 @@ public final class SaleService {
             Long cashReceivedSatang, @NonNull String createdAtUtc) {
         requireText(idempotencyKey,"idempotencyKey");
         requireText(createdAtUtc,"createdAtUtc");
+        final String businessDate = Instant.parse(createdAtUtc)
+                .atZone(ZoneId.of("Asia/Bangkok")).toLocalDate().toString();
         if (requestedQuantities.isEmpty()) throw new IllegalArgumentException("ตะกร้าสินค้าว่าง");
         final Map<String,Long> quantities=new TreeMap<>();
         for(Map.Entry<String,Long> entry:requestedQuantities.entrySet()){
@@ -93,6 +98,16 @@ public final class SaleService {
                         line.quantityMilli,line.lineTotalSatang));
             }
             db.saleLineDao().insertAll(lines);
+
+            db.dailySummaryDao().ensure(new DailySummaryEntity(businessDate,0,0,0,0,0,0,0,0,0,0,0,0,createdAtUtc));
+            long cashGoods = type==SaleCalculator.SaleType.CASH ? bill.subtotalSatang : 0L;
+            long creditGoods = type==SaleCalculator.SaleType.CREDIT ? bill.subtotalSatang : 0L;
+            db.dailySummaryDao().addSale(businessDate,cashGoods,creditGoods,bill.feeSatang,
+                    bill.totalSatang,createdAtUtc);
+            for(SaleCalculator.LineTotal line:bill.lines){
+                db.productDailyDao().ensure(new ProductDailyEntity(businessDate,line.sku,0,0,0,0,0,0,0,0));
+                db.productDailyDao().addSale(businessDate,line.sku,line.quantityMilli,line.lineTotalSatang);
+            }
 
             for(SaleCalculator.LineTotal line:bill.lines){
                 ProductEntity product=products.get(line.sku);
