@@ -60,7 +60,8 @@ public final class BarcodeActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(24, 20, 24, 24);
+        content.setPadding(dp(20), dp(18), dp(20), dp(24));
+        content.setBackgroundColor(getColor(com.maeyaion.pos.R.color.pos_background));
         scroll.addView(content);
         setContentView(scroll);
 
@@ -72,7 +73,10 @@ public final class BarcodeActivity extends Activity {
         TextView title = new TextView(this);
         title.setText(catalogOnly ? "คลังบาร์โค้ด" : "สร้างบาร์โค้ดสินค้า");
         title.setTextSize(23);
+        title.setTextColor(getColor(com.maeyaion.pos.R.color.pos_forest));
+        title.setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD);
         title.setGravity(Gravity.CENTER);
+        title.setPadding(0, dp(12), 0, dp(18));
         content.addView(title);
 
         nameInput = field("ชื่อสินค้า");
@@ -119,6 +123,10 @@ public final class BarcodeActivity extends Activity {
             exportButton.setVisibility(View.GONE);
             exportPdfButton.setVisibility(View.GONE);
         }
+    }
+
+    private int dp(float value) {
+        return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 
     private EditText field(String hint) {

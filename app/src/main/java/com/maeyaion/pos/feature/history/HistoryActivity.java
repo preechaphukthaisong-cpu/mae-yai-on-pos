@@ -33,9 +33,9 @@ public final class HistoryActivity extends Activity {
  private LinearLayout content; private String screen;
  @Override protected void onCreate(Bundle state){super.onCreate(state);screen=getIntent().getStringExtra(HistoryRoute.EXTRA_SCREEN);renderList();}
  private void renderList(){
-  ScrollView scroll=new ScrollView(this);content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(20,16,20,24);scroll.addView(content);setContentView(scroll);
+  ScrollView scroll=new ScrollView(this);content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(18),dp(16),dp(18),dp(24));content.setBackgroundColor(getColor(com.maeyaion.pos.R.color.pos_background));scroll.addView(content);setContentView(scroll);
   Button backButton=new Button(this);backButton.setText("ย้อนกลับหน้าก่อน");backButton.setOnClickListener(v->finish());content.addView(backButton);
-  TextView title=new TextView(this);title.setText("unpaid".equals(screen)?"บิลค้างชำระ":"all".equals(screen)?"ประวัติการขายทั้งหมด":"บิลจ่ายแล้ว");title.setTextSize(22);title.setGravity(Gravity.CENTER);content.addView(title);
+  TextView title=new TextView(this);title.setText("unpaid".equals(screen)?"บิลค้างชำระ":"all".equals(screen)?"ประวัติการขายทั้งหมด":"บิลจ่ายแล้ว");title.setTextSize(23);title.setTextColor(getColor(com.maeyaion.pos.R.color.pos_forest));title.setTypeface(android.graphics.Typeface.DEFAULT,android.graphics.Typeface.BOLD);title.setGravity(Gravity.CENTER);title.setPadding(0,dp(12),0,dp(18));content.addView(title);
   worker.execute(()->{
    try{AppDatabase db=AppDatabase.getInstance(getApplicationContext());List<SaleEntity> rows="unpaid".equals(screen)?db.saleDao().unpaidCredit():"all".equals(screen)?db.saleDao().latest(200):db.saleDao().paid(200);
     runOnUiThread(()->{for(SaleEntity sale:rows){Button b=new Button(this);b.setText(sale.id+"\n"+sale.type+" · "+money(sale.total_satang)+" บาท · "+sale.created_at_utc);b.setOnClickListener(v->showDetail(sale.id));content.addView(b);}if(rows.isEmpty())addText("ไม่พบรายการ");});
@@ -90,7 +90,8 @@ public final class HistoryActivity extends Activity {
    }).show();
  }
  private void payDebt(String saleId){worker.execute(()->{try{AppDatabase db=AppDatabase.getInstance(getApplicationContext());long paid=new DebtPaymentService(db,new RoomTransactionRunner(db)).payBills(java.util.Collections.singletonList(saleId),Instant.now().toString());runOnUiThread(()->{toast("รับชำระแล้ว "+money(paid)+" บาท");renderList();});}catch(RuntimeException e){runOnUiThread(()->toast(msg(e)));}});}
- private void addText(String s){TextView t=new TextView(this);t.setText(s);t.setTextSize(16);t.setPadding(4,8,4,8);content.addView(t);}
+ private int dp(float value){return (int)(value*getResources().getDisplayMetrics().density+0.5f);}
+ private void addText(String s){TextView t=new TextView(this);t.setText(s);t.setTextSize(15);t.setPadding(dp(14),dp(12),dp(14),dp(12));t.setBackgroundResource(com.maeyaion.pos.R.drawable.bg_pos_card);LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,LinearLayout.LayoutParams.WRAP_CONTENT);p.setMargins(0,dp(4),0,dp(4));content.addView(t,p);}
  private void toast(String s){Toast.makeText(this,s,Toast.LENGTH_LONG).show();}
  private static String msg(Throwable e){return e.getMessage()==null?e.getClass().getSimpleName():e.getMessage();}
  private static String money(long n){return String.format(Locale.ROOT,"%d.%02d",n/100,n%100);}
