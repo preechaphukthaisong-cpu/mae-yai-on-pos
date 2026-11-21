@@ -13,6 +13,11 @@
                 <action android:name="com.maeyaion.pos.action.INVENTORY" />
             </intent-filter>
         </activity>
+        <activity android:name=".feature.barcode.BarcodeActivity" android:exported="false">
+            <intent-filter>
+                <action android:name="com.maeyaion.pos.action.BARCODE" />
+            </intent-filter>
+        </activity>
         <activity android:name=".app.MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
