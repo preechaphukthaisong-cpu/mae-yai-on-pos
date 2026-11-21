@@ -24,8 +24,11 @@ public interface SyncQueueDao {
     @Query("UPDATE sync_outbox SET attempt_count=attempt_count+1, last_attempt_at_utc=:attemptedAt, last_error=:error WHERE event_id=:eventId AND delivery_state='PENDING'")
     int recordAttempt(String eventId, String attemptedAt, String error);
 
-    @Query("DELETE FROM sync_outbox WHERE event_id=:eventId AND delivery_state='PENDING'")
+    @Query("UPDATE sync_outbox SET delivery_state='ACKNOWLEDGED' WHERE event_id=:eventId AND delivery_state='PENDING'")
     int acknowledgeOutbox(String eventId);
+
+    @Query("SELECT * FROM sync_outbox WHERE event_id=:eventId LIMIT 1")
+    SyncOutboxEntity outboxEvent(String eventId);
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     long receiveRemote(SyncInboxEntity event);
