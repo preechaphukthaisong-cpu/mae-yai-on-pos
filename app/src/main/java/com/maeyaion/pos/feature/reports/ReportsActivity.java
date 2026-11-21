@@ -24,6 +24,7 @@ public final class ReportsActivity extends Activity {
  @Override protected void onCreate(Bundle state){super.onCreate(state);screen=getIntent().getStringExtra(ReportsRoute.EXTRA_SCREEN);render();}
  private void render(){
   ScrollView scroll=new ScrollView(this);content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(20,16,20,24);scroll.addView(content);setContentView(scroll);
+  android.widget.Button backButton=new android.widget.Button(this);backButton.setText("ย้อนกลับ");backButton.setOnClickListener(v->finish());content.addView(backButton);
   TextView title=new TextView(this);title.setText("รายงานยอดขาย · "+label(screen));title.setTextSize(22);title.setGravity(Gravity.CENTER);content.addView(title);
   results=new LinearLayout(this);results.setOrientation(LinearLayout.VERTICAL);content.addView(results);
   if("monthly".equals(screen)){

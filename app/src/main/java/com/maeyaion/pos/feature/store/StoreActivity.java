@@ -29,6 +29,7 @@ public final class StoreActivity extends Activity {
  @Override protected void onCreate(Bundle state){super.onCreate(state);screen=getIntent().getStringExtra(StoreRoute.EXTRA_SCREEN);render();}
  private void render(){
   ScrollView scroll=new ScrollView(this);content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(20,16,20,24);scroll.addView(content);setContentView(scroll);
+  Button backButton=new Button(this);backButton.setText("ย้อนกลับ");backButton.setOnClickListener(v->finish());content.addView(backButton);
   TextView title=new TextView(this);title.setText("history".equals(screen)?"ประวัติราคา":"แก้ไขราคาขาย");title.setTextSize(22);title.setGravity(Gravity.CENTER);content.addView(title);
   skuInput=field("SKU สินค้า");priceInput=field("ราคาขายใหม่ (บาท)");
   if(!"history".equals(screen)){Button save=new Button(this);save.setText("บันทึกราคาใหม่");content.addView(save);save.setOnClickListener(v->savePrice());}

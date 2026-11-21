@@ -45,9 +45,9 @@ public final class SalesActivity extends ComponentActivity {
  private ThaiSpeechService speech;
  private final ExecutorService worker=Executors.newSingleThreadExecutor();
  private final Map<String,Long> cart=new LinkedHashMap<>();
- private EditText productCode,quantity,cashReceived,customerName,customerIdentity;
+ private EditText quantity,cashReceived,customerName,customerIdentity;
  private TextView cartText,resultText;
- private Button addButton,checkoutButton;
+ private Button checkoutButton;
  private boolean checkoutInFlight;
  private String checkoutIdempotencyKey=UUID.randomUUID().toString();
  private boolean credit;
@@ -56,11 +56,11 @@ public final class SalesActivity extends ComponentActivity {
  private void render(){
   LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(20,16,20,20);
   ScrollView scroll=new ScrollView(this);scroll.addView(root);setContentView(scroll);
+  Button backButton=new Button(this);backButton.setText("ย้อนกลับ");backButton.setOnClickListener(v->finish());root.addView(backButton);
   TextView title=new TextView(this);title.setText("customers".equals(screen)?"บัญชีลูกค้าเชื่อ":credit?"ขายเชื่อ":"ขายเงินสด");title.setTextSize(23);title.setGravity(Gravity.CENTER);root.addView(title);
   if("customers".equals(screen)){loadCustomers(root);return;}
-  productCode=field(root,"บาร์โค้ดหรือ SKU");quantity=field(root,"จำนวน (สูงสุด 3 ตำแหน่ง)");quantity.setText("1");
-  Button scanButton=new Button(this);scanButton.setText("สแกนบาร์โค้ด");root.addView(scanButton);scanButton.setOnClickListener(v->startScan());
-  addButton=new Button(this);addButton.setText("เพิ่มสินค้าในบิล");root.addView(addButton);addButton.setOnClickListener(v->addItem());
+  quantity=field(root,"จำนวนสินค้าก่อนสแกน (สูงสุด 3 ตำแหน่ง)");quantity.setText("1");
+  Button scanButton=new Button(this);scanButton.setText("สแกนบาร์โค้ด");scanButton.setTextSize(20);scanButton.setMinHeight((int)(64*getResources().getDisplayMetrics().density));root.addView(scanButton);scanButton.setOnClickListener(v->startScan());
   cartText=new TextView(this);cartText.setPadding(0,12,0,12);root.addView(cartText);refreshCart();
   if(credit){customerName=field(root,"ชื่อลูกค้า");customerIdentity=field(root,"ข้อมูลแยกบุคคล เช่น เบอร์โทร");}
   else cashReceived=field(root,"รับเงิน (บาท)");
@@ -68,13 +68,13 @@ public final class SalesActivity extends ComponentActivity {
   resultText=new TextView(this);root.addView(resultText);
  }
  private EditText field(LinearLayout root,String hint){EditText e=new EditText(this);e.setSingleLine(true);e.setHint(hint);root.addView(e);return e;}
- private void addItem(){
-  String code=productCode.getText().toString().trim();long qty;
-  try{qty=parseQuantity(quantity.getText().toString());if(code.isEmpty())throw new IllegalArgumentException("กรอกรหัสสินค้า");}
+ private void addScannedItem(String code){
+  final long qty;
+  try{qty=parseQuantity(quantity.getText().toString());if(code==null||code.trim().isEmpty())throw new IllegalArgumentException("อ่านบาร์โค้ดไม่สำเร็จ");}
   catch(RuntimeException e){toast(e.getMessage());return;}
   worker.execute(()->{
-   try{AppDatabase db=AppDatabase.getInstance(getApplicationContext());ProductEntity p=db.productDao().findByBarcode(code);if(p==null)p=db.productDao().findBySku(code);if(p==null||p.isActive!=1)throw new IllegalArgumentException("ไม่พบสินค้าที่ใช้งานได้");
-    final ProductEntity found=p;runOnUiThread(()->{try{cart.merge(found.sku,qty,Math::addExact);productCode.setText("");refreshCart();if(speech!=null)speech.speak(found.name+" จำนวน "+formatQty(qty),"sale-item-"+UUID.randomUUID());}catch(RuntimeException invalid){toast(message(invalid));}});
+   try{AppDatabase db=AppDatabase.getInstance(getApplicationContext());ProductEntity p=db.productDao().findByBarcode(code.trim());if(p==null)p=db.productDao().findBySku(code.trim());if(p==null||p.isActive!=1)throw new IllegalArgumentException("ไม่พบสินค้าที่ใช้งานได้");
+    final ProductEntity found=p;runOnUiThread(()->{try{cart.merge(found.sku,qty,Math::addExact);quantity.setText("1");refreshCart();if(speech!=null)speech.speak(found.name+" จำนวน "+formatQty(qty),"sale-item-"+UUID.randomUUID());}catch(RuntimeException invalid){toast(message(invalid));}});
    }catch(RuntimeException e){runOnUiThread(()->toast(message(e)));}
   });
  }
@@ -94,7 +94,7 @@ public final class SalesActivity extends ComponentActivity {
   final String identity=credit?customerIdentity.getText().toString():null;
   final Map<String,Long> items=new LinkedHashMap<>(cart);
   final String idempotencyKey=checkoutIdempotencyKey;
-  checkoutInFlight=true;checkoutButton.setEnabled(false);addButton.setEnabled(false);
+  checkoutInFlight=true;checkoutButton.setEnabled(false);
   worker.execute(()->{
    try{
     AppDatabase db=AppDatabase.getInstance(getApplicationContext());
@@ -104,14 +104,14 @@ public final class SalesActivity extends ComponentActivity {
     SaleCalculator.SaleType type=credit?SaleCalculator.SaleType.CREDIT:SaleCalculator.SaleType.CASH;
     com.maeyaion.pos.core.db.SaleEntity sale=new SaleService(db,tx).checkout(idempotencyKey,type,customerId,items,received,now,confirmDuplicate);
     String summary="บันทึกบิลสำเร็จ\nเลขที่: "+sale.id+"\nยอดสินค้า: "+formatMoney(sale.subtotal_satang)+" บาท\nค่าบริการ: "+formatMoney(sale.fee_total_satang)+" บาท\nยอดรวม: "+formatMoney(sale.total_satang)+" บาท"+(sale.change_satang==null?"":"\nเงินทอน: "+formatMoney(sale.change_satang)+" บาท");
-    runOnUiThread(()->{checkoutInFlight=false;checkoutButton.setEnabled(true);addButton.setEnabled(true);cart.clear();checkoutIdempotencyKey=UUID.randomUUID().toString();refreshCart();resultText.setText(summary);});
+    runOnUiThread(()->{checkoutInFlight=false;checkoutButton.setEnabled(true);cart.clear();checkoutIdempotencyKey=UUID.randomUUID().toString();refreshCart();resultText.setText(summary);});
    }catch(DuplicateSaleException duplicate){runOnUiThread(()->{
-    checkoutInFlight=false;checkoutButton.setEnabled(true);addButton.setEnabled(true);
+    checkoutInFlight=false;checkoutButton.setEnabled(true);
     new AlertDialog.Builder(this).setTitle("ตรวจพบรายการขายซ้ำ")
      .setMessage("พบบิล "+duplicate.existingSaleId.substring(0,8)+" ที่มีรายละเอียดเหมือนกันภายใน 60 นาที ต้องการบันทึกบิลซ้ำหรือไม่")
      .setNegativeButton("ไม่บันทึกซ้ำ",null)
      .setPositiveButton("ยืนยันขายซ้ำ",(dialog,which)->checkout(true)).show();
-   });}catch(RuntimeException e){runOnUiThread(()->{checkoutInFlight=false;checkoutButton.setEnabled(true);addButton.setEnabled(true);toast(message(e));});}
+   });}catch(RuntimeException e){runOnUiThread(()->{checkoutInFlight=false;checkoutButton.setEnabled(true);toast(message(e));});}
   });
  }
  private void loadCustomers(LinearLayout root){
@@ -177,7 +177,7 @@ public final class SalesActivity extends ComponentActivity {
   scanner=new OfflineBarcodeScanner(this,this,preview,cameraExecutor,ContextCompat.getMainExecutor(this),new OfflineBarcodeScanner.Listener(){
    private boolean delivered;
    @Override public void onBarcode(String rawValue,int format){
-    if(delivered)return;delivered=true;closeScanner();render();productCode.setText(rawValue);addItem();
+    if(delivered)return;delivered=true;closeScanner();render();addScannedItem(rawValue);
    }
    @Override public void onFailure(Exception error){runOnUiThread(()->toast("สแกนไม่สำเร็จ: "+message(error)));}
   });

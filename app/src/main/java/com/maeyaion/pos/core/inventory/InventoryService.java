@@ -70,6 +70,42 @@ public final class InventoryService {
         });
     }
 
+    /** A scanned manufacturer barcode, product, opening receipt and audit evidence commit atomically. */
+    @NonNull
+    public ProductEntity createAndReceiveWithBarcode(@NonNull String operationId,
+            @NonNull String sku, @NonNull String barcode, @NonNull String name,
+            long priceSatang, long costSatang, @NonNull String unit,
+            @NonNull Long stockLimitQtyMilli, long receivedQtyMilli, @NonNull String nowUtc) {
+        validateOperation(operationId);
+        validateProduct(sku, name, priceSatang, costSatang, unit,
+                stockLimitQtyMilli, receivedQtyMilli, nowUtc);
+        if (barcode.trim().isEmpty()) throw new IllegalArgumentException("Barcode is required");
+        if (stockLimitQtyMilli == null || stockLimitQtyMilli <= 0) {
+            throw new IllegalArgumentException("A positive stock limit is required");
+        }
+        if (receivedQtyMilli <= 0) {
+            throw new IllegalArgumentException("Received quantity must be greater than zero");
+        }
+        return transactions.runInTransaction(() -> {
+            if (backupJournal.findByOperationId(operationId) != null) {
+                throw new IllegalStateException("Operation id has already been used");
+            }
+            BarcodeRegistryEntity registered = barcodes.registerOrGetManufacturerInTransaction(
+                    barcode, name, priceSatang, nowUtc);
+            ProductEntity product = new ProductEntity(sku, registered.barcode, name,
+                    priceSatang, costSatang, unit, stockLimitQtyMilli, 0L, 1, nowUtc, nowUtc);
+            products.insert(product);
+            String payload = "{\"sku\":\"" + escape(sku) + "\",\"barcode\":\""
+                    + escape(registered.barcode) + "\",\"name\":\"" + escape(name)
+                    + "\",\"price_satang\":" + priceSatang
+                    + ",\"cost_satang\":" + costSatang + ",\"unit\":\"" + escape(unit)
+                    + "\",\"stock_limit_qty_milli\":" + stockLimitQtyMilli + "}";
+            appendOperation(operationId, "INVENTORY_PRODUCT_CREATE", "PRODUCT", sku, payload, nowUtc);
+            appendStock(UUID.randomUUID().toString(), product, receivedQtyMilli, "RECEIVE", nowUtc);
+            return products.findBySku(sku);
+        });
+    }
+
     /** Receives stock for an existing barcode. */
     @NonNull
     public ProductEntity receive(@NonNull String operationId, @NonNull String barcode,
