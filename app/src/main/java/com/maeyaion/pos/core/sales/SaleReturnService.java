@@ -3,6 +3,10 @@ package com.maeyaion.pos.core.sales;
 import androidx.annotation.NonNull;
 import com.maeyaion.pos.core.db.*;
 import com.maeyaion.pos.core.tx.TransactionRunner;
+import com.maeyaion.pos.core.sync.SyncOutboxWriter;
+import com.maeyaion.pos.core.sync.SyncException;
+import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -17,8 +21,8 @@ public final class SaleReturnService {
   public final String saleLineId; public final long qtyMilli; public final boolean restock; public final String nonRestockReason;
   public LineRequest(String saleLineId,long qtyMilli,boolean restock,String reason){this.saleLineId=saleLineId;this.qtyMilli=qtyMilli;this.restock=restock;this.nonRestockReason=reason;}
  }
- private final AppDatabase db; private final TransactionRunner tx;
- public SaleReturnService(@NonNull AppDatabase db,@NonNull TransactionRunner tx){this.db=Objects.requireNonNull(db);this.tx=Objects.requireNonNull(tx);}
+ private final AppDatabase db; private final TransactionRunner tx; private final SyncOutboxWriter syncOutbox;
+ public SaleReturnService(@NonNull AppDatabase db,@NonNull TransactionRunner tx){this.db=Objects.requireNonNull(db);this.tx=Objects.requireNonNull(tx);this.syncOutbox=new SyncOutboxWriter(db);}
  public SaleReturnEntity createReturn(String saleId,List<LineRequest> requests,String reason,String recipientName,String operatorLabel,String atUtc){
   if(requests==null||requests.isEmpty())throw new IllegalArgumentException("เลือกรายการสินค้าที่คืน");
   require(reason,"reason");require(operatorLabel,"operator");
@@ -87,6 +91,27 @@ public final class SaleReturnService {
    String op=UUID.randomUUID().toString();
    db.opLogDao().append(new OpLogEntity(UUID.randomUUID().toString(),"SALE_RETURN","SALE",saleId,payload,atUtc));
    db.backupJournalDao().append(new BackupJournalEntity(0,op,"SALE_RETURN",payload,sha256(payload),5,atUtc,0));
+   try {
+    JSONObject event=new JSONObject();
+    event.put("sale_id",saleId); event.put("return_id",returnId); event.put("reason",reason);
+    event.put("cash_refund_satang",cashRefund); event.put("debt_reduction_satang",reduceDebt?reversal:0);
+    event.put("fee_reversal_satang",newFee);
+    event.put("recipient_name",recipientName==null?JSONObject.NULL:recipientName);
+    event.put("operator_label",operatorLabel); event.put("created_at_utc",atUtc);
+    JSONArray eventLines=new JSONArray();
+    for(SaleReturnLineEntity row:lineRows) {
+     JSONObject item=new JSONObject();
+     item.put("id",row.id); item.put("sale_line_id",row.sale_line_id);
+     item.put("qty_milli",row.qty_milli); item.put("value_satang",row.value_satang);
+     item.put("fee_satang",row.fee_satang); item.put("restock",row.restock);
+     item.put("non_restock_reason",row.non_restock_reason==null?JSONObject.NULL:row.non_restock_reason);
+     eventLines.put(item);
+    }
+    event.put("lines",eventLines);
+    syncOutbox.appendUnboundInTransaction("upsert","sale_return",returnId,event,atUtc);
+   } catch(JSONException | SyncException error) {
+    throw new IllegalStateException("Unable to append sale return sync event",error);
+   }
    return header;
   });
  }
