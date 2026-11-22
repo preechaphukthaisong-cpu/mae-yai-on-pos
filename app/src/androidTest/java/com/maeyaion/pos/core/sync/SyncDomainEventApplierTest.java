@@ -98,11 +98,11 @@ public final class SyncDomainEventApplierTest {
         java.util.List<com.maeyaion.pos.core.db.StockLogEntity> history =
                 db.stockLogDao().historyForSku("SKU-STOCK");
         assertEquals(1, history.size());
-        assertEquals(0L, history.get(0).beforeQtyMilli);
-        assertEquals(1500L, history.get(0).afterQtyMilli);
-        assertEquals(1500L, history.get(0).diffQtyMilli);
+        assertEquals(0L, history.get(0).before_qty_milli);
+        assertEquals(1500L, history.get(0).after_qty_milli);
+        assertEquals(1500L, history.get(0).diff_qty_milli);
         assertEquals("RECEIVE", history.get(0).reason);
-        assertEquals("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", history.get(0).operationId);
+        assertEquals("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", history.get(0).ref_id);
     }
 
     @Test public void conflictingImmutableBarcodeProvenanceRejectsReplay() throws Exception {
