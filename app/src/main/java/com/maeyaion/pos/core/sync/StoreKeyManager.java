@@ -89,6 +89,52 @@ public final class StoreKeyManager {
         }
     }
 
+    /** Imports a key explicitly wrapped for this installation; never accepts plaintext from the server. */
+    public synchronized void importStoreKey(@NonNull String storeId, long epoch,
+            @NonNull byte[] importedKey) throws SyncException {
+        validateStoreId(storeId);
+        if (epoch < 1 || importedKey == null || importedKey.length != AesGcmEventCipher.KEY_BYTES) {
+            throw new SyncException("Imported store key or epoch is invalid");
+        }
+        long current = currentEpoch(storeId);
+        if (epoch < current) throw new SyncException("Refusing to roll back the local store-key epoch");
+        String existing = preferences.getString(entryKey(storeId, epoch), null);
+        if (existing != null) {
+            byte[] stored = getStoreKey(storeId, epoch);
+            try {
+                if (!MessageDigest.isEqual(stored, importedKey)) {
+                    throw new SyncException("A different key is already installed for this epoch");
+                }
+                return;
+            } finally {
+                Arrays.fill(stored, (byte) 0);
+            }
+        }
+        ensureWrappingKey(storeId);
+        byte[] nonce = new byte[NONCE_BYTES];
+        random.nextBytes(nonce);
+        try {
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.ENCRYPT_MODE, getWrappingKey(storeId),
+                    new GCMParameterSpec(TAG_BITS, nonce));
+            cipher.updateAAD(aad(storeId, epoch));
+            byte[] ciphertext = cipher.doFinal(importedKey);
+            ByteBuffer packed = ByteBuffer.allocate(nonce.length + ciphertext.length);
+            packed.put(nonce).put(ciphertext);
+            boolean saved = preferences.edit()
+                    .putString(entryKey(storeId, epoch), Base64.getEncoder().encodeToString(packed.array()))
+                    .putLong(currentKey(storeId), Math.max(current, epoch))
+                    .commit();
+            if (!saved) throw new SyncException("Unable to persist imported store key");
+            Arrays.fill(ciphertext, (byte) 0);
+            Arrays.fill(packed.array(), (byte) 0);
+        } catch (SyncException error) {
+            throw error;
+        } catch (Exception error) {
+            throw new SyncException("Unable to import wrapped store key", error);
+        }
+    }
+
     /** Creates a fresh epoch; prior epochs remain available for decrypting old events. */
     public synchronized long rotateStoreKey(@NonNull String storeId) throws SyncException {
         validateStoreId(storeId);
