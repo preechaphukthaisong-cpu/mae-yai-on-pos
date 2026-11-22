@@ -26,6 +26,15 @@ public final class SyncWorker extends Worker {
     @NonNull
     @Override
     public Result doWork() {
+        if (!SyncExecutionLock.tryAcquire()) return Result.retry();
+        try {
+            return runSyncPass();
+        } finally {
+            SyncExecutionLock.release();
+        }
+    }
+
+    private Result runSyncPass() {
         Context context = getApplicationContext();
         if (!SyncReadinessGate.isEnabled(context)) return Result.success();
         String serverUrl = getInputData().getString(KEY_SERVER_URL);
