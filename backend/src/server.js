@@ -534,6 +534,10 @@ async function handle(req, res) {
     if (Number(store.rows[0].current_key_epoch) !== body.keyEpoch) {
       throw new HttpError(409, 'Only the current store key epoch can be enrolled');
     }
+    const trusted = await pool.query(
+      'SELECT 1 FROM store_key_wrappers WHERE store_id = $1 AND device_id = $2 AND key_epoch = $3',
+      [context.store_id, context.device_id, body.keyEpoch]);
+    if (!trusted.rowCount) throw new HttpError(403, 'Only a trusted device may approve another device');
     const target = await pool.query(
       'SELECT id FROM devices WHERE store_id = $1 AND id = $2 AND revoked_at IS NULL AND public_key IS NOT NULL',
       [context.store_id, body.targetDeviceId]);
