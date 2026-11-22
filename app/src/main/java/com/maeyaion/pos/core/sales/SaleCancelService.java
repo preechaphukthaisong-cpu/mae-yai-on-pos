@@ -68,7 +68,8 @@ public final class SaleCancelService {
     rows.add(new SaleCancelLineEntity(UUID.randomUUID().toString(),cancelId,line.id,qty,value,feeDelta,
       choice.restock?1:0,choice.restock?null:choice.nonRestockReason,null,null));
     if(choice.restock){ProductEntity p=db.productDao().findBySku(line.sku);long after=Math.addExact(p.stockQtyMilli,qty);
-     db.stockLogDao().append(new StockLogEntity(UUID.randomUUID().toString(),p.sku,p.stockQtyMilli,after,qty,"CANCEL",cancelId,atUtc));}
+     db.stockLogDao().append(new StockLogEntity(UUID.randomUUID().toString(),p.sku,p.stockQtyMilli,after,qty,"CANCEL",cancelId,atUtc));
+     appendProductSyncEvent(db.productDao().findBySku(p.sku),atUtc);}
     db.productDailyDao().ensure(new ProductDailyEntity(businessDate,line.sku,0,0,0,0,0,0,0,0));
     db.productDailyDao().addCancel(businessDate,line.sku,qty,value);
    }
@@ -110,6 +111,19 @@ public final class SaleCancelService {
    }
    return header;
   });
+ }
+
+ private void appendProductSyncEvent(ProductEntity product,String atUtc){
+  try{
+   JSONObject data=new JSONObject();
+   data.put("sku",product.sku);data.put("barcode",product.barcode);data.put("name",product.name);
+   data.put("price_satang",product.priceSatang);data.put("cost_satang",product.costSatang);
+   data.put("unit",product.unit);
+   data.put("stock_limit_qty_milli",product.stockLimitQtyMilli==null?JSONObject.NULL:product.stockLimitQtyMilli);
+   data.put("stock_qty_milli",product.stockQtyMilli);data.put("is_active",product.isActive);
+   data.put("created_at_utc",product.createdAtUtc);data.put("updated_at_utc",product.updatedAtUtc);
+   syncOutbox.appendUnboundInTransaction("upsert","product",product.sku,data,atUtc);
+  }catch(JSONException|SyncException error){throw new IllegalStateException("Unable to append cancelled stock sync event",error);}
  }
  private static long roundHalfUp(long a,long b,long d){if(d<=0)return 0;BigInteger[] q=BigInteger.valueOf(a).multiply(BigInteger.valueOf(b)).divideAndRemainder(BigInteger.valueOf(d));if(q[1].shiftLeft(1).compareTo(BigInteger.valueOf(d))>=0)q[0]=q[0].add(BigInteger.ONE);if(q[0].compareTo(BigInteger.valueOf(Long.MAX_VALUE))>0)throw new ArithmeticException("long overflow");return q[0].longValue();}
  private static void require(String s,String f){if(s==null||s.trim().isEmpty())throw new IllegalArgumentException(f+" is required");}
