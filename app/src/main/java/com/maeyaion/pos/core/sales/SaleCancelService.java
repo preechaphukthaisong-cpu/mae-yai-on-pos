@@ -3,6 +3,10 @@ package com.maeyaion.pos.core.sales;
 import androidx.annotation.NonNull;
 import com.maeyaion.pos.core.db.*;
 import com.maeyaion.pos.core.tx.TransactionRunner;
+import com.maeyaion.pos.core.sync.SyncOutboxWriter;
+import com.maeyaion.pos.core.sync.SyncException;
+import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -17,8 +21,8 @@ public final class SaleCancelService {
   public final String saleLineId; public final boolean restock; public final String nonRestockReason;
   public LineRequest(String saleLineId,boolean restock,String reason){this.saleLineId=saleLineId;this.restock=restock;this.nonRestockReason=reason;}
  }
- private final AppDatabase db;private final TransactionRunner tx;
- public SaleCancelService(@NonNull AppDatabase db,@NonNull TransactionRunner tx){this.db=Objects.requireNonNull(db);this.tx=Objects.requireNonNull(tx);}
+ private final AppDatabase db;private final TransactionRunner tx;private final SyncOutboxWriter syncOutbox;
+ public SaleCancelService(@NonNull AppDatabase db,@NonNull TransactionRunner tx){this.db=Objects.requireNonNull(db);this.tx=Objects.requireNonNull(tx);this.syncOutbox=new SyncOutboxWriter(db);}
  public SaleCancelEntity cancelSale(String saleId,String reason,String recipientName,String operatorLabel,
    Map<String,LineRequest> restockChoices,String atUtc){
   require(reason,"reason");require(operatorLabel,"operator");
@@ -83,6 +87,27 @@ public final class SaleCancelService {
    String op=UUID.randomUUID().toString();
    db.opLogDao().append(new OpLogEntity(UUID.randomUUID().toString(),"SALE_CANCEL","SALE",saleId,payload,atUtc));
    db.backupJournalDao().append(new BackupJournalEntity(0,op,"SALE_CANCEL",payload,sha256(payload),5,atUtc,0));
+   try {
+    JSONObject event=new JSONObject();
+    event.put("sale_id",saleId); event.put("cancel_id",cancelId); event.put("reason",reason);
+    event.put("cash_refund_satang",cashRefund); event.put("debt_reduction_satang",reduceDebt?reversal:0);
+    event.put("fee_reversal_satang",remainingFee);
+    event.put("recipient_name",recipientName==null?JSONObject.NULL:recipientName);
+    event.put("operator_label",operatorLabel); event.put("created_at_utc",atUtc);
+    JSONArray eventLines=new JSONArray();
+    for(SaleCancelLineEntity row:rows) {
+     JSONObject item=new JSONObject();
+     item.put("id",row.id); item.put("sale_line_id",row.sale_line_id);
+     item.put("qty_milli",row.qty_milli); item.put("value_satang",row.value_satang);
+     item.put("fee_satang",row.fee_satang); item.put("restock",row.restock);
+     item.put("non_restock_reason",row.non_restock_reason==null?JSONObject.NULL:row.non_restock_reason);
+     eventLines.put(item);
+    }
+    event.put("lines",eventLines);
+    syncOutbox.appendUnboundInTransaction("upsert","sale_cancel",cancelId,event,atUtc);
+   } catch(JSONException | SyncException error) {
+    throw new IllegalStateException("Unable to append sale cancellation sync event",error);
+   }
    return header;
   });
  }
