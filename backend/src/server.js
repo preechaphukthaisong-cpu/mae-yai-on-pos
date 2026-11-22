@@ -1,7 +1,7 @@
 import http from 'node:http';
 import crypto from 'node:crypto';
 import pg from 'pg';
-import { verifyGoogleIdentity, encryptRefreshToken, sha256Hex, canonicalJson, isUuid } from './security.js';
+import { verifyGoogleIdentity, encryptRefreshToken, sha256Hex, canonicalJson, isUuid, sameImmutableEvent } from './security.js';
 import { mirrorSnapshot } from './drive-mirror.js';
 
 const { Pool } = pg;
@@ -135,12 +135,7 @@ async function handlePush(req, res, context) {
       );
       if (duplicate.rowCount) {
         const prior = duplicate.rows[0];
-        const sameImmutableEvent = prior.payload_sha256 === digest
-          && prior.entity_type === event.entityType
-          && prior.entity_id === event.entityId
-          && prior.operation === event.operation
-          && BigInt(prior.base_version) === BigInt(event.baseVersion);
-        if (!sameImmutableEvent) {
+        if (!sameImmutableEvent(prior, event, digest)) {
           throw new HttpError(409, 'An event ID was reused with different immutable content', {
             eventId: event.eventId
           });
