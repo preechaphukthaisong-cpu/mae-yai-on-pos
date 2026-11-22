@@ -225,6 +225,40 @@ async function handlePull(req, res, context, url) {
   send(res, 200, { events, nextCursor, hasMore: events.length === limit });
 }
 
+
+function parseBackupManifest(req, context, throughSeq, claimedSha) {
+  const encoded = req.headers['x-baseline-manifest'];
+  if (encoded === undefined) return {};
+  if (typeof encoded !== 'string' || encoded.length < 20 || encoded.length > 8192
+      || !/^[A-Za-z0-9_-]+$/.test(encoded)) {
+    throw new HttpError(400, 'Baseline manifest header is invalid');
+  }
+  let manifest;
+  try {
+    const raw = Buffer.from(encoded, 'base64url');
+    if (raw.toString('base64url') !== encoded) throw new Error('non-canonical encoding');
+    manifest = JSON.parse(raw.toString('utf8'));
+  } catch {
+    throw new HttpError(400, 'Baseline manifest is not valid base64url JSON');
+  }
+  if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)
+      || manifest.format !== 'MAEYAI_SYNC_BASELINE'
+      || manifest.manifestVersion !== 1
+      || manifest.storeId !== context.store_id
+      || String(manifest.throughSequence) !== throughSeq
+      || !Number.isSafeInteger(manifest.databaseSchemaVersion)
+      || manifest.databaseSchemaVersion < 1
+      || typeof manifest.snapshotSha256 !== 'string'
+      || !/^[a-f0-9]{64}$/i.test(manifest.snapshotSha256)
+      || typeof manifest.encryptedFileSha256 !== 'string'
+      || manifest.encryptedFileSha256.toLowerCase() !== claimedSha.toLowerCase()
+      || typeof manifest.createdAtUtc !== 'string'
+      || !Number.isFinite(Date.parse(manifest.createdAtUtc))) {
+    throw new HttpError(400, 'Baseline manifest fields do not match the uploaded snapshot');
+  }
+  return manifest;
+}
+
 async function handleBackupUpload(req, res, context) {
   const throughSeq = req.headers['x-through-seq'];
   const claimedSha = req.headers['x-backup-sha256'];
@@ -234,6 +268,7 @@ async function handleBackupUpload(req, res, context) {
   if (!String(req.headers['content-type'] || '').startsWith('application/octet-stream')) {
     throw new HttpError(415, 'Encrypted backup must use application/octet-stream');
   }
+  const manifest = parseBackupManifest(req, context, throughSeq, claimedSha);
   const blob = await readBody(req, MAX_BACKUP_BYTES);
   if (!blob.length || sha256Hex(blob) !== claimedSha.toLowerCase()) {
     throw new HttpError(400, 'Encrypted backup is empty or checksum verification failed');
@@ -250,12 +285,12 @@ async function handleBackupUpload(req, res, context) {
       });
     }
     const inserted = await client.query(
-      `INSERT INTO backup_snapshots(id, store_id, created_by_device, through_seq, sha256, byte_length, encrypted_blob)
-       VALUES($1,$2,$3,$4,$5,$6,$7)
+      `INSERT INTO backup_snapshots(id, store_id, created_by_device, through_seq, sha256, byte_length, encrypted_blob, manifest)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb)
        ON CONFLICT(store_id, through_seq, sha256) DO UPDATE
-         SET created_by_device = EXCLUDED.created_by_device
+         SET created_by_device = EXCLUDED.created_by_device, manifest = EXCLUDED.manifest
        RETURNING id`,
-      [crypto.randomUUID(), context.store_id, context.device_id, throughSeq, claimedSha.toLowerCase(), blob.length, blob]
+      [crypto.randomUUID(), context.store_id, context.device_id, throughSeq, claimedSha.toLowerCase(), blob.length, blob, JSON.stringify(manifest)]
     );
     snapshotId = inserted.rows[0].id;
     await client.query('COMMIT');
@@ -320,7 +355,7 @@ async function handle(req, res) {
   const backupDownloadMatch = url.pathname.match(new RegExp('^/v1/backups/([0-9a-f-]{36})$', 'i'));
   if (req.method === 'GET' && backupDownloadMatch) {
     const result = await pool.query(
-      'SELECT id, through_seq, sha256, encrypted_blob FROM backup_snapshots WHERE store_id = $1 AND id = $2',
+      'SELECT id, through_seq, sha256, encrypted_blob, manifest FROM backup_snapshots WHERE store_id = $1 AND id = $2',
       [context.store_id, backupDownloadMatch[1]]
     );
     if (!result.rowCount) throw new HttpError(404, 'Backup snapshot not found');
@@ -331,6 +366,7 @@ async function handle(req, res) {
       'content-disposition': 'attachment; filename="maeyai-pos-' + backup.id + '.myobak"',
       'x-backup-sha256': backup.sha256,
       'x-through-seq': String(backup.through_seq),
+      'x-baseline-manifest': Buffer.from(JSON.stringify(backup.manifest || {}), 'utf8').toString('base64url'),
       'cache-control': 'no-store',
       'x-content-type-options': 'nosniff'
     });
@@ -339,7 +375,7 @@ async function handle(req, res) {
   }
   if (req.method === 'GET' && url.pathname === '/v1/backups') {
     const result = await pool.query(
-      `SELECT id, through_seq, sha256, byte_length, drive_file_id, drive_uploaded_at, created_at
+      `SELECT id, through_seq, sha256, byte_length, manifest, drive_file_id, drive_uploaded_at, created_at
          FROM backup_snapshots WHERE store_id = $1
         ORDER BY through_seq DESC, created_at DESC LIMIT 20`,
       [context.store_id]
