@@ -45,6 +45,24 @@ public final class DeviceKeyEnrollmentCryptoTest {
         } catch (SyncException expected) {
             assertTrue(expected.getMessage().contains("authentication"));
         }
+        try {
+            StoreKeyRecoveryWrapper.unwrap("store_test_01", 3,
+                    BackupCrypto.generateRecoveryKey(), wrapped);
+            fail("Wrong recovery key must fail authentication");
+        } catch (SyncException expected) {
+            assertTrue(expected.getMessage().contains("authentication"));
+        }
+        byte[] tampered = java.util.Base64.getUrlDecoder().decode(wrapped);
+        tampered[tampered.length - 1] ^= 1;
+        try {
+            StoreKeyRecoveryWrapper.unwrap("store_test_01", 3, recoveryKey,
+                    java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(tampered));
+            fail("Tampered recovery wrapper must fail authentication");
+        } catch (SyncException expected) {
+            assertTrue(expected.getMessage().contains("authentication"));
+        } finally {
+            Arrays.fill(tampered, (byte) 0);
+        }
         Arrays.fill(storeKey, (byte) 0);
         Arrays.fill(recovered, (byte) 0);
     }
