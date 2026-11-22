@@ -218,9 +218,10 @@ public final class SyncSettingsActivity extends Activity {
                 preferences().edit().putString(KEY_STORE, storeId).commit();
                 long epoch = api().getCurrentKeyEpoch().getLong("keyEpoch");
                 String fingerprint = ownFingerprint();
+                String deviceId = new DeviceIdentityStore(this).getOrCreateDeviceId();
                 runOnUiThread(() -> {
                     showStatus("ลงทะเบียนแล้ว\nStore ID: " + storeId
-                            + "\nDevice ID: " + new DeviceIdentityStore(this).getOrCreateDeviceId()
+                            + "\nDevice ID: " + deviceId
                             + "\nFingerprint: " + fingerprint
                             + "\nServer key epoch: " + epoch);
                     if (epoch == 0) promptFirstDeviceEnrollment(storeId);
