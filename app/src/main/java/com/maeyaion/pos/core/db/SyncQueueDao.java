@@ -68,4 +68,16 @@ public interface SyncQueueDao {
 
     @Query("SELECT COUNT(*) FROM sync_inbox WHERE store_id=:storeId AND applied=0")
     long unappliedInboxCount(String storeId);
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    void recordReplayConflict(SyncReplayConflictEntity conflict);
+
+    @Query("SELECT * FROM sync_replay_conflict WHERE store_id=:storeId ORDER BY server_sequence ASC")
+    List<SyncReplayConflictEntity> unresolvedReplayConflicts(String storeId);
+
+    @Query("SELECT * FROM sync_replay_conflict WHERE event_id=:eventId LIMIT 1")
+    SyncReplayConflictEntity replayConflict(String eventId);
+
+    @Query("DELETE FROM sync_replay_conflict WHERE event_id=:eventId")
+    int clearReplayConflictForRetry(String eventId);
 }
