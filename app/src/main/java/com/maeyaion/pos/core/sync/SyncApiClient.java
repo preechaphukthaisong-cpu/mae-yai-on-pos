@@ -114,6 +114,10 @@ public final class SyncApiClient {
         return requestJson("GET", "/v1/conflicts", null, true);
     }
 
+    @NonNull public JSONObject getCurrentKeyEpoch() throws SyncException {
+        return requestJson("GET", "/v1/key-epochs/current", null, true);
+    }
+
     @NonNull public JSONObject listDevices() throws SyncException {
         return requestJson("GET", "/v1/devices", null, true);
     }
