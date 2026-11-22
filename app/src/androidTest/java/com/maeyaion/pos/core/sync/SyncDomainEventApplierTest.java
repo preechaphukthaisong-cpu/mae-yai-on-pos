@@ -121,6 +121,157 @@ public final class SyncDomainEventApplierTest {
         }
     }
 
+    @Test public void returnAndCancellationReplayPreserveDailyAccounting() throws Exception {
+        SyncDomainEventApplier applier = new SyncDomainEventApplier(db);
+        db.runInTransaction(() -> {
+            try { applier.apply(productEvent("SKU-SALE", "2000002", "SYSTEM",
+                    "Sale product", 500, 200, 0)); applier.apply(saleEvent()); }
+            catch (Exception error) { throw new IllegalStateException(error); }
+        });
+        db.runInTransaction(() -> {
+            try { applier.apply(returnEvent()); }
+            catch (Exception error) { throw new IllegalStateException(error); }
+        });
+        assertEquals(250L, db.dailySummaryDao().find("2026-11-21").net_sales_satang);
+        assertEquals(500L, db.productDailyDao().topSellers("2026-11-21", "2026-11-21")
+                .get(0).net_qty_milli);
+
+        db.runInTransaction(() -> {
+            try { applier.apply(cancelEvent()); }
+            catch (Exception error) { throw new IllegalStateException(error); }
+        });
+        assertEquals(0L, db.dailySummaryDao().find("2026-11-21").net_sales_satang);
+        assertEquals(0L, db.productDailyDao().topSellers("2026-11-21", "2026-11-21").size() == 0
+                ? 0L : db.productDailyDao().topSellers("2026-11-21", "2026-11-21").get(0).net_qty_milli);
+        assertEquals("CANCELLED", db.saleDao().findById("sale-remote-1").lifecycle_status);
+    }
+
+    @Test public void debtPaymentBatchReplaysCustomerDebtSettlement() throws Exception {
+        SyncDomainEventApplier applier = new SyncDomainEventApplier(db);
+        db.runInTransaction(() -> {
+            try {
+                applier.apply(productEvent("SKU-CREDIT", "2000003", "SYSTEM",
+                        "Credit product", 500, 200, 0));
+                applier.apply(creditSaleEvent());
+            } catch (Exception error) { throw new IllegalStateException(error); }
+        });
+        db.runInTransaction(() -> {
+            try { applier.apply(debtPaymentEvent()); }
+            catch (Exception error) { throw new IllegalStateException(error); }
+        });
+        assertEquals("PAID", db.saleDao().findById("sale-credit-1").payment_status);
+        assertEquals(500L, db.debtPaymentDao().findForSale("sale-credit-1").amount_satang);
+        assertNotNull(db.customerDao().findById("customer-credit-1"));
+    }
+
+    private static SyncInboxEntity returnEvent() throws Exception {
+        JSONObject data = new JSONObject();
+        data.put("return_id", "return-remote-1");
+        data.put("sale_id", "sale-remote-1");
+        data.put("reason", "Damaged");
+        data.put("cash_refund_satang", 250);
+        data.put("debt_reduction_satang", 0);
+        data.put("fee_reversal_satang", 0);
+        data.put("recipient_name", "Customer");
+        data.put("operator_label", "Operator");
+        data.put("created_at_utc", "2026-11-21T01:00:00Z");
+        JSONObject line = new JSONObject();
+        line.put("id", "return-line-1");
+        line.put("sale_line_id", "sale-line-remote-1");
+        line.put("qty_milli", 500);
+        line.put("value_satang", 250);
+        line.put("fee_satang", 0);
+        line.put("restock", 0);
+        line.put("non_restock_reason", "Damaged");
+        data.put("lines", new org.json.JSONArray().put(line));
+        return wrappedEvent("33333333-3333-4333-8333-333333333333",
+                "sale_return", "return-remote-1", data, 3);
+    }
+
+    private static SyncInboxEntity cancelEvent() throws Exception {
+        JSONObject data = new JSONObject();
+        data.put("cancel_id", "cancel-remote-1");
+        data.put("sale_id", "sale-remote-1");
+        data.put("reason", "Cancel remaining");
+        data.put("cash_refund_satang", 250);
+        data.put("debt_reduction_satang", 0);
+        data.put("fee_reversal_satang", 0);
+        data.put("recipient_name", "Customer");
+        data.put("operator_label", "Operator");
+        data.put("created_at_utc", "2026-11-21T02:00:00Z");
+        JSONObject line = new JSONObject();
+        line.put("id", "cancel-line-1");
+        line.put("sale_line_id", "sale-line-remote-1");
+        line.put("qty_milli", 500);
+        line.put("value_satang", 250);
+        line.put("fee_satang", 0);
+        line.put("restock", 0);
+        line.put("non_restock_reason", "Cancel");
+        data.put("lines", new org.json.JSONArray().put(line));
+        return wrappedEvent("44444444-4444-4444-8444-444444444444",
+                "sale_cancel", "cancel-remote-1", data, 4);
+    }
+
+    private static SyncInboxEntity creditSaleEvent() throws Exception {
+        JSONObject data = new JSONObject();
+        data.put("sale_id", "sale-credit-1");
+        data.put("idempotency_key", "remote-credit-idem");
+        data.put("type", "CREDIT");
+        data.put("payment_status", "UNPAID");
+        data.put("lifecycle_status", "COMPLETED");
+        data.put("customer_id", "customer-credit-1");
+        JSONObject customer = new JSONObject();
+        customer.put("id", "customer-credit-1");
+        customer.put("name", "Credit Customer");
+        customer.put("name_key", "credit customer");
+        customer.put("identity_key", "identity-hash-1");
+        customer.put("created_at_utc", "2026-11-21T00:00:00Z");
+        customer.put("updated_at_utc", "2026-11-21T00:00:00Z");
+        data.put("customer", customer);
+        data.put("subtotal_satang", 500);
+        data.put("fee_total_satang", 0);
+        data.put("total_satang", 500);
+        data.put("cash_received_satang", JSONObject.NULL);
+        data.put("change_satang", JSONObject.NULL);
+        data.put("content_hash", "b".repeat(64));
+        data.put("created_at_utc", "2026-11-21T00:00:00Z");
+        data.put("paid_at_utc", JSONObject.NULL);
+        JSONObject line = new JSONObject();
+        line.put("id", "credit-line-1");
+        line.put("line_no", 1);
+        line.put("sku", "SKU-CREDIT");
+        line.put("name_snap", "Credit product");
+        line.put("price_snap_satang", 500);
+        line.put("cost_snap_satang", 200);
+        line.put("qty_milli", 1000);
+        line.put("line_total_satang", 500);
+        data.put("lines", new org.json.JSONArray().put(line));
+        return wrappedEvent("55555555-5555-4555-8555-555555555555",
+                "sale", "sale-credit-1", data, 2);
+    }
+
+    private static SyncInboxEntity debtPaymentEvent() throws Exception {
+        JSONObject data = new JSONObject();
+        data.put("paid_at_utc", "2026-11-22T01:00:00Z");
+        JSONObject payment = new JSONObject();
+        payment.put("payment_id", "debt-payment-1");
+        payment.put("sale_id", "sale-credit-1");
+        payment.put("amount_satang", 500);
+        data.put("payments", new org.json.JSONArray().put(payment));
+        return wrappedEvent("66666666-6666-4666-8666-666666666666",
+                "debt_payment_batch", "debt-batch-1", data, 3);
+    }
+
+    private static SyncInboxEntity wrappedEvent(String eventId, String entityType,
+            String entityId, JSONObject data, long sequence) throws Exception {
+        JSONObject envelope = new JSONObject();
+        envelope.put("schemaVersion", 1);
+        envelope.put("data", data);
+        return new SyncInboxEntity(eventId, "store-1", sequence, "upsert",
+                entityType, entityId, 0, 1, envelope.toString(), "0".repeat(64),
+                "2026-11-21T03:00:00Z", 0);
+    }
+
     private static SyncInboxEntity saleEvent() throws Exception {
         return saleEventWithTotal(500);
     }
