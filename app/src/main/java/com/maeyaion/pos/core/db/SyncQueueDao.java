@@ -63,6 +63,9 @@ public interface SyncQueueDao {
     @Query("SELECT COUNT(*) FROM sync_outbox WHERE store_id=:storeId AND delivery_state='PENDING'")
     long pendingOutboxCount(String storeId);
 
+    @Query("SELECT COUNT(*) FROM sync_outbox WHERE store_id='__UNBOUND__' AND delivery_state='PENDING'")
+    long unboundPendingOutboxCount(String storeId);
+
     @Query("SELECT COUNT(*) FROM sync_inbox WHERE store_id=:storeId AND applied=0")
     long unappliedInboxCount(String storeId);
 }
