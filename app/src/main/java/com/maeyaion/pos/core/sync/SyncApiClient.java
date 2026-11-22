@@ -73,6 +73,7 @@ public final class SyncApiClient {
         try {
             body.put("deviceId", identityStore.getOrCreateDeviceId());
             body.put("label", identityStore.getDeviceLabel());
+            body.put("publicKey", identityStore.getPublicKeyBase64());
         } catch (JSONException error) {
             throw new SyncException("Unable to prepare device registration", error);
         }
