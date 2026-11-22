@@ -7,6 +7,9 @@ import androidx.room.Query;
 public interface AppMetaDao {
     @Query("SELECT value FROM app_meta WHERE meta_key = :key LIMIT 1")
     String findValue(String key);
-    @Query("SELECT * FROM app_meta WHERE meta_key = :key LIMIT 1")\n    AppMetaEntity findEntry(String key);\n\n    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Query("SELECT * FROM app_meta WHERE meta_key = :key LIMIT 1")
+    AppMetaEntity findEntry(String key);
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     void put(AppMetaEntity entry);
 }
