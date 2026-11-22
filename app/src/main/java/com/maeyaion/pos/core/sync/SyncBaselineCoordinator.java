@@ -60,6 +60,11 @@ public final class SyncBaselineCoordinator {
                 throw new SyncException("Baseline store identity does not match the authenticated account");
             }
             long throughSequence = exactSequence(remoteStore.get("lastSequence"));
+            com.maeyaion.pos.core.db.SyncCursorEntity localCursor = database.syncQueueDao().cursor(storeId);
+            long localSequence = localCursor == null ? 0L : localCursor.last_applied_sequence;
+            if (localSequence != throughSequence) {
+                throw new SyncException("Local applied cursor must match the server sequence before baseline export");
+            }
             File directory = new File(context.getApplicationContext().getFilesDir(), "sync-baselines");
             if (!directory.isDirectory() && !directory.mkdirs()) {
                 throw new IOException("Unable to create private baseline directory");
@@ -68,6 +73,11 @@ public final class SyncBaselineCoordinator {
                     context.getApplicationContext(), database, directory);
             snapshot = created.file;
             encrypted = new File(directory, created.file.getName().replace(".sqlite", ".myobak"));
+            SyncQueueGuard.requireQuiescent(database, storeId);
+            JSONObject sequenceCheck = api.getStore();
+            if (exactSequence(sequenceCheck.get("lastSequence")) != throughSequence) {
+                throw new SyncException("Server event sequence changed during baseline creation; retry required");
+            }
             localKeyWrapper = BackupCrypto.encryptFile(snapshot, encrypted, passwordCopy,
                     recoveryKey, new AndroidKeystoreKeyProtector());
             BackupCrypto.validateEnvelopeFile(encrypted);
@@ -105,6 +115,10 @@ public final class SyncBaselineCoordinator {
         File downloaded = null;
         try {
             SyncBaselineManifest manifest = SyncBaselineManifest.fromJson(manifestJson);
+            int currentSchema = database.getOpenHelper().getWritableDatabase().getVersion();
+            if (manifest.databaseSchemaVersion != currentSchema) {
+                throw new SyncException("Baseline Room schema does not match this application version");
+            }
             if (!storeId.equals(manifest.storeId)) {
                 throw new SyncException("Baseline belongs to a different store; restore refused");
             }
