@@ -348,10 +348,8 @@ public final class SyncSettingsActivity extends Activity {
                 .setNegativeButton("ยกเลิก", null)
                 .setPositiveButton("เพิกถอนและหมุนเวียน", (dialog, which) -> worker.execute(() -> {
                     try {
-                        new StoreKeyEnrollmentService(this, api())
-                                .approveDevice(storeId, deviceId, fingerprint);
                         long epoch = new StoreKeyEnrollmentService(this, api())
-                                .rotateAndRevokeDevice(storeId, recovery, deviceId);
+                                .rotateAndRevokeDevice(storeId, recovery, deviceId, fingerprint);
                         runOnUiThread(() -> showStatus("เพิกถอนอุปกรณ์และหมุนเวียนกุญแจสำเร็จ: Epoch " + epoch));
                     } catch (Exception error) {
                         runOnUiThread(() -> showStatus("เพิกถอนอุปกรณ์ไม่สำเร็จ: " + message(error)));
