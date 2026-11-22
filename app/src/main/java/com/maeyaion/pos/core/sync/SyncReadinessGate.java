@@ -17,7 +17,7 @@ public final class SyncReadinessGate {
         return preferences(context).getBoolean(KEY_ENABLED, false);
     }
 
-    public static void enableAfterQualification(@NonNull Context context) throws SyncException {
+    static void enableAfterQualification(@NonNull Context context) throws SyncException {
         if (context == null) throw new IllegalArgumentException("Context is required");
         // This API is deliberately explicit; callers must first complete key enrollment,
         // baseline validation, replay coverage and conflict-resolution qualification.
