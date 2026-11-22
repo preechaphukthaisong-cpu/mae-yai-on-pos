@@ -157,8 +157,9 @@ public final class SyncBaselineCoordinator {
                 output.getFD().sync();
             }
             BackupCrypto.validateEnvelopeFile(downloaded);
+            boolean usePassword = recoveryPassword != null && recoveryPassword.length > 0;
             restorer.restoreDownloadedBackup(context, database, downloaded,
-                    recoveryPassword, recoveryKey);
+                    usePassword ? recoveryPassword : null, usePassword ? null : recoveryKey);
             AppDatabase restored = AppDatabase.getInstance(context);
             SyncQueueGuard.requireQuiescent(restored, storeId);
             restored.runInTransaction(() -> restored.syncQueueDao().saveCursor(
