@@ -70,6 +70,7 @@ test('backend accepts only canonical AES-256-GCM encrypted event envelopes', () 
     aadVersion: 1
   };
   assert.equal(validateEncryptedEventPayload(valid), true);
+  assert.equal(validateEncryptedEventPayload({ ...valid, plaintext: { sku: 'LEAK' } }), false);
   assert.equal(validateEncryptedEventPayload({ sku: 'PLAINTEXT' }), false);
   assert.equal(validateEncryptedEventPayload({ ...valid, algorithm: 'A128GCM' }), false);
   assert.equal(validateEncryptedEventPayload({ ...valid, keyEpoch: 0 }), false);
