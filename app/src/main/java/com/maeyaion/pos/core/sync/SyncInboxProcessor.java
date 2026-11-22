@@ -26,6 +26,10 @@ public final class SyncInboxProcessor {
         void apply(@NonNull SyncInboxEntity event) throws Exception;
     }
 
+    public interface DomainPayloadDecoder {
+        SyncInboxEntity decode(@NonNull SyncInboxEntity encryptedEvent) throws Exception;
+    }
+
     private final AppDatabase database;
 
     public SyncInboxProcessor(@NonNull AppDatabase database) {
@@ -79,16 +83,18 @@ public final class SyncInboxProcessor {
         if (keyManager == null) throw new IllegalArgumentException("Store key manager is required");
         EncryptedSyncEventCodec codec = new EncryptedSyncEventCodec(keyManager);
         DomainEventApplier typed = new SyncDomainEventApplier(database);
-        return applyNext(storeId, nowUtc, event -> {
+        DomainPayloadDecoder decoder = event -> {
             JSONObject encrypted = new JSONObject(event.payload_json);
             JSONObject plaintext = codec.decrypt(storeId, event.event_id, event.operation,
                     event.entity_type, event.entity_id, event.base_version, encrypted);
-            SyncInboxEntity decryptedEvent = new SyncInboxEntity(event.event_id, event.store_id,
-                    event.server_sequence, event.operation, event.entity_type, event.entity_id,
-                    event.base_version, event.entity_version, plaintext.toString(),
-                    event.payload_sha256, event.received_at_utc, event.applied);
-            typed.apply(decryptedEvent);
-        });
+            String canonical = SyncEventEnvelope.canonicalJson(plaintext);
+            String plainHash = sha256(canonical.getBytes(StandardCharsets.UTF_8));
+            return new SyncInboxEntity(event.event_id, event.store_id, event.server_sequence,
+                    event.operation, event.entity_type, event.entity_id, event.base_version,
+                    event.entity_version, plaintext.toString(), plainHash,
+                    event.received_at_utc, event.applied);
+        };
+        return applyNextInternal(storeId, nowUtc, typed, decoder);
     }
 
     /**
@@ -97,9 +103,15 @@ public final class SyncInboxProcessor {
      */
     public boolean applyNext(@NonNull String storeId, @NonNull String nowUtc,
             @NonNull DomainEventApplier applier) throws SyncException {
+        return applyNextInternal(storeId, nowUtc, applier, event -> event);
+    }
+
+    private boolean applyNextInternal(@NonNull String storeId, @NonNull String nowUtc,
+            @NonNull DomainEventApplier applier, @NonNull DomainPayloadDecoder decoder)
+            throws SyncException {
         if (storeId == null || storeId.trim().isEmpty() || nowUtc == null
-                || nowUtc.trim().isEmpty() || applier == null) {
-            throw new IllegalArgumentException("Store, timestamp and domain applier are required");
+                || nowUtc.trim().isEmpty() || applier == null || decoder == null) {
+            throw new IllegalArgumentException("Store, timestamp, domain applier and decoder are required");
         }
         final boolean[] applied = {false};
         final SyncException[] failure = {null};
@@ -122,11 +134,13 @@ public final class SyncInboxProcessor {
 
                     com.maeyaion.pos.core.db.SyncOutboxEntity localEvent =
                             dao.outboxEvent(event.event_id);
+                    SyncInboxEntity decodedEvent = null;
                     if (localEvent != null && "ACKNOWLEDGED".equals(localEvent.delivery_state)) {
+                        decodedEvent = decoder.decode(event);
                         SyncEntityVersionEntity localVersion =
                                 dao.entityVersion(event.entity_type, event.entity_id);
                         if (!localEvent.store_id.equals(event.store_id)
-                                || !localEvent.payload_sha256.equalsIgnoreCase(event.payload_sha256)
+                                || !localEvent.payload_sha256.equalsIgnoreCase(decodedEvent.payload_sha256)
                                 || localVersion == null || localVersion.version < event.entity_version) {
                             throw new SyncException("Server echo does not match the acknowledged local event");
                         }
@@ -148,8 +162,9 @@ public final class SyncInboxProcessor {
                     }
 
                     // Must call a domain service that writes through this same AppDatabase transaction.
+                    decodedEvent = decoder.decode(event);
                     try (SyncReplayContext.Scope ignored = SyncReplayContext.enter()) {
-                        applier.apply(event);
+                        applier.apply(decodedEvent);
                     }
                     dao.saveEntityVersion(new SyncEntityVersionEntity(event.entity_type,
                             event.entity_id, event.entity_version, nowUtc));
