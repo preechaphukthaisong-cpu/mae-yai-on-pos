@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import {
-  canonicalJson, sha256Hex, encryptRefreshToken, decryptRefreshToken, isUuid, sameImmutableEvent
+  canonicalJson, sha256Hex, encryptRefreshToken, decryptRefreshToken, isUuid, sameImmutableEvent, validateEncryptedEventPayload
 } from '../src/security.js';
 
 test('canonical JSON sorts object keys recursively and preserves arrays', () => {
@@ -58,4 +58,21 @@ test('event idempotency accepts only byte-identical immutable event metadata', (
   assert.equal(sameImmutableEvent(prior, { ...event, operation: 'delete' }, 'a'.repeat(64)), false);
   assert.equal(sameImmutableEvent(prior, { ...event, baseVersion: 3 }, 'a'.repeat(64)), false);
   assert.equal(sameImmutableEvent(prior, event, 'b'.repeat(64)), false);
+});
+
+test('backend accepts only canonical AES-256-GCM encrypted event envelopes', () => {
+  const valid = {
+    encryptionVersion: 1,
+    keyEpoch: 2,
+    algorithm: 'A256GCM',
+    nonce: crypto.randomBytes(12).toString('base64url'),
+    ciphertext: crypto.randomBytes(48).toString('base64url'),
+    aadVersion: 1
+  };
+  assert.equal(validateEncryptedEventPayload(valid), true);
+  assert.equal(validateEncryptedEventPayload({ sku: 'PLAINTEXT' }), false);
+  assert.equal(validateEncryptedEventPayload({ ...valid, algorithm: 'A128GCM' }), false);
+  assert.equal(validateEncryptedEventPayload({ ...valid, keyEpoch: 0 }), false);
+  assert.equal(validateEncryptedEventPayload({ ...valid, nonce: 'bad=' }), false);
+  assert.equal(validateEncryptedEventPayload({ ...valid, nonce: Buffer.alloc(11).toString('base64url') }), false);
 });
