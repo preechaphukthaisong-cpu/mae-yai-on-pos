@@ -65,10 +65,10 @@ public final class RoomDatabaseRestorerTest {
         });
         assertEquals("after-restore", database.appMetaDao().findValue("restore_probe"));
 
-        new RoomDatabaseRestorer().activate(context, staged, safety.file, 6);
+        new RoomDatabaseRestorer().activate(context, staged, safety.file, 7);
         database = AppDatabase.getInstance(context);
         assertEquals("before-restore", database.appMetaDao().findValue("restore_probe"));
-        assertEquals(6, database.getOpenHelper().getWritableDatabase().getVersion());
+        assertEquals(7, database.getOpenHelper().getWritableDatabase().getVersion());
     }
 
     @Test public void invalidRestoreCandidateDoesNotCloseOrModifyLiveDatabase() throws Exception {
@@ -84,7 +84,7 @@ public final class RoomDatabaseRestorerTest {
         Files.write(invalid.toPath(), "not sqlite".getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
         try {
-            new RoomDatabaseRestorer().activate(context, invalid, safety.file, 6);
+            new RoomDatabaseRestorer().activate(context, invalid, safety.file, 7);
             fail("Invalid candidate must be rejected");
         } catch (java.io.IOException expected) {
             // Validation occurs before closing the live Room database.
@@ -114,7 +114,7 @@ public final class RoomDatabaseRestorerTest {
         } finally {
             candidate.close();
         }
-        assertTrue(new SQLiteStagedRestoreValidator(6).isValid(staged));
+        assertTrue(new SQLiteStagedRestoreValidator(7).isValid(staged));
 
         try {
             new RoomDatabaseRestorer().activate(context, staged, safety.file, 6);
