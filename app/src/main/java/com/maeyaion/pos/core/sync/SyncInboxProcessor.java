@@ -68,6 +68,11 @@ public final class SyncInboxProcessor {
         return false;
     }
 
+    /** Applies the next event using the built-in typed domain handlers. Unsupported aggregates fail closed. */
+    public boolean applyNext(@NonNull String storeId, @NonNull String nowUtc) throws SyncException {
+        return applyNext(storeId, nowUtc, new SyncDomainEventApplier(database));
+    }
+
     /**
      * Applies at most one event per transaction. Returns false when no unapplied event exists.
      * The cursor moves only in the same commit as the business mutation and inbox acknowledgement.
