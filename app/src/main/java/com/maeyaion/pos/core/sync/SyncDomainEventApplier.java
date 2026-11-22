@@ -3,6 +3,7 @@ package com.maeyaion.pos.core.sync;
 import androidx.annotation.NonNull;
 
 import com.maeyaion.pos.core.db.AppDatabase;
+import com.maeyaion.pos.core.db.AppMetaEntity;
 import com.maeyaion.pos.core.db.BarcodeRegistryEntity;
 import com.maeyaion.pos.core.db.ProductEntity;
 import com.maeyaion.pos.core.db.CustomerEntity;
@@ -43,6 +44,10 @@ public final class SyncDomainEventApplier implements SyncInboxProcessor.DomainEv
         if (!"upsert".equals(event.operation)) {
             throw new SyncException("Unsupported remote operation for " + event.entity_type);
         }
+        if ("store_setting".equals(event.entity_type)) {
+            applyStoreSetting(event);
+            return;
+        }
         if ("customer".equals(event.entity_type)) {
             applyCustomer(event);
             return;
@@ -68,6 +73,53 @@ public final class SyncDomainEventApplier implements SyncInboxProcessor.DomainEv
             return;
         }
         throw new SyncException("No typed replay handler is registered for entity type: " + event.entity_type);
+    }
+
+    /** Replays only explicitly allow-listed store profile settings; local/device secrets are excluded. */
+    private void applyStoreSetting(SyncInboxEntity event) throws SyncException {
+        try {
+            JSONObject data = unwrap(event);
+            String key = requiredString(data, "setting_key");
+            Object rawValue = data.get("value");
+            if (!(rawValue instanceof String)) throw new SyncException("Store setting value must be text");
+            String value = (String) rawValue;
+            String updatedAt = requiredString(data, "updated_at_utc");
+            if (!event.entity_id.equals(key)
+                    || !java.util.Arrays.asList("store_name", "store_phone", "store_address",
+                            "receipt_footer", "tax_id").contains(key)
+                    || value.length() > ("store_address".equals(key) ? 1000
+                            : "receipt_footer".equals(key) ? 500
+                            : "store_name".equals(key) ? 160 : 32)
+                    || value.indexOf('\u0000') >= 0) {
+                throw new SyncException("Store setting key or value is not allowed");
+            }
+            if ("store_phone".equals(key) && !value.isEmpty()
+                    && !value.matches("[0-9+() .-]{6,32}")) {
+                throw new SyncException("Store phone setting format is invalid");
+            }
+            if ("tax_id".equals(key) && !value.isEmpty()
+                    && !value.matches("[0-9-]{10,20}")) {
+                throw new SyncException("Store tax ID format is invalid");
+            }
+            Instant incomingAt = Instant.parse(updatedAt);
+            AppMetaEntity existing = database.appMetaDao().findEntry(key);
+            if (existing != null) {
+                Instant localAt = Instant.parse(existing.updatedAtUtc);
+                if (incomingAt.isBefore(localAt)) {
+                    throw new SyncException("Store setting is older than local data; manual resolution required");
+                }
+                if (incomingAt.equals(localAt)) {
+                    if (!existing.value.equals(value)) {
+                        throw new SyncException("Store setting changed with the same timestamp; manual resolution required");
+                    }
+                    return;
+                }
+            }
+            database.appMetaDao().put(new AppMetaEntity(key, value, updatedAt));
+            appendAudit(event, "SYNC_REPLAY_STORE_SETTING", "STORE_SETTING", key);
+        } catch (JSONException | java.time.DateTimeException | IllegalArgumentException error) {
+            throw new SyncException("Store setting event payload is malformed", error);
+        }
     }
 
     /** Replays customer PII only after the inbox decoder has authenticated and decrypted it. */
