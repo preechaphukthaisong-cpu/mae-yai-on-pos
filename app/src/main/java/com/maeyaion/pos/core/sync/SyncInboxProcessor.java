@@ -70,7 +70,25 @@ public final class SyncInboxProcessor {
 
     /** Applies the next event using the built-in typed domain handlers. Unsupported aggregates fail closed. */
     public boolean applyNext(@NonNull String storeId, @NonNull String nowUtc) throws SyncException {
-        return applyNext(storeId, nowUtc, new SyncDomainEventApplier(database));
+        throw new SyncException("End-to-end encryption key manager is required for remote replay");
+    }
+
+    /** Decrypts authenticated event payloads before passing them to typed domain handlers. */
+    public boolean applyNext(@NonNull String storeId, @NonNull String nowUtc,
+            @NonNull StoreKeyManager keyManager) throws SyncException {
+        if (keyManager == null) throw new IllegalArgumentException("Store key manager is required");
+        EncryptedSyncEventCodec codec = new EncryptedSyncEventCodec(keyManager);
+        DomainEventApplier typed = new SyncDomainEventApplier(database);
+        return applyNext(storeId, nowUtc, event -> {
+            JSONObject encrypted = new JSONObject(event.payload_json);
+            JSONObject plaintext = codec.decrypt(storeId, event.event_id, event.operation,
+                    event.entity_type, event.entity_id, event.base_version, encrypted);
+            SyncInboxEntity decryptedEvent = new SyncInboxEntity(event.event_id, event.store_id,
+                    event.server_sequence, event.operation, event.entity_type, event.entity_id,
+                    event.base_version, event.entity_version, plaintext.toString(),
+                    event.payload_sha256, event.received_at_utc, event.applied);
+            typed.apply(decryptedEvent);
+        });
     }
 
     /**
