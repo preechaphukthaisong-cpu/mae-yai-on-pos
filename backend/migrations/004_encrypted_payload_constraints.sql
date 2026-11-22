@@ -7,7 +7,7 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sync_events_payload_ciphertext_only') THEN
     ALTER TABLE sync_events ADD CONSTRAINT sync_events_payload_ciphertext_only CHECK (
     jsonb_typeof(payload) = 'object'
-    AND jsonb_object_length(payload) = 6
+    AND (payload - ARRAY['algorithm','encryptionVersion','aadVersion','keyEpoch','nonce','ciphertext']) = '{}'::jsonb
     AND payload ?& ARRAY['algorithm','encryptionVersion','aadVersion','keyEpoch','nonce','ciphertext']
     AND payload->>'algorithm' = 'A256GCM'
     AND payload->>'encryptionVersion' = '1'
@@ -29,7 +29,7 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sync_conflicts_payload_ciphertext_only') THEN
     ALTER TABLE sync_conflicts ADD CONSTRAINT sync_conflicts_payload_ciphertext_only CHECK (
     jsonb_typeof(submitted_payload) = 'object'
-    AND jsonb_object_length(submitted_payload) = 6
+    AND (submitted_payload - ARRAY['algorithm','encryptionVersion','aadVersion','keyEpoch','nonce','ciphertext']) = '{}'::jsonb
     AND submitted_payload ?& ARRAY['algorithm','encryptionVersion','aadVersion','keyEpoch','nonce','ciphertext']
     AND submitted_payload->>'algorithm' = 'A256GCM'
     AND submitted_payload->>'encryptionVersion' = '1'
