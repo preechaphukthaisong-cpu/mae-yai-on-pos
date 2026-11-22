@@ -10,7 +10,9 @@ BEGIN
     AND (payload - ARRAY['algorithm','encryptionVersion','aadVersion','keyEpoch','nonce','ciphertext']) = '{}'::jsonb
     AND payload ?& ARRAY['algorithm','encryptionVersion','aadVersion','keyEpoch','nonce','ciphertext']
     AND payload->>'algorithm' = 'A256GCM'
+    AND jsonb_typeof(payload->'encryptionVersion') = 'number'
     AND payload->>'encryptionVersion' = '1'
+    AND jsonb_typeof(payload->'aadVersion') = 'number'
     AND payload->>'aadVersion' = '1'
     AND jsonb_typeof(payload->'keyEpoch') = 'number'
     AND (payload->>'keyEpoch')::numeric BETWEEN 1 AND 9007199254740991
@@ -33,7 +35,9 @@ BEGIN
     AND (submitted_payload - ARRAY['algorithm','encryptionVersion','aadVersion','keyEpoch','nonce','ciphertext']) = '{}'::jsonb
     AND submitted_payload ?& ARRAY['algorithm','encryptionVersion','aadVersion','keyEpoch','nonce','ciphertext']
     AND submitted_payload->>'algorithm' = 'A256GCM'
+    AND jsonb_typeof(submitted_payload->'encryptionVersion') = 'number'
     AND submitted_payload->>'encryptionVersion' = '1'
+    AND jsonb_typeof(submitted_payload->'aadVersion') = 'number'
     AND submitted_payload->>'aadVersion' = '1'
     AND jsonb_typeof(submitted_payload->'keyEpoch') = 'number'
     AND (submitted_payload->>'keyEpoch')::numeric BETWEEN 1 AND 9007199254740991
