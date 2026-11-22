@@ -68,7 +68,7 @@ public final class AppDatabaseMigrationTest {
         assertEquals("preserved_value", database.appMetaDao().findValue("legacy_key"));
         assertNotNull(database.barcodeCounterDao().get());
         assertEquals(2_000_001L, database.barcodeCounterDao().get().nextValue);
-        assertEquals(6, database.getOpenHelper().getWritableDatabase().getVersion());
+        assertEquals(7, database.getOpenHelper().getWritableDatabase().getVersion());
         assertTableExists(sql, "barcode_registry");
         assertTableExists(sql, "product");
         assertTableExists(sql, "customer");
@@ -121,12 +121,12 @@ public final class AppDatabaseMigrationTest {
 
         database = Room.databaseBuilder(context, AppDatabase.class, databaseName)
                 .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
-                .addMigrations(Migration3To4.INSTANCE, Migration4To5.INSTANCE, Migration5To6.INSTANCE)
+                .addMigrations(Migration3To4.INSTANCE, Migration4To5.INSTANCE, Migration5To6.INSTANCE, Migration6To7.INSTANCE)
                 .addCallback(AppDatabase.databaseCallback())
                 .allowMainThreadQueries()
                 .build();
         SupportSQLiteDatabase sql = database.getOpenHelper().getWritableDatabase();
-        assertEquals(6, sql.getVersion());
+        assertEquals(7, sql.getVersion());
         assertEquals("v3_value", database.appMetaDao().findValue("legacy_key"));
         assertTableExists(sql, "sync_outbox");
         assertTableExists(sql, "sync_inbox");
