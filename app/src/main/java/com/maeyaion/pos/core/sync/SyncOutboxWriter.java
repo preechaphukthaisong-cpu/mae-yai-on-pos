@@ -1,6 +1,7 @@
 package com.maeyaion.pos.core.sync;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.maeyaion.pos.core.db.AppDatabase;
 import com.maeyaion.pos.core.db.SyncEntityVersionEntity;
@@ -23,7 +24,7 @@ public final class SyncOutboxWriter {
         this.database = database;
     }
 
-    @NonNull
+    @Nullable
     public SyncEventEnvelope appendUnboundInTransaction(@NonNull String operation,
             @NonNull String entityType, @NonNull String entityId,
             @NonNull org.json.JSONObject domainData, @NonNull String createdAtUtc)
@@ -34,7 +35,7 @@ public final class SyncOutboxWriter {
                 domainData, createdAtUtc);
     }
 
-    @NonNull
+    @Nullable
     public SyncEventEnvelope appendInTransaction(@NonNull String storeId,
             @NonNull String operation, @NonNull String entityType, @NonNull String entityId,
             @NonNull org.json.JSONObject domainData, @NonNull String createdAtUtc)
@@ -42,6 +43,7 @@ public final class SyncOutboxWriter {
         if (!database.inTransaction()) {
             throw new SyncException("Outbox events must be appended inside the business Room transaction");
         }
+        if (SyncReplayContext.isApplyingRemote()) return null;
         if (storeId == null || storeId.trim().isEmpty() || storeId.length() > 160
                 || createdAtUtc == null || createdAtUtc.trim().isEmpty()) {
             throw new SyncException("Store ID and event timestamp are required");
