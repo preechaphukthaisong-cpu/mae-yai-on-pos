@@ -399,9 +399,14 @@ async function rotateStoreKeyEpoch(req, res, context, revokeDeviceId = null) {
       }
     }
     const active = await client.query(
-      `SELECT id FROM devices WHERE store_id = $1 AND revoked_at IS NULL
-        AND ($2::uuid IS NULL OR id <> $2::uuid) ORDER BY id`,
-      [context.store_id, revokeDeviceId]
+      `SELECT d.id FROM devices d WHERE d.store_id = $1 AND d.revoked_at IS NULL
+        AND ($2::uuid IS NULL OR d.id <> $2::uuid)
+        AND ($3::bigint = 0 OR EXISTS (
+          SELECT 1 FROM store_key_wrappers w
+           WHERE w.store_id = d.store_id AND w.device_id = d.id AND w.key_epoch = $3
+        ))
+        ORDER BY d.id`,
+      [context.store_id, revokeDeviceId, currentEpoch]
     );
     const expected = new Set(active.rows.map(row => row.id));
     const supplied = new Set();
@@ -495,8 +500,11 @@ async function handle(req, res) {
   }
   if (req.method === 'GET' && url.pathname === '/v1/devices') {
     const devices = await pool.query(
-      `SELECT id, label, public_key, key_fingerprint, registered_at, last_seen_at
-         FROM devices WHERE store_id = $1 AND revoked_at IS NULL ORDER BY registered_at ASC`,
+      `SELECT d.id, d.label, d.public_key, d.key_fingerprint, d.registered_at, d.last_seen_at,
+              EXISTS (SELECT 1 FROM store_key_wrappers w WHERE w.store_id = d.store_id
+                AND w.device_id = d.id AND w.key_epoch = s.current_key_epoch) AS key_enrolled
+         FROM devices d JOIN stores s ON s.id = d.store_id
+        WHERE d.store_id = $1 AND d.revoked_at IS NULL ORDER BY d.registered_at ASC`,
       [context.store_id]);
     return send(res, 200, { devices: devices.rows });
   }
@@ -646,7 +654,12 @@ async function handle(req, res) {
     if (targetId === context.device_id) throw new HttpError(409, 'A device cannot revoke its own active session');
     const storeKey = await pool.query('SELECT current_key_epoch FROM stores WHERE id = $1', [context.store_id]);
     if (Number(storeKey.rows[0].current_key_epoch) > 0) {
-      throw new HttpError(409, 'Key rotation and re-wrapping for all remaining devices is required before revocation');
+      const enrolled = await pool.query(
+        'SELECT 1 FROM store_key_wrappers WHERE store_id = $1 AND device_id = $2 AND key_epoch = $3',
+        [context.store_id, targetId, storeKey.rows[0].current_key_epoch]);
+      if (enrolled.rowCount) {
+        throw new HttpError(409, 'Key rotation and re-wrapping for all remaining trusted devices is required before revocation');
+      }
     }
     const result = await pool.query(
       'UPDATE devices SET revoked_at = now() WHERE store_id = $1 AND id = $2 AND revoked_at IS NULL',
