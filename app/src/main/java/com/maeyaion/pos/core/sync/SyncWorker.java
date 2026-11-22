@@ -62,9 +62,10 @@ public final class SyncWorker extends Worker {
             new StoreKeyEnrollmentService(context, api)
                     .installAllApprovedDeviceKeys(registeredStore);
             keys.getCurrentEpoch(registeredStore);
-            if (!database.syncQueueDao().unresolvedReplayConflicts(registeredStore).isEmpty()) {
-                // A failed remote business mutation blocks later sequence numbers. Do not
-                // retry-loop or advance the cursor until an operator resolves the conflict.
+            if (!database.syncQueueDao().unresolvedReplayConflicts(registeredStore).isEmpty()
+                    || !database.syncQueueDao().conflictedOutbox(registeredStore).isEmpty()) {
+                // A failed remote business mutation blocks later sequence numbers; an
+                // optimistic-concurrency conflict requires explicit operator resolution.
                 return Result.failure();
             }
             SyncPushCoordinator push = new SyncPushCoordinator(database, api, keys);
@@ -74,6 +75,9 @@ public final class SyncWorker extends Worker {
             for (int batch = 0; batch < 10 && !isStopped(); batch++) {
                 SyncPushCoordinator.PushResult result = push.pushPending(registeredStore);
                 if (result.sent == 0) break;
+            }
+            if (!database.syncQueueDao().conflictedOutbox(registeredStore).isEmpty()) {
+                return Result.failure();
             }
             if (database.syncQueueDao().pendingOutboxCount(registeredStore) > 0) {
                 return Result.retry();
