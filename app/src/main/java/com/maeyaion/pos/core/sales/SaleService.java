@@ -188,6 +188,20 @@ public final class SaleService {
             data.put("payment_status", sale.payment_status);
             data.put("lifecycle_status", sale.lifecycle_status);
             data.put("customer_id", sale.customer_id == null ? JSONObject.NULL : sale.customer_id);
+            if (sale.customer_id != null) {
+                CustomerEntity customer = db.customerDao().findById(sale.customer_id);
+                if (customer == null) throw new IllegalStateException("Credit sale customer is missing");
+                JSONObject customerData = new JSONObject();
+                customerData.put("id", customer.id);
+                customerData.put("name", customer.name);
+                customerData.put("name_key", customer.name_key);
+                customerData.put("identity_key", customer.identity_key);
+                customerData.put("created_at_utc", customer.created_at_utc);
+                customerData.put("updated_at_utc", customer.updated_at_utc);
+                data.put("customer", customerData);
+            } else {
+                data.put("customer", JSONObject.NULL);
+            }
             data.put("subtotal_satang", sale.subtotal_satang);
             data.put("fee_total_satang", sale.fee_total_satang);
             data.put("total_satang", sale.total_satang);
