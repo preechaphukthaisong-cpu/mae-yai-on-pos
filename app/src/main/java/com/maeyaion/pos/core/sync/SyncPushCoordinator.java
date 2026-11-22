@@ -131,6 +131,9 @@ public final class SyncPushCoordinator {
         } catch (JSONException error) {
             recordFailure(batch, "Malformed push acknowledgement");
             throw new SyncException("Sync server returned a malformed push acknowledgement", error);
+        } catch (SyncException error) {
+            recordFailure(batch, error.getMessage());
+            throw error;
         } catch (IllegalStateException error) {
             throw new SyncException("Unable to commit sync acknowledgements", error);
         }
