@@ -165,6 +165,27 @@ public final class SyncDomainEventApplierTest {
         assertNotNull(db.customerDao().findById("customer-credit-1"));
     }
 
+    @Test public void localStoreSettingUpdateWritesOutboxInSameTransaction() throws Exception {
+        com.maeyaion.pos.core.store.StoreSettingsSyncService service =
+                new com.maeyaion.pos.core.store.StoreSettingsSyncService(
+                        db, new com.maeyaion.pos.core.tx.RoomTransactionRunner(db));
+        service.update("store_name", "แม่ใหญ่อ่อน", "2026-11-21T00:00:00Z");
+        assertEquals("แม่ใหญ่อ่อน", db.appMetaDao().findValue("store_name"));
+        java.util.List<com.maeyaion.pos.core.db.SyncOutboxEntity> events =
+                db.syncQueueDao().pendingOutbox(SyncOutboxWriter.UNBOUND_STORE_ID, 10);
+        assertEquals(1, events.size());
+        assertEquals("store_setting", events.get(0).entity_type);
+        assertEquals("store_name", events.get(0).entity_id);
+        assertTrue(events.get(0).payload_json.contains("แม่ใหญ่อ่อน"));
+        try {
+            service.update("google_refresh_token", "secret", "2026-11-21T00:01:00Z");
+            fail("Secret metadata must not be synchronized");
+        } catch (IllegalArgumentException expected) {
+            assertEquals(1, db.syncQueueDao().pendingOutbox(
+                    SyncOutboxWriter.UNBOUND_STORE_ID, 10).size());
+        }
+    }
+
     @Test public void storeSettingReplayAllowsOnlyWhitelistedProfileFields() throws Exception {
         SyncDomainEventApplier applier = new SyncDomainEventApplier(db);
         JSONObject allowed = new JSONObject();
