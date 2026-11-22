@@ -154,7 +154,7 @@ public final class SyncSettingsActivity extends Activity {
         String url = serverUrlInput.getText().toString().trim();
         String client = webClientInput.getText().toString().trim();
         if (!url.matches("https://[^\\s]+") || !client.matches(
-                "[A-Za-z0-9._-]+\\\\.apps\\\\.googleusercontent\\\\.com")) {
+                "[A-Za-z0-9._-]+\\.apps\\.googleusercontent\\.com")) {
             showStatus("ต้องใช้ Backend HTTPS URL และ Google Web OAuth Client ID ที่ถูกต้อง");
             return;
         }
