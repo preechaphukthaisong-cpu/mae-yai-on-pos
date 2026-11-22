@@ -106,6 +106,8 @@ public final class SyncSettingsActivity extends Activity {
         addButton(root, "ลงชื่อเข้าใช้ Google และลงทะเบียนอุปกรณ์นี้", this::startGoogleSignIn);
         addButton(root, "แสดงอุปกรณ์และ Fingerprint", this::loadDevices);
         addButton(root, "อนุมัติอุปกรณ์ปลายทางและส่งกุญแจทุก Epoch", this::approveDevice);
+        addButton(root, "หมุนเวียน Store Key (Key Rotation)", this::rotateStoreKey);
+        addButton(root, "เพิกถอนอุปกรณ์และหมุนเวียนกุญแจ", this::confirmRevokeDevice);
         addButton(root, "กู้คืนกุญแจทุก Epoch ด้วย Recovery Key", this::recoverKeyHistory);
         addButton(root, "ส่งออก Baseline เข้ารหัส", this::exportBaseline);
         addButton(root, "กู้คืน Baseline จากเซิร์ฟเวอร์", this::restoreBaseline);
@@ -307,6 +309,54 @@ public final class SyncSettingsActivity extends Activity {
                 runOnUiThread(() -> showStatus("อนุมัติอุปกรณ์ไม่สำเร็จ: " + message(error)));
             }
         });
+    }
+
+    private void rotateStoreKey() {
+        String storeId = storedStoreId();
+        String recovery = recoveryKeyInput.getText().toString().trim();
+        if (storeId == null || recovery.isEmpty()) {
+            showStatus("ต้องลงทะเบียน Store และกรอก Recovery Key ก่อนหมุนเวียนกุญแจ");
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("ยืนยัน Key Rotation")
+                .setMessage("ระบบจะสร้าง Store Key epoch ใหม่และส่ง wrapper ให้ทุกอุปกรณ์ที่ได้รับอนุมัติ")
+                .setNegativeButton("ยกเลิก", null)
+                .setPositiveButton("หมุนเวียนกุญแจ", (dialog, which) -> worker.execute(() -> {
+                    try {
+                        long epoch = new StoreKeyEnrollmentService(this, api())
+                                .rotateStoreKey(storeId, recovery);
+                        runOnUiThread(() -> showStatus("หมุนเวียน Store Key สำเร็จ: Epoch " + epoch));
+                    } catch (Exception error) {
+                        runOnUiThread(() -> showStatus("หมุนเวียนกุญแจไม่สำเร็จ: " + message(error)));
+                    }
+                })).show();
+    }
+
+    private void confirmRevokeDevice() {
+        String storeId = storedStoreId();
+        String deviceId = targetDeviceInput.getText().toString().trim();
+        String fingerprint = targetFingerprintInput.getText().toString().trim();
+        String recovery = recoveryKeyInput.getText().toString().trim();
+        if (storeId == null || deviceId.isEmpty() || fingerprint.isEmpty() || recovery.isEmpty()) {
+            showStatus("กรอก Device ID, Fingerprint ที่ตรวจสอบแล้ว และ Recovery Key ให้ครบ");
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("เพิกถอนอุปกรณ์")
+                .setMessage("อุปกรณ์ที่เลือกจะถูกเพิกถอน และ Store Key จะหมุนเวียนเพื่อไม่ให้ใช้งานกุญแจ epoch ใหม่ได้ ยืนยันเฉพาะเมื่อ Fingerprint ตรงกับเครื่องเป้าหมาย")
+                .setNegativeButton("ยกเลิก", null)
+                .setPositiveButton("เพิกถอนและหมุนเวียน", (dialog, which) -> worker.execute(() -> {
+                    try {
+                        new StoreKeyEnrollmentService(this, api())
+                                .approveDevice(storeId, deviceId, fingerprint);
+                        long epoch = new StoreKeyEnrollmentService(this, api())
+                                .rotateAndRevokeDevice(storeId, recovery, deviceId);
+                        runOnUiThread(() -> showStatus("เพิกถอนอุปกรณ์และหมุนเวียนกุญแจสำเร็จ: Epoch " + epoch));
+                    } catch (Exception error) {
+                        runOnUiThread(() -> showStatus("เพิกถอนอุปกรณ์ไม่สำเร็จ: " + message(error)));
+                    }
+                })).show();
     }
 
     private void recoverKeyHistory() {
