@@ -58,24 +58,46 @@ public final class EncryptedSyncPayload {
     public static EncryptedSyncPayload fromJsonObject(@NonNull JSONObject json)
             throws SyncException {
         if (json == null) throw new SyncException("Encrypted payload is required");
-        int version = json.optInt("encryptionVersion", -1);
-        long epoch = json.optLong("keyEpoch", -1);
-        String algorithm = json.optString("algorithm", "");
-        String nonce = json.optString("nonce", "");
-        String ciphertext = json.optString("ciphertext", "");
-        int aadVersion = json.optInt("aadVersion", -1);
-        if (version != ENCRYPTION_VERSION || epoch < 1 || !ALGORITHM.equals(algorithm)
-                || aadVersion != SyncAssociatedData.VERSION) {
-            throw new SyncException("Unsupported encrypted payload metadata");
+        if (json.length() != 6) {
+            throw new SyncException("Encrypted payload contains missing or unexpected fields");
         }
-        byte[] nonceBytes = decode(nonce, "nonce");
-        byte[] cipherBytes = decode(ciphertext, "ciphertext");
-        if (nonceBytes.length != AesGcmEventCipher.NONCE_BYTES
-                || cipherBytes.length < AesGcmEventCipher.TAG_BYTES
-                || cipherBytes.length > AesGcmEventCipher.MAX_CIPHERTEXT_BYTES) {
-            throw new SyncException("Encrypted payload length is invalid");
+        try {
+            Object rawVersion = json.get("encryptionVersion");
+            Object rawEpoch = json.get("keyEpoch");
+            Object rawAadVersion = json.get("aadVersion");
+            Object rawAlgorithm = json.get("algorithm");
+            Object rawNonce = json.get("nonce");
+            Object rawCiphertext = json.get("ciphertext");
+            if (!(rawVersion instanceof Number) || !(rawEpoch instanceof Number)
+                    || !(rawAadVersion instanceof Number) || !(rawAlgorithm instanceof String)
+                    || !(rawNonce instanceof String) || !(rawCiphertext instanceof String)) {
+                throw new SyncException("Encrypted payload field types are invalid");
+            }
+            int version = new java.math.BigDecimal(rawVersion.toString()).intValueExact();
+            long epoch = new java.math.BigDecimal(rawEpoch.toString()).longValueExact();
+            int aadVersion = new java.math.BigDecimal(rawAadVersion.toString()).intValueExact();
+            String algorithm = (String) rawAlgorithm;
+            String nonce = (String) rawNonce;
+            String ciphertext = (String) rawCiphertext;
+            if (version != ENCRYPTION_VERSION || epoch < 1 || !ALGORITHM.equals(algorithm)
+                    || aadVersion != SyncAssociatedData.VERSION) {
+                throw new SyncException("Unsupported encrypted payload metadata");
+            }
+            byte[] nonceBytes = decode(nonce, "nonce");
+            byte[] cipherBytes = decode(ciphertext, "ciphertext");
+            if (nonceBytes.length != AesGcmEventCipher.NONCE_BYTES
+                    || cipherBytes.length < AesGcmEventCipher.TAG_BYTES
+                    || cipherBytes.length > AesGcmEventCipher.MAX_CIPHERTEXT_BYTES) {
+                java.util.Arrays.fill(nonceBytes, (byte) 0);
+                java.util.Arrays.fill(cipherBytes, (byte) 0);
+                throw new SyncException("Encrypted payload length is invalid");
+            }
+            java.util.Arrays.fill(nonceBytes, (byte) 0);
+            java.util.Arrays.fill(cipherBytes, (byte) 0);
+            return new EncryptedSyncPayload(version, epoch, algorithm, nonce, ciphertext, aadVersion);
+        } catch (JSONException | ArithmeticException | NumberFormatException error) {
+            throw new SyncException("Encrypted payload metadata is malformed", error);
         }
-        return new EncryptedSyncPayload(version, epoch, algorithm, nonce, ciphertext, aadVersion);
     }
 
     byte[] nonceBytes() throws SyncException { return decode(nonce, "nonce"); }
@@ -87,7 +109,12 @@ public final class EncryptedSyncPayload {
             throw new SyncException("Invalid encrypted payload " + label);
         }
         try {
-            return Base64.getUrlDecoder().decode(value);
+            byte[] decoded = Base64.getUrlDecoder().decode(value);
+            if (!Base64.getUrlEncoder().withoutPadding().encodeToString(decoded).equals(value)) {
+                java.util.Arrays.fill(decoded, (byte) 0);
+                throw new SyncException("Non-canonical encrypted payload " + label);
+            }
+            return decoded;
         } catch (IllegalArgumentException error) {
             throw new SyncException("Invalid encrypted payload " + label, error);
         }
