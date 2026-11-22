@@ -8,6 +8,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.security.MessageDigest;
 import java.util.Arrays;
 
 /** Explicit first-device enrollment, trusted-device approval, recovery and key rotation workflows. */
