@@ -116,7 +116,10 @@ public final class SaleCancelService {
  private void appendProductSyncEvent(ProductEntity product,String atUtc){
   try{
    JSONObject data=new JSONObject();
-   data.put("sku",product.sku);data.put("barcode",product.barcode);data.put("name",product.name);
+   data.put("sku",product.sku);data.put("barcode",product.barcode);
+   BarcodeRegistryEntity registry=db.barcodeRegistryDao().findByBarcode(product.barcode);
+   if(registry==null)throw new IllegalStateException("Product barcode registry row is missing");
+   data.put("barcode_source_type",registry.sourceType);data.put("name",product.name);
    data.put("price_satang",product.priceSatang);data.put("cost_satang",product.costSatang);
    data.put("unit",product.unit);
    data.put("stock_limit_qty_milli",product.stockLimitQtyMilli==null?JSONObject.NULL:product.stockLimitQtyMilli);
