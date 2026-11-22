@@ -66,6 +66,7 @@ public final class SyncSettingsActivity extends Activity {
     private TextView status;
     private GoogleSignInClient signInClient;
     private String pendingRecoveryKey;
+    private String pendingServerAuthCode;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -191,13 +192,7 @@ public final class SyncSettingsActivity extends Activity {
                 showStatus("Google ไม่ส่ง ID token กลับมา ตรวจสอบ OAuth client configuration");
                 return;
             }
-            if (account.getServerAuthCode() != null) {
-                final String authCode = account.getServerAuthCode();
-                worker.execute(() -> {
-                    try { api().connectGoogleDrive(authCode); }
-                    catch (Exception ignored) { /* Drive mirror is optional for event transport. */ }
-                });
-            }
+            pendingServerAuthCode = account.getServerAuthCode();
             registerDevice();
         } catch (ApiException error) {
             showStatus("Google Sign-in error: " + error.getStatusCode());
@@ -210,6 +205,14 @@ public final class SyncSettingsActivity extends Activity {
                 JSONObject registration = new SyncAccountBootstrapper(
                         api(), AppDatabase.getInstance(getApplicationContext())).ensureRegistered();
                 String storeId = registration.getJSONObject("store").getString("storeId");
+                String authCode = pendingServerAuthCode;
+                pendingServerAuthCode = null;
+                if (authCode != null) {
+                    try { api().connectGoogleDrive(authCode); }
+                    catch (SyncException driveError) {
+                        // Drive is a backup mirror; event transport and local recovery remain usable.
+                    }
+                }
                 preferences().edit().putString(KEY_STORE, storeId).commit();
                 long epoch = api().getCurrentKeyEpoch().getLong("keyEpoch");
                 String fingerprint = ownFingerprint();
