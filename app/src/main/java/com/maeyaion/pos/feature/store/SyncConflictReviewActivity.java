@@ -14,6 +14,7 @@ import android.widget.Toast;
 
 import com.maeyaion.pos.core.db.AppDatabase;
 import com.maeyaion.pos.core.db.SyncOutboxEntity;
+import com.maeyaion.pos.core.db.SyncReplayConflictEntity;
 
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -60,21 +61,30 @@ public final class SyncConflictReviewActivity extends Activity {
                 List<SyncOutboxEntity> conflicts = storeId == null
                         ? java.util.Collections.emptyList()
                         : db.syncQueueDao().conflictedOutbox(storeId);
-                runOnUiThread(() -> render(conflicts));
+                List<SyncReplayConflictEntity> replayConflicts = storeId == null
+                        ? java.util.Collections.emptyList()
+                        : db.syncQueueDao().unresolvedReplayConflicts(storeId);
+                runOnUiThread(() -> render(conflicts, replayConflicts));
             } catch (RuntimeException error) {
                 runOnUiThread(() -> Toast.makeText(this, message(error), Toast.LENGTH_LONG).show());
             }
         });
     }
 
-    private void render(List<SyncOutboxEntity> conflicts) {
+    private void render(List<SyncOutboxEntity> conflicts, List<SyncReplayConflictEntity> replayConflicts) {
         list.removeAllViews();
-        if (conflicts.isEmpty()) {
+        if (conflicts.isEmpty() && replayConflicts.isEmpty()) {
             TextView empty = new TextView(this);
             empty.setText("ไม่มีรายการที่รอการตรวจสอบ");
             empty.setPadding(8, 16, 8, 16);
             list.addView(empty);
             return;
+        }
+        if (!conflicts.isEmpty()) {
+            TextView outboundTitle = new TextView(this);
+            outboundTitle.setText("เหตุการณ์ที่ส่งแล้วพบเวอร์ชันขัดแย้ง");
+            outboundTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+            list.addView(outboundTitle);
         }
         for (SyncOutboxEntity event : conflicts) {
             TextView detail = new TextView(this);
@@ -98,6 +108,29 @@ public final class SyncConflictReviewActivity extends Activity {
             TextView divider = new TextView(this);
             divider.setText("────────────────────────");
             list.addView(divider);
+        }
+        if (!replayConflicts.isEmpty()) {
+            TextView inboundTitle = new TextView(this);
+            inboundTitle.setText("เหตุการณ์จากเครื่องอื่นที่นำเข้าไม่ได้");
+            inboundTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+            inboundTitle.setPadding(8, 18, 8, 8);
+            list.addView(inboundTitle);
+            for (SyncReplayConflictEntity event : replayConflicts) {
+                TextView detail = new TextView(this);
+                detail.setText("ประเภท: " + event.entity_type
+                        + "\\nรหัสข้อมูล: " + event.entity_id
+                        + "\\nเหตุการณ์: " + event.event_id
+                        + "\\nลำดับเซิร์ฟเวอร์: " + event.server_sequence
+                        + "\\nสาเหตุ: " + event.reason
+                        + "\\nเวลาตรวจพบ: " + event.created_at_utc);
+                detail.setTextIsSelectable(true);
+                detail.setPadding(8, 12, 8, 8);
+                list.addView(detail);
+                TextView warning = new TextView(this);
+                warning.setText("รายการนี้ยังไม่ถูกนำเข้าและระบบไม่ข้ามลำดับเหตุการณ์ ต้องแก้สาเหตุและตรวจสอบข้อมูลก่อนดำเนินการต่อ");
+                warning.setPadding(8, 0, 8, 12);
+                list.addView(warning);
+            }
         }
     }
 
