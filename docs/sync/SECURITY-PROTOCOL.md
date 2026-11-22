@@ -1,6 +1,6 @@
 # Sync Security Protocol (Pre-Production ADR)
 
-Status: proposed protocol; implementation and interoperability tests are required before any sync endpoint may receive store data.
+Status: implementation in progress; live sync remains disabled and this protocol is not yet production-qualified.
 
 ## Security objectives
 
@@ -59,3 +59,22 @@ The event content hash used for server idempotency is SHA-256 over the canonical
 - Key rotation, recovery, and revocation are separate operations with durable audit records.
 - If encryption, key lookup, or authentication fails, keep events in the local durable outbox and show a recoverable error. Never discard the local event or send plaintext.
 - This ADR does not authorize provisioning Cloud resources, enabling live sync, merging the PR, or releasing an APK.
+
+
+## Implemented in the current Android transport branch
+
+- AES-256-GCM event encryption/decryption with 96-bit random nonces and 128-bit tags.
+- Canonical AAD binds store/event/operation/entity/base-version/encryption-version/key-epoch.
+- Device-local store-key epochs are wrapped at rest by a non-exportable Android Keystore AES key; old epochs are retained for historical decryption.
+- Outbound push now requires an encrypted codec and the legacy plaintext-only constructor fails closed.
+- Inbound replay requires a key manager and decrypts authenticated payloads before typed domain handlers.
+- Backend rejects payloads that are not the versioned AES-256-GCM envelope and hashes the opaque envelope for idempotency.
+- Android instrumentation and backend unit tests cover local key persistence/rotation, encrypted payload round-trip, AAD tampering, and encrypted-only payload validation.
+
+## Still required before production
+
+- Cross-device key enrollment and recovery wrapping are not implemented. A device-local key cannot be shared with another installation.
+- Device public-key registration, pairing approval, recovery-secret confirmation, key rotation distribution, and revoked-device epoch enforcement remain incomplete.
+- No customer/sales/debt/inventory replay coverage is complete; product replay is the only typed handler at present.
+- Baseline manifest/bootstrap, conflict resolution UI, and full WorkManager production configuration remain incomplete.
+- No live sync may be enabled until all of these gates and cross-device tests pass.
