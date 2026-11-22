@@ -2,8 +2,10 @@ BEGIN;
 
 -- Defense in depth: event and quarantined conflict payloads must remain opaque
 -- AES-256-GCM envelopes even if a future server route accidentally skips validation.
-ALTER TABLE sync_events
-  ADD CONSTRAINT sync_events_payload_ciphertext_only CHECK (
+DO $migration$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sync_events_payload_ciphertext_only') THEN
+    ALTER TABLE sync_events ADD CONSTRAINT sync_events_payload_ciphertext_only CHECK (
     jsonb_typeof(payload) = 'object'
     AND jsonb_object_length(payload) = 6
     AND payload ?& ARRAY['algorithm','encryptionVersion','aadVersion','keyEpoch','nonce','ciphertext']
@@ -17,10 +19,15 @@ ALTER TABLE sync_events
     AND jsonb_typeof(payload->'ciphertext') = 'string'
     AND length(payload->>'ciphertext') BETWEEN 22 AND 349526
     AND payload->>'ciphertext' ~ '^[A-Za-z0-9_-]+$'
-  );
+    );
+  END IF;
+END
+$migration$;
 
-ALTER TABLE sync_conflicts
-  ADD CONSTRAINT sync_conflicts_payload_ciphertext_only CHECK (
+DO $migration$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sync_conflicts_payload_ciphertext_only') THEN
+    ALTER TABLE sync_conflicts ADD CONSTRAINT sync_conflicts_payload_ciphertext_only CHECK (
     jsonb_typeof(submitted_payload) = 'object'
     AND jsonb_object_length(submitted_payload) = 6
     AND submitted_payload ?& ARRAY['algorithm','encryptionVersion','aadVersion','keyEpoch','nonce','ciphertext']
@@ -34,6 +41,9 @@ ALTER TABLE sync_conflicts
     AND jsonb_typeof(submitted_payload->'ciphertext') = 'string'
     AND length(submitted_payload->>'ciphertext') BETWEEN 22 AND 349526
     AND submitted_payload->>'ciphertext' ~ '^[A-Za-z0-9_-]+$'
-  );
+    );
+  END IF;
+END
+$migration$;
 
 COMMIT;
