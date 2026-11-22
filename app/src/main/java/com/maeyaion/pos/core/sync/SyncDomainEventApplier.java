@@ -22,9 +22,9 @@ import java.time.Instant;
 import java.time.ZoneId;
 
 /**
- * Typed inbound domain replay. This implementation deliberately supports only product
- * snapshots until the financial aggregate handlers are implemented and independently
- * qualified. Unsupported event types fail closed; the inbox/cursor transaction rolls back.
+ * Typed inbound domain replay. Every supported business aggregate is validated and applied
+ * inside the caller's Room transaction. Unknown event types fail closed; the inbox/cursor
+ * transaction rolls back without discarding the event.
  */
 public final class SyncDomainEventApplier implements SyncInboxProcessor.DomainEventApplier {
     private final AppDatabase database;
@@ -188,6 +188,19 @@ public final class SyncDomainEventApplier implements SyncInboxProcessor.DomainEv
                 } else if (!existingCustomer.identity_key.equals(identityKey)
                         || !existingCustomer.created_at_utc.equals(customerCreated)) {
                     throw new SyncException("Customer identity conflicts with the local customer record");
+                } else {
+                    Instant localUpdated = Instant.parse(existingCustomer.updated_at_utc);
+                    Instant remoteUpdated = Instant.parse(customerUpdated);
+                    if (remoteUpdated.isAfter(localUpdated)) {
+                        if (database.customerDao().update(new CustomerEntity(customerId, name,
+                                nameKey, identityKey, customerCreated, customerUpdated)) != 1) {
+                            throw new SyncException("Customer snapshot update failed");
+                        }
+                    } else if (remoteUpdated.equals(localUpdated)
+                            && (!existingCustomer.name.equals(name)
+                                || !existingCustomer.name_key.equals(nameKey))) {
+                        throw new SyncException("Customer changed with the same update timestamp; manual resolution required");
+                    }
                 }
             } else if (customerId != null || !data.isNull("customer")) {
                 throw new SyncException("Cash sale cannot contain a customer dependency");
