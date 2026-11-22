@@ -508,6 +508,16 @@ async function handle(req, res) {
       [context.store_id]);
     return send(res, 200, { devices: devices.rows });
   }
+  if (req.method === 'GET' && url.pathname === '/v1/key-wrappers') {
+    const result = await pool.query(
+      `SELECT key_epoch, wrapped_key FROM store_key_wrappers
+        WHERE store_id = $1 AND device_id = $2 ORDER BY key_epoch ASC`,
+      [context.store_id, context.device_id]);
+    return send(res, 200, { wrappers: result.rows.map(row => ({
+      keyEpoch: String(row.key_epoch),
+      wrappedKey: row.wrapped_key.toString('base64url')
+    })) });
+  }
   if (req.method === 'GET' && url.pathname === '/v1/key-wrappers/current') {
     const result = await pool.query(
       `SELECT s.current_key_epoch, w.wrapped_key
@@ -539,8 +549,9 @@ async function handle(req, res) {
     }
     const wrapped = decodeBase64Url(body.wrappedKey, 384, 1024, 'Wrapped store key');
     const store = await pool.query('SELECT current_key_epoch FROM stores WHERE id = $1', [context.store_id]);
-    if (Number(store.rows[0].current_key_epoch) !== body.keyEpoch) {
-      throw new HttpError(409, 'Only the current store key epoch can be enrolled');
+    const currentEpoch = Number(store.rows[0].current_key_epoch);
+    if (body.keyEpoch > currentEpoch || body.keyEpoch < 1) {
+      throw new HttpError(409, 'A device can only approve key epochs it already holds');
     }
     const trusted = await pool.query(
       'SELECT 1 FROM store_key_wrappers WHERE store_id = $1 AND device_id = $2 AND key_epoch = $3',
