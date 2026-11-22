@@ -1,0 +1,4 @@
+BEGIN;
+ALTER TABLE backup_snapshots
+  ADD COLUMN IF NOT EXISTS manifest JSONB NOT NULL DEFAULT '{}'::jsonb;
+COMMIT;

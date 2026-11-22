@@ -65,9 +65,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          SCHEMA_FILE="app/schemas/com.maeyaion.pos.core.db.AppDatabase/5.json"
+          SCHEMA_FILE="app/schemas/com.maeyaion.pos.core.db.AppDatabase/7.json"
           test -s "$SCHEMA_FILE" || {
-            echo "::error::Room schema v5 was not generated at $SCHEMA_FILE"
+            echo "::error::Room schema v7 was not generated at $SCHEMA_FILE"
             find app/schemas -type f -print || true
             exit 1
           }
@@ -76,23 +76,23 @@ jobs:
           import json
           from pathlib import Path
 
-          schema_path = "app/schemas/com.maeyaion.pos.core.db.AppDatabase/5.json"
+          schema_path = "app/schemas/com.maeyaion.pos.core.db.AppDatabase/7.json"
           schema = json.loads(Path(schema_path).read_text(encoding="utf-8"))
-          if schema.get("database", {}).get("version") != 5:
-              raise SystemExit("::error::Generated Room schema is not version 5.")
+          if schema.get("database", {}).get("version") != 7:
+              raise SystemExit("::error::Generated Room schema is not version 7.")
           PY
-      - name: Upload generated Room schema v5 for review
+      - name: Upload generated Room schema v7 for review
         uses: actions/upload-artifact@v4
         with:
-          name: mae-yai-on-pos-room-schema-v5-generated
-          path: app/schemas/com.maeyaion.pos.core.db.AppDatabase/5.json
+          name: mae-yai-on-pos-room-schema-v7-generated
+          path: app/schemas/com.maeyaion.pos.core.db.AppDatabase/7.json
           if-no-files-found: error
           retention-days: 7
       - name: Upload Room schema
         uses: actions/upload-artifact@v4
         with:
-          name: mae-yai-on-pos-room-schema-v5
-          path: app/schemas/com.maeyaion.pos.core.db.AppDatabase/5.json
+          name: mae-yai-on-pos-room-schema-v7
+          path: app/schemas/com.maeyaion.pos.core.db.AppDatabase/7.json
           if-no-files-found: error
           retention-days: 30
       - name: Upload debug APK

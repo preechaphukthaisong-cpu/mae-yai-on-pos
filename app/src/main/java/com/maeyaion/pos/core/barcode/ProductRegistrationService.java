@@ -10,6 +10,10 @@ import com.maeyaion.pos.core.db.OpLogEntity;
 import com.maeyaion.pos.core.db.ProductDao;
 import com.maeyaion.pos.core.db.ProductEntity;
 import com.maeyaion.pos.core.tx.TransactionRunner;
+import com.maeyaion.pos.core.sync.SyncOutboxWriter;
+import com.maeyaion.pos.core.sync.SyncException;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.util.Objects;
 import java.util.UUID;
@@ -26,15 +30,24 @@ public final class ProductRegistrationService {
     private final OpLogDao opLogDao;
     private final BackupJournalDao backupJournalDao;
     private final TransactionRunner transactions;
+    private final SyncOutboxWriter syncOutbox;
 
     public ProductRegistrationService(@NonNull BarcodeAllocator barcodeAllocator,
             @NonNull ProductDao productDao, @NonNull OpLogDao opLogDao,
             @NonNull BackupJournalDao backupJournalDao, @NonNull TransactionRunner transactions) {
+        this(barcodeAllocator, productDao, opLogDao, backupJournalDao, transactions, null);
+    }
+
+    public ProductRegistrationService(@NonNull BarcodeAllocator barcodeAllocator,
+            @NonNull ProductDao productDao, @NonNull OpLogDao opLogDao,
+            @NonNull BackupJournalDao backupJournalDao, @NonNull TransactionRunner transactions,
+            SyncOutboxWriter syncOutbox) {
         this.barcodeAllocator = Objects.requireNonNull(barcodeAllocator, "barcodeAllocator");
         this.productDao = Objects.requireNonNull(productDao, "productDao");
         this.opLogDao = Objects.requireNonNull(opLogDao, "opLogDao");
         this.backupJournalDao = Objects.requireNonNull(backupJournalDao, "backupJournalDao");
         this.transactions = Objects.requireNonNull(transactions, "transactions");
+        this.syncOutbox = syncOutbox;
     }
 
     @NonNull
@@ -56,6 +69,7 @@ public final class ProductRegistrationService {
                     createdAtUtc, updatedAtUtc);
             persistEvidence(product, operationId, "PRODUCT_CREATE_SYSTEM", createdAtUtc);
             productDao.insert(product);
+            appendProductSyncEvent(product, createdAtUtc);
             return product;
         });
     }
@@ -84,8 +98,38 @@ public final class ProductRegistrationService {
                     createdAtUtc, updatedAtUtc);
             persistEvidence(product, operationId, "PRODUCT_CREATE_MANUFACTURER", createdAtUtc);
             productDao.insert(product);
+            appendProductSyncEvent(product, createdAtUtc);
             return product;
         });
+    }
+
+
+    private void appendProductSyncEvent(ProductEntity product, String atUtc) {
+        if (syncOutbox == null) return;
+        try {
+            JSONObject data = new JSONObject();
+            data.put("sku", product.sku);
+            data.put("barcode", product.barcode);
+            com.maeyaion.pos.core.db.BarcodeRegistryEntity registry = barcodeAllocator.findRegistered(product.barcode);
+            if (registry == null) throw new IllegalStateException("Product barcode registry row is missing");
+            data.put("barcode_source_type", registry.sourceType);
+            data.put("barcode_registry_display_name", registry.displayName);
+            data.put("barcode_registry_price_satang", registry.priceSatang);
+            data.put("barcode_registry_created_at_utc", registry.createdAtUtc);
+            data.put("name", product.name);
+            data.put("price_satang", product.priceSatang);
+            data.put("cost_satang", product.costSatang);
+            data.put("unit", product.unit);
+            data.put("stock_limit_qty_milli", product.stockLimitQtyMilli == null
+                    ? JSONObject.NULL : product.stockLimitQtyMilli);
+            data.put("stock_qty_milli", product.stockQtyMilli);
+            data.put("is_active", product.isActive);
+            data.put("created_at_utc", product.createdAtUtc);
+            data.put("updated_at_utc", product.updatedAtUtc);
+            syncOutbox.appendUnboundInTransaction("upsert", "product", product.sku, data, atUtc);
+        } catch (JSONException | SyncException error) {
+            throw new IllegalStateException("Unable to append product registration sync event", error);
+        }
     }
 
     private ProductEntity findReplay(String operationId, String expectedOperation,

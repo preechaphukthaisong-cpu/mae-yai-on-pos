@@ -5,6 +5,7 @@ import androidx.annotation.NonNull;
 import com.maeyaion.pos.core.barcode.BarcodeAllocator;
 import com.maeyaion.pos.core.db.AppDatabase;
 import com.maeyaion.pos.core.tx.RoomTransactionRunner;
+import com.maeyaion.pos.core.sync.SyncOutboxWriter;
 
 public final class InventoryServiceFactory {
     private InventoryServiceFactory() {}
@@ -13,6 +14,6 @@ public final class InventoryServiceFactory {
         BarcodeAllocator allocator = new BarcodeAllocator(
                 db.barcodeRegistryDao(), db.barcodeCounterDao(), transactions);
         return new InventoryService(allocator, db.productDao(), db.stockLogDao(),
-                db.opLogDao(), db.backupJournalDao(), transactions);
+                db.opLogDao(), db.backupJournalDao(), transactions, new SyncOutboxWriter(db));
     }
 }

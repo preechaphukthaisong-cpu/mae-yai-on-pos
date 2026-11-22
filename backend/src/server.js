@@ -1,7 +1,7 @@
 import http from 'node:http';
 import crypto from 'node:crypto';
 import pg from 'pg';
-import { verifyGoogleIdentity, encryptRefreshToken, sha256Hex, canonicalJson, isUuid } from './security.js';
+import { verifyGoogleIdentity, encryptRefreshToken, sha256Hex, canonicalJson, isUuid, sameImmutableEvent, validateEncryptedEventPayload } from './security.js';
 import { mirrorSnapshot } from './drive-mirror.js';
 
 const { Pool } = pg;
@@ -90,6 +90,9 @@ function validateEvent(event) {
       || typeof event.payload !== 'object') {
     throw new HttpError(400, 'Invalid sync event envelope');
   }
+  if (!validateEncryptedEventPayload(event.payload)) {
+    throw new HttpError(400, 'Sync payload must be a supported AES-256-GCM encrypted envelope');
+  }
   const canonical = canonicalJson(event.payload);
   if (Buffer.byteLength(canonical, 'utf8') > 256 * 1024) {
     throw new HttpError(413, 'A sync event payload exceeds 256 KiB');
@@ -129,14 +132,18 @@ async function handlePush(req, res, context) {
     for (const event of body.events) {
       const digest = validateEvent(event);
       const duplicate = await client.query(
-        'SELECT seq, payload_sha256 FROM sync_events WHERE store_id = $1 AND event_id = $2',
+        `SELECT seq, payload_sha256, entity_type, entity_id, operation, base_version
+           FROM sync_events WHERE store_id = $1 AND event_id = $2`,
         [context.store_id, event.eventId]
       );
       if (duplicate.rowCount) {
-        if (duplicate.rows[0].payload_sha256 !== digest) {
-          throw new HttpError(409, 'An event ID was reused with different content', { eventId: event.eventId });
+        const prior = duplicate.rows[0];
+        if (!sameImmutableEvent(prior, event, digest)) {
+          throw new HttpError(409, 'An event ID was reused with different immutable content', {
+            eventId: event.eventId
+          });
         }
-        acknowledgements.push({ eventId: event.eventId, seq: String(duplicate.rows[0].seq), duplicate: true });
+        acknowledgements.push({ eventId: event.eventId, seq: String(prior.seq), duplicate: true });
         continue;
       }
       const versionResult = await client.query(
@@ -218,6 +225,40 @@ async function handlePull(req, res, context, url) {
   send(res, 200, { events, nextCursor, hasMore: events.length === limit });
 }
 
+
+function parseBackupManifest(req, context, throughSeq, claimedSha) {
+  const encoded = req.headers['x-baseline-manifest'];
+  if (encoded === undefined) return {};
+  if (typeof encoded !== 'string' || encoded.length < 20 || encoded.length > 8192
+      || !/^[A-Za-z0-9_-]+$/.test(encoded)) {
+    throw new HttpError(400, 'Baseline manifest header is invalid');
+  }
+  let manifest;
+  try {
+    const raw = Buffer.from(encoded, 'base64url');
+    if (raw.toString('base64url') !== encoded) throw new Error('non-canonical encoding');
+    manifest = JSON.parse(raw.toString('utf8'));
+  } catch {
+    throw new HttpError(400, 'Baseline manifest is not valid base64url JSON');
+  }
+  if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)
+      || manifest.format !== 'MAEYAI_SYNC_BASELINE'
+      || manifest.manifestVersion !== 1
+      || manifest.storeId !== context.store_id
+      || String(manifest.throughSequence) !== throughSeq
+      || !Number.isSafeInteger(manifest.databaseSchemaVersion)
+      || manifest.databaseSchemaVersion < 1
+      || typeof manifest.snapshotSha256 !== 'string'
+      || !/^[a-f0-9]{64}$/i.test(manifest.snapshotSha256)
+      || typeof manifest.encryptedFileSha256 !== 'string'
+      || manifest.encryptedFileSha256.toLowerCase() !== claimedSha.toLowerCase()
+      || typeof manifest.createdAtUtc !== 'string'
+      || !Number.isFinite(Date.parse(manifest.createdAtUtc))) {
+    throw new HttpError(400, 'Baseline manifest fields do not match the uploaded snapshot');
+  }
+  return manifest;
+}
+
 async function handleBackupUpload(req, res, context) {
   const throughSeq = req.headers['x-through-seq'];
   const claimedSha = req.headers['x-backup-sha256'];
@@ -227,6 +268,7 @@ async function handleBackupUpload(req, res, context) {
   if (!String(req.headers['content-type'] || '').startsWith('application/octet-stream')) {
     throw new HttpError(415, 'Encrypted backup must use application/octet-stream');
   }
+  const manifest = parseBackupManifest(req, context, throughSeq, claimedSha);
   const blob = await readBody(req, MAX_BACKUP_BYTES);
   if (!blob.length || sha256Hex(blob) !== claimedSha.toLowerCase()) {
     throw new HttpError(400, 'Encrypted backup is empty or checksum verification failed');
@@ -243,12 +285,12 @@ async function handleBackupUpload(req, res, context) {
       });
     }
     const inserted = await client.query(
-      `INSERT INTO backup_snapshots(id, store_id, created_by_device, through_seq, sha256, byte_length, encrypted_blob)
-       VALUES($1,$2,$3,$4,$5,$6,$7)
+      `INSERT INTO backup_snapshots(id, store_id, created_by_device, through_seq, sha256, byte_length, encrypted_blob, manifest)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb)
        ON CONFLICT(store_id, through_seq, sha256) DO UPDATE
-         SET created_by_device = EXCLUDED.created_by_device
+         SET created_by_device = EXCLUDED.created_by_device, manifest = EXCLUDED.manifest
        RETURNING id`,
-      [crypto.randomUUID(), context.store_id, context.device_id, throughSeq, claimedSha.toLowerCase(), blob.length, blob]
+      [crypto.randomUUID(), context.store_id, context.device_id, throughSeq, claimedSha.toLowerCase(), blob.length, blob, JSON.stringify(manifest)]
     );
     snapshotId = inserted.rows[0].id;
     await client.query('COMMIT');
@@ -263,6 +305,145 @@ async function handleBackupUpload(req, res, context) {
       .catch(error => console.error('Drive mirror failed for snapshot', snapshotId, error.message));
   });
   send(res, 202, { snapshotId, throughSeq, sha256: claimedSha.toLowerCase(), stored: true, driveMirror: 'queued' });
+}
+
+
+function decodeBase64Url(value, minBytes, maxBytes, label) {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]+$/.test(value)) {
+    throw new HttpError(400, label + ' must be base64url');
+  }
+  const bytes = Buffer.from(value, 'base64url');
+  if (bytes.toString('base64url') !== value || bytes.length < minBytes || bytes.length > maxBytes) {
+    throw new HttpError(400, label + ' has an invalid encoding or length');
+  }
+  return bytes;
+}
+
+function validateDevicePublicKey(encoded) {
+  const der = decodeBase64Url(encoded, 256, 2048, 'Device public key');
+  let key;
+  try { key = crypto.createPublicKey({ key: der, format: 'der', type: 'spki' }); }
+  catch { throw new HttpError(400, 'Device public key is malformed'); }
+  if (key.asymmetricKeyType !== 'rsa' || key.asymmetricKeyDetails?.modulusLength !== 3072) {
+    throw new HttpError(400, 'Device public key must be RSA-3072');
+  }
+  return {
+    encoded,
+    fingerprint: sha256Hex(key.export({ format: 'der', type: 'spki' }))
+  };
+}
+
+async function rotateStoreKeyEpoch(req, res, context, revokeDeviceId = null) {
+  const body = await readJson(req);
+  if (!Number.isSafeInteger(body.keyEpoch) || body.keyEpoch < 1
+      || !Array.isArray(body.wrappers) || body.wrappers.length < 1
+      || body.wrappers.length > 100
+      || typeof body.recoveryWrappedKey !== 'string') {
+    throw new HttpError(400, 'A key epoch, per-device wrappers and recovery wrapper are required');
+  }
+  const recoveryWrapper = decodeBase64Url(body.recoveryWrappedKey, 60, 256, 'Recovery key wrapper');
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const store = await client.query(
+      'SELECT current_key_epoch FROM stores WHERE id = $1 FOR UPDATE', [context.store_id]);
+    if (!store.rowCount) throw new HttpError(404, 'Store not found');
+    const currentEpoch = Number(store.rows[0].current_key_epoch);
+    if (currentEpoch > 0) {
+      const trusted = await client.query(
+        'SELECT 1 FROM store_key_wrappers WHERE store_id = $1 AND device_id = $2 AND key_epoch = $3',
+        [context.store_id, context.device_id, currentEpoch]);
+      if (!trusted.rowCount) throw new HttpError(403, 'Only a device with the current store key may rotate or revoke devices');
+    }
+    if (Number(body.keyEpoch) === currentEpoch && currentEpoch > 0) {
+      const priorRecovery = await client.query(
+        'SELECT wrapped_key FROM store_recovery_wrappers WHERE store_id = $1 AND key_epoch = $2',
+        [context.store_id, body.keyEpoch]);
+      if (!priorRecovery.rowCount || !priorRecovery.rows[0].wrapped_key.equals(recoveryWrapper)) {
+        throw new HttpError(409, 'Key epoch retry does not match the committed recovery wrapper');
+      }
+      for (const item of body.wrappers) {
+        if (!item || !isUuid(item.deviceId)) throw new HttpError(400, 'Invalid device key wrapper');
+        const wrapped = decodeBase64Url(item.wrappedKey, 384, 1024, 'Wrapped store key');
+        const prior = await client.query(
+          'SELECT wrapped_key FROM store_key_wrappers WHERE store_id = $1 AND device_id = $2 AND key_epoch = $3',
+          [context.store_id, item.deviceId, body.keyEpoch]);
+        if (!prior.rowCount || !prior.rows[0].wrapped_key.equals(wrapped)) {
+          throw new HttpError(409, 'Key epoch retry does not match committed device wrappers');
+        }
+      }
+      if (revokeDeviceId) {
+        const revoked = await client.query(
+          'SELECT revoked_at FROM devices WHERE store_id = $1 AND id = $2',
+          [context.store_id, revokeDeviceId]);
+        if (!revoked.rowCount || !revoked.rows[0].revoked_at) {
+          throw new HttpError(409, 'Requested device revocation was not committed with this epoch');
+        }
+      }
+      await client.query('COMMIT');
+      return send(res, 200, { keyEpoch: body.keyEpoch, revokedDeviceId: revokeDeviceId,
+        enrolledDevices: body.wrappers.length, duplicate: true });
+    }
+    if (Number(body.keyEpoch) !== currentEpoch + 1) {
+      throw new HttpError(409, 'Store key epoch is stale or out of order');
+    }
+    if (revokeDeviceId && revokeDeviceId === context.device_id) {
+      throw new HttpError(409, 'A device cannot revoke itself while rotating store keys');
+    }
+    if (revokeDeviceId) {
+      const target = await client.query(
+        'SELECT revoked_at FROM devices WHERE store_id = $1 AND id = $2',
+        [context.store_id, revokeDeviceId]);
+      if (!target.rowCount || target.rows[0].revoked_at) {
+        throw new HttpError(404, 'Target device is not active in this store');
+      }
+    }
+    const active = await client.query(
+      `SELECT d.id FROM devices d WHERE d.store_id = $1 AND d.revoked_at IS NULL
+        AND ($2::uuid IS NULL OR d.id <> $2::uuid)
+        AND ($3::bigint = 0 OR EXISTS (
+          SELECT 1 FROM store_key_wrappers w
+           WHERE w.store_id = d.store_id AND w.device_id = d.id AND w.key_epoch = $3
+        ))
+        ORDER BY d.id`,
+      [context.store_id, revokeDeviceId, currentEpoch]
+    );
+    const expected = new Set(active.rows.map(row => row.id));
+    const supplied = new Set();
+    for (const item of body.wrappers) {
+      if (!item || !isUuid(item.deviceId) || supplied.has(item.deviceId) || !expected.has(item.deviceId)) {
+        throw new HttpError(400, 'Key wrappers must cover each active target device exactly once');
+      }
+      const wrapped = decodeBase64Url(item.wrappedKey, 384, 1024, 'Wrapped store key');
+      supplied.add(item.deviceId);
+      await client.query(
+        `INSERT INTO store_key_wrappers(store_id, device_id, key_epoch, wrapped_key, created_by_device)
+         VALUES($1,$2,$3,$4,$5)`,
+        [context.store_id, item.deviceId, body.keyEpoch, wrapped, context.device_id]
+      );
+    }
+    if (supplied.size !== expected.size) {
+      throw new HttpError(400, 'A wrapped store key is required for every active device');
+    }
+    await client.query(
+      `INSERT INTO store_recovery_wrappers(store_id, key_epoch, wrapped_key, created_by_device)
+       VALUES($1,$2,$3,$4)`,
+      [context.store_id, body.keyEpoch, recoveryWrapper, context.device_id]
+    );
+    await client.query('UPDATE stores SET current_key_epoch = $2 WHERE id = $1',
+      [context.store_id, body.keyEpoch]);
+    if (revokeDeviceId) {
+      await client.query('UPDATE devices SET revoked_at = now() WHERE store_id = $1 AND id = $2 AND revoked_at IS NULL',
+        [context.store_id, revokeDeviceId]);
+    }
+    await client.query('COMMIT');
+    return send(res, 200, { keyEpoch: body.keyEpoch, revokedDeviceId: revokeDeviceId, enrolledDevices: supplied.size });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function handle(req, res) {
@@ -289,31 +470,127 @@ async function handle(req, res) {
     const storeResult = await pool.query('SELECT id FROM stores WHERE owner_google_sub = $1', [identity.sub]);
     if (!storeResult.rowCount) throw new HttpError(404, 'Create the store before registering a device');
     const body = await readJson(req);
-    if (!isUuid(body.deviceId) || typeof body.label !== 'string' || !body.label.trim() || body.label.length > 80) {
-      throw new HttpError(400, 'A UUID deviceId and a label of 1–80 characters are required');
+    if (!isUuid(body.deviceId) || typeof body.label !== 'string' || !body.label.trim()
+        || body.label.length > 80 || typeof body.publicKey !== 'string') {
+      throw new HttpError(400, 'A UUID deviceId, label and RSA device public key are required');
     }
+    const publicKey = validateDevicePublicKey(body.publicKey);
     const result = await pool.query(
-      `INSERT INTO devices(id, store_id, google_sub, label)
-       VALUES($1,$2,$3,$4)
-       ON CONFLICT(id) DO UPDATE SET label = EXCLUDED.label, last_seen_at = now()
+      `INSERT INTO devices(id, store_id, google_sub, label, public_key, key_fingerprint)
+       VALUES($1,$2,$3,$4,$5,$6)
+       ON CONFLICT(id) DO UPDATE SET label = EXCLUDED.label, last_seen_at = now(),
+         public_key = COALESCE(devices.public_key, EXCLUDED.public_key),
+         key_fingerprint = COALESCE(devices.key_fingerprint, EXCLUDED.key_fingerprint)
        WHERE devices.store_id = EXCLUDED.store_id AND devices.google_sub = EXCLUDED.google_sub
          AND devices.revoked_at IS NULL
-       RETURNING id, label, registered_at`,
-      [body.deviceId, storeResult.rows[0].id, identity.sub, body.label.trim()]
+         AND (devices.key_fingerprint IS NULL OR devices.key_fingerprint = EXCLUDED.key_fingerprint)
+       RETURNING id, label, registered_at, key_fingerprint`,
+      [body.deviceId, storeResult.rows[0].id, identity.sub, body.label.trim(),
+        publicKey.encoded, publicKey.fingerprint]
     );
-    if (!result.rowCount) throw new HttpError(409, 'Device ID is already assigned or has been revoked');
-    return send(res, 201, { deviceId: result.rows[0].id, label: result.rows[0].label, registeredAt: result.rows[0].registered_at });
+    if (!result.rowCount) throw new HttpError(409, 'Device ID is assigned, revoked, or has a different enrolled key');
+    return send(res, 201, { deviceId: result.rows[0].id, label: result.rows[0].label,
+      registeredAt: result.rows[0].registered_at, keyFingerprint: result.rows[0].key_fingerprint });
   }
 
   const context = await requireDevice(req);
-  if (req.method === 'POST' && url.pathname === '/v1/sync/push') return handlePush(req, res, context);
+  if (req.method === 'GET' && url.pathname === '/v1/key-epochs/current') {
+    const result = await pool.query('SELECT current_key_epoch FROM stores WHERE id = $1', [context.store_id]);
+    return send(res, 200, { keyEpoch: String(result.rows[0].current_key_epoch) });
+  }
+  if (req.method === 'GET' && url.pathname === '/v1/devices') {
+    const devices = await pool.query(
+      `SELECT d.id, d.label, d.public_key, d.key_fingerprint, d.registered_at, d.last_seen_at,
+              EXISTS (SELECT 1 FROM store_key_wrappers w WHERE w.store_id = d.store_id
+                AND w.device_id = d.id AND w.key_epoch = s.current_key_epoch) AS key_enrolled
+         FROM devices d JOIN stores s ON s.id = d.store_id
+        WHERE d.store_id = $1 AND d.revoked_at IS NULL ORDER BY d.registered_at ASC`,
+      [context.store_id]);
+    return send(res, 200, { devices: devices.rows });
+  }
+  if (req.method === 'GET' && url.pathname === '/v1/key-wrappers') {
+    const result = await pool.query(
+      `SELECT key_epoch, wrapped_key FROM store_key_wrappers
+        WHERE store_id = $1 AND device_id = $2 ORDER BY key_epoch ASC`,
+      [context.store_id, context.device_id]);
+    return send(res, 200, { wrappers: result.rows.map(row => ({
+      keyEpoch: String(row.key_epoch),
+      wrappedKey: row.wrapped_key.toString('base64url')
+    })) });
+  }
+  if (req.method === 'GET' && url.pathname === '/v1/key-wrappers/current') {
+    const result = await pool.query(
+      `SELECT s.current_key_epoch, w.wrapped_key
+         FROM stores s LEFT JOIN store_key_wrappers w
+           ON w.store_id = s.id AND w.key_epoch = s.current_key_epoch AND w.device_id = $2
+        WHERE s.id = $1`,
+      [context.store_id, context.device_id]);
+    if (!result.rowCount || Number(result.rows[0].current_key_epoch) < 1) {
+      throw new HttpError(404, 'Store encryption key has not been enrolled');
+    }
+    if (!result.rows[0].wrapped_key) throw new HttpError(409, 'This device has not been approved for the current store key');
+    return send(res, 200, { keyEpoch: String(result.rows[0].current_key_epoch),
+      wrappedKey: result.rows[0].wrapped_key.toString('base64url') });
+  }
+  if (req.method === 'GET' && url.pathname === '/v1/key-wrappers/recovery') {
+    const rawEpoch = url.searchParams.get('epoch') || '';
+    if (!/^[1-9][0-9]{0,17}$/.test(rawEpoch)) throw new HttpError(400, 'Invalid recovery key epoch');
+    const result = await pool.query(
+      'SELECT wrapped_key FROM store_recovery_wrappers WHERE store_id = $1 AND key_epoch = $2',
+      [context.store_id, rawEpoch]);
+    if (!result.rowCount) throw new HttpError(404, 'Recovery wrapper for this key epoch was not found');
+    return send(res, 200, { keyEpoch: rawEpoch,
+      wrappedKey: result.rows[0].wrapped_key.toString('base64url') });
+  }
+  if (req.method === 'POST' && url.pathname === '/v1/key-wrappers') {
+    const body = await readJson(req);
+    if (!isUuid(body.targetDeviceId) || !Number.isSafeInteger(body.keyEpoch) || body.keyEpoch < 1) {
+      throw new HttpError(400, 'Target device and key epoch are required');
+    }
+    const wrapped = decodeBase64Url(body.wrappedKey, 384, 1024, 'Wrapped store key');
+    const store = await pool.query('SELECT current_key_epoch FROM stores WHERE id = $1', [context.store_id]);
+    const currentEpoch = Number(store.rows[0].current_key_epoch);
+    if (body.keyEpoch > currentEpoch || body.keyEpoch < 1) {
+      throw new HttpError(409, 'A device can only approve key epochs it already holds');
+    }
+    const trusted = await pool.query(
+      'SELECT 1 FROM store_key_wrappers WHERE store_id = $1 AND device_id = $2 AND key_epoch = $3',
+      [context.store_id, context.device_id, body.keyEpoch]);
+    if (!trusted.rowCount) throw new HttpError(403, 'Only a trusted device may approve another device');
+    const target = await pool.query(
+      'SELECT id FROM devices WHERE store_id = $1 AND id = $2 AND revoked_at IS NULL AND public_key IS NOT NULL',
+      [context.store_id, body.targetDeviceId]);
+    if (!target.rowCount) throw new HttpError(404, 'Target device is not active or has no public key');
+    const prior = await pool.query(
+      'SELECT wrapped_key FROM store_key_wrappers WHERE store_id = $1 AND device_id = $2 AND key_epoch = $3',
+      [context.store_id, body.targetDeviceId, body.keyEpoch]);
+    if (prior.rowCount) {
+      if (!prior.rows[0].wrapped_key.equals(wrapped)) throw new HttpError(409, 'A different wrapper already exists for this device and epoch');
+      return send(res, 200, { enrolled: true, duplicate: true });
+    }
+    await pool.query(
+      `INSERT INTO store_key_wrappers(store_id, device_id, key_epoch, wrapped_key, created_by_device)
+       VALUES($1,$2,$3,$4,$5)`,
+      [context.store_id, body.targetDeviceId, body.keyEpoch, wrapped, context.device_id]);
+    return send(res, 201, { enrolled: true, duplicate: false });
+  }
+  if (req.method === 'POST' && url.pathname === '/v1/key-epochs') {
+    return rotateStoreKeyEpoch(req, res, context);
+  }
+  const revokeParts = url.pathname.split('/');
+  if (req.method === 'POST' && revokeParts.length === 5
+      && revokeParts[1] === 'v1' && revokeParts[2] === 'devices'
+      && revokeParts[4] === 'revoke') {
+    if (!isUuid(revokeParts[3])) throw new HttpError(400, 'Invalid device ID');
+    return rotateStoreKeyEpoch(req, res, context, revokeParts[3]);
+  }
   if (req.method === 'GET' && url.pathname === '/v1/sync/pull') return handlePull(req, res, context, url);
   if (req.method === 'POST' && url.pathname === '/v1/backups') return handleBackupUpload(req, res, context);
 
   const backupDownloadMatch = url.pathname.match(new RegExp('^/v1/backups/([0-9a-f-]{36})$', 'i'));
   if (req.method === 'GET' && backupDownloadMatch) {
     const result = await pool.query(
-      'SELECT id, through_seq, sha256, encrypted_blob FROM backup_snapshots WHERE store_id = $1 AND id = $2',
+      'SELECT id, through_seq, sha256, encrypted_blob, manifest FROM backup_snapshots WHERE store_id = $1 AND id = $2',
       [context.store_id, backupDownloadMatch[1]]
     );
     if (!result.rowCount) throw new HttpError(404, 'Backup snapshot not found');
@@ -324,6 +601,7 @@ async function handle(req, res) {
       'content-disposition': 'attachment; filename="maeyai-pos-' + backup.id + '.myobak"',
       'x-backup-sha256': backup.sha256,
       'x-through-seq': String(backup.through_seq),
+      'x-baseline-manifest': Buffer.from(JSON.stringify(backup.manifest || {}), 'utf8').toString('base64url'),
       'cache-control': 'no-store',
       'x-content-type-options': 'nosniff'
     });
@@ -332,7 +610,7 @@ async function handle(req, res) {
   }
   if (req.method === 'GET' && url.pathname === '/v1/backups') {
     const result = await pool.query(
-      `SELECT id, through_seq, sha256, byte_length, drive_file_id, drive_uploaded_at, created_at
+      `SELECT id, through_seq, sha256, byte_length, manifest, drive_file_id, drive_uploaded_at, created_at
          FROM backup_snapshots WHERE store_id = $1
         ORDER BY through_seq DESC, created_at DESC LIMIT 20`,
       [context.store_id]
@@ -385,6 +663,15 @@ async function handle(req, res) {
     const targetId = url.pathname.split('/').pop();
     if (!isUuid(targetId)) throw new HttpError(400, 'Invalid device ID');
     if (targetId === context.device_id) throw new HttpError(409, 'A device cannot revoke its own active session');
+    const storeKey = await pool.query('SELECT current_key_epoch FROM stores WHERE id = $1', [context.store_id]);
+    if (Number(storeKey.rows[0].current_key_epoch) > 0) {
+      const enrolled = await pool.query(
+        'SELECT 1 FROM store_key_wrappers WHERE store_id = $1 AND device_id = $2 AND key_epoch = $3',
+        [context.store_id, targetId, storeKey.rows[0].current_key_epoch]);
+      if (enrolled.rowCount) {
+        throw new HttpError(409, 'Key rotation and re-wrapping for all remaining trusted devices is required before revocation');
+      }
+    }
     const result = await pool.query(
       'UPDATE devices SET revoked_at = now() WHERE store_id = $1 AND id = $2 AND revoked_at IS NULL',
       [context.store_id, targetId]

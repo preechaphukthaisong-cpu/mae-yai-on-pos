@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node src/server.js",
     "test": "node --test",
-    "check": "node --check src/server.js && node --check src/security.js && node --check src/drive-mirror.js",
+    "check": "node --check src/server.js && node --check src/security.js && node --check src/drive-mirror.js && node --check src/migrate.js",
     "migrate": "node src/migrate.js"
   },
   "dependencies": {

@@ -1,0 +1,128 @@
+package com.maeyaion.pos.core.sync;
+
+import static org.junit.Assert.*;
+
+import android.content.Context;
+
+import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.platform.app.InstrumentationRegistry;
+
+import org.junit.Test;
+import org.junit.runner.RunWith;
+
+import java.util.Arrays;
+
+@RunWith(AndroidJUnit4.class)
+public final class StoreKeyManagerTest {
+    @Test public void initializesIdempotentlyAndPersistsKeyAcrossManagerInstances() throws Exception {
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        String storeId = "test_store_" + System.nanoTime();
+        StoreKeyManager first = new StoreKeyManager(context);
+        assertEquals(1L, first.initializeStore(storeId));
+        byte[] original = first.getStoreKey(storeId, 1L);
+        assertEquals(32, original.length);
+
+        StoreKeyManager second = new StoreKeyManager(context);
+        assertEquals(1L, second.initializeStore(storeId));
+        byte[] restored = second.getStoreKey(storeId, 1L);
+        assertArrayEquals(original, restored);
+        Arrays.fill(original, (byte) 0);
+        Arrays.fill(restored, (byte) 0);
+    }
+
+    @Test public void concurrentManagerInitializationCannotCreateDivergentEpochOneKeys() throws Exception {
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        String storeId = "concurrent_store_" + System.nanoTime();
+        StoreKeyManager first = new StoreKeyManager(context);
+        StoreKeyManager second = new StoreKeyManager(context);
+        java.util.concurrent.CountDownLatch ready = new java.util.concurrent.CountDownLatch(2);
+        java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            java.util.concurrent.Future<byte[]> left = pool.submit(() -> {
+                ready.countDown();
+                start.await();
+                assertEquals(1L, first.initializeStore(storeId));
+                return first.getStoreKey(storeId, 1L);
+            });
+            java.util.concurrent.Future<byte[]> right = pool.submit(() -> {
+                ready.countDown();
+                start.await();
+                assertEquals(1L, second.initializeStore(storeId));
+                return second.getStoreKey(storeId, 1L);
+            });
+            assertTrue(ready.await(5, java.util.concurrent.TimeUnit.SECONDS));
+            start.countDown();
+            byte[] a = left.get(10, java.util.concurrent.TimeUnit.SECONDS);
+            byte[] b = right.get(10, java.util.concurrent.TimeUnit.SECONDS);
+            try { assertArrayEquals(a, b); }
+            finally {
+                Arrays.fill(a, (byte) 0);
+                Arrays.fill(b, (byte) 0);
+            }
+        } finally {
+            start.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+    @Test public void rotationAdvancesEpochAndRetainsHistoricalKeys() throws Exception {
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        String storeId = "rotation_store_" + System.nanoTime();
+        StoreKeyManager manager = new StoreKeyManager(context);
+        manager.initializeStore(storeId);
+        byte[] epochOne = manager.getStoreKey(storeId, 1L);
+
+        assertEquals(2L, manager.rotateStoreKey(storeId));
+        assertEquals(2L, manager.getCurrentEpoch(storeId));
+        assertEquals(2L, manager.getPendingRotationEpoch(storeId));
+        StoreKeyManager restarted = new StoreKeyManager(context);
+        assertEquals(2L, restarted.getPendingRotationEpoch(storeId));
+        byte[] epochTwo = manager.getStoreKey(storeId, 2L);
+        byte[] historical = manager.getStoreKey(storeId, 1L);
+
+        assertEquals(32, epochTwo.length);
+        assertArrayEquals(epochOne, historical);
+        assertFalse(Arrays.equals(epochOne, epochTwo));
+        try {
+            manager.getStoreKey(storeId, 3L);
+            fail("Future key epoch must not be returned");
+        } catch (SyncException expected) {
+            assertTrue(expected.getMessage().contains("Unknown"));
+        }
+        manager.confirmRotation(storeId, 2L);
+        assertEquals(0L, manager.getPendingRotationEpoch(storeId));
+        Arrays.fill(epochOne, (byte) 0);
+        Arrays.fill(epochTwo, (byte) 0);
+        Arrays.fill(historical, (byte) 0);
+    }
+
+    @Test public void historicalEpochCanBeRestoredWithoutRollingBackCurrentEpoch() throws Exception {
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        String storeId = "history_store_" + System.nanoTime();
+        StoreKeyManager manager = new StoreKeyManager(context);
+        manager.initializeStore(storeId);
+        byte[] epochOne = manager.getStoreKey(storeId, 1L);
+        manager.rotateStoreKey(storeId);
+        context.getSharedPreferences("maeyai_store_keys_v1", Context.MODE_PRIVATE)
+                .edit().remove("store_key_" + storeId + "_1").commit();
+
+        manager.importStoreKey(storeId, 1L, epochOne);
+        assertEquals(2L, manager.getCurrentEpoch(storeId));
+        assertArrayEquals(epochOne, manager.getStoreKey(storeId, 1L));
+        Arrays.fill(epochOne, (byte) 0);
+    }
+
+    @Test public void rejectsInvalidStoreIdentifiersAndUninitializedReads() throws Exception {
+        StoreKeyManager manager = new StoreKeyManager(
+                InstrumentationRegistry.getInstrumentation().getTargetContext());
+        try {
+            manager.initializeStore("../other-store");
+            fail("Unsafe store ID must be rejected");
+        } catch (SyncException expected) { /* fail closed */ }
+        try {
+            manager.getStoreKey("not_initialized_" + System.nanoTime(), 1L);
+            fail("Missing epoch must be rejected");
+        } catch (SyncException expected) { /* fail closed */ }
+    }
+}

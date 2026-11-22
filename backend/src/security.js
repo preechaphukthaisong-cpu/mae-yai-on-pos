@@ -60,3 +60,40 @@ export function isUuid(value) {
   return typeof value === 'string'
     && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
+
+export function sameImmutableEvent(prior, event, digest) {
+  return Boolean(prior && event)
+    && prior.payload_sha256 === digest
+    && prior.entity_type === event.entityType
+    && prior.entity_id === event.entityId
+    && prior.operation === event.operation
+    && BigInt(prior.base_version) === BigInt(event.baseVersion);
+}
+
+/** Enforce the opaque AES-256-GCM envelope; plaintext domain JSON is never accepted. */
+export function validateEncryptedEventPayload(payload) {
+  const allowedFields = ['aadVersion', 'algorithm', 'ciphertext',
+    'encryptionVersion', 'keyEpoch', 'nonce'];
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)
+      || Object.keys(payload).length !== allowedFields.length
+      || Object.keys(payload).some((key) => !allowedFields.includes(key))
+      || payload.encryptionVersion !== 1 || payload.aadVersion !== 1
+      || payload.algorithm !== 'A256GCM'
+      || !Number.isSafeInteger(payload.keyEpoch) || payload.keyEpoch < 1
+      || typeof payload.nonce !== 'string' || typeof payload.ciphertext !== 'string') {
+    return false;
+  }
+  const base64url = /^[A-Za-z0-9_-]+$/;
+  if (!base64url.test(payload.nonce) || !base64url.test(payload.ciphertext)) return false;
+  let nonce;
+  let ciphertext;
+  try {
+    nonce = Buffer.from(payload.nonce, 'base64url');
+    ciphertext = Buffer.from(payload.ciphertext, 'base64url');
+  } catch {
+    return false;
+  }
+  return nonce.length === 12 && ciphertext.length >= 16 && ciphertext.length <= 256 * 1024 + 16
+    && nonce.toString('base64url') === payload.nonce
+    && ciphertext.toString('base64url') === payload.ciphertext;
+}

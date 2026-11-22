@@ -47,6 +47,28 @@ public final class BackupRestoreCoordinator {
             @NonNull RoomDatabase database, @NonNull File encryptedBackup,
             char[] recoveryPassword, String recoveryKey)
             throws IOException, GeneralSecurityException {
+        restoreDownloadedBackupInternal(context, database, encryptedBackup,
+                recoveryPassword, recoveryKey, null);
+    }
+
+    /** Seeds the authoritative event cursor inside the staged SQLite file before atomic activation. */
+    public void restoreDownloadedSyncBaseline(@NonNull Context context,
+            @NonNull RoomDatabase database, @NonNull File encryptedBackup,
+            char[] recoveryPassword, String recoveryKey, @NonNull String storeId,
+            long throughSequence, @NonNull String updatedAtUtc)
+            throws IOException, GeneralSecurityException {
+        if (storeId == null || !storeId.matches("[A-Za-z0-9_-]{1,128}")
+                || throughSequence < 0 || updatedAtUtc == null || updatedAtUtc.trim().isEmpty()) {
+            throw new IllegalArgumentException("Sync baseline cursor metadata is invalid");
+        }
+        restoreDownloadedBackupInternal(context, database, encryptedBackup,
+                recoveryPassword, recoveryKey,
+                new SyncCursorSeed(storeId, throughSequence, updatedAtUtc));
+    }
+
+    private void restoreDownloadedBackupInternal(Context context, RoomDatabase database,
+            File encryptedBackup, char[] recoveryPassword, String recoveryKey,
+            SyncCursorSeed cursorSeed) throws IOException, GeneralSecurityException {
         boolean hasPassword = recoveryPassword != null && recoveryPassword.length > 0;
         boolean hasRecoveryKey = recoveryKey != null && !recoveryKey.trim().isEmpty();
         if (hasPassword == hasRecoveryKey) {
@@ -86,6 +108,7 @@ public final class BackupRestoreCoordinator {
                     staged = fileStore.restoreToStaging(stagingDirectory, backup,
                             passwordCopy, hasPassword ? null : recoveryKey,
                             new SQLiteStagedRestoreValidator(expectedVersion));
+                    if (cursorSeed != null) seedCursor(staged, cursorSeed, expectedVersion);
                     activationAttempted = true;
                     restorer.activate(app, staged, safety.file, expectedVersion);
                     activationSucceeded = true;
@@ -108,6 +131,51 @@ public final class BackupRestoreCoordinator {
             throw new IOException("Encrypted backup restore failed", e);
         } finally {
             if (passwordCopy != null) Arrays.fill(passwordCopy, '\0');
+        }
+    }
+
+    private static void seedCursor(File staged, SyncCursorSeed seed, int expectedVersion)
+            throws IOException {
+        android.database.sqlite.SQLiteDatabase sqlite = null;
+        try {
+            sqlite = android.database.sqlite.SQLiteDatabase.openDatabase(
+                    staged.getAbsolutePath(), null, android.database.sqlite.SQLiteDatabase.OPEN_READWRITE);
+            if (sqlite.getVersion() != expectedVersion) {
+                throw new IOException("Staged sync baseline schema changed before cursor seeding");
+            }
+            boolean tableExists;
+            try (android.database.Cursor cursor = sqlite.rawQuery(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='sync_cursor'", null)) {
+                tableExists = cursor.moveToFirst();
+            }
+            if (!tableExists) throw new IOException("Staged database has no sync cursor table");
+            android.content.ContentValues values = new android.content.ContentValues();
+            values.put("store_id", seed.storeId);
+            values.put("last_applied_sequence", seed.sequence);
+            values.put("updated_at_utc", seed.updatedAtUtc);
+            long row = sqlite.insertWithOnConflict("sync_cursor", null, values,
+                    android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE);
+            if (row == -1L) throw new IOException("Unable to seed sync cursor in staged baseline");
+            try (android.database.Cursor integrity = sqlite.rawQuery("PRAGMA integrity_check", null)) {
+                if (!integrity.moveToFirst() || !"ok".equalsIgnoreCase(integrity.getString(0))) {
+                    throw new IOException("Staged baseline failed integrity check after cursor seeding");
+                }
+            }
+        } catch (android.database.sqlite.SQLiteException error) {
+            throw new IOException("Unable to seed sync cursor in staged baseline", error);
+        } finally {
+            if (sqlite != null && sqlite.isOpen()) sqlite.close();
+        }
+    }
+
+    private static final class SyncCursorSeed {
+        final String storeId;
+        final long sequence;
+        final String updatedAtUtc;
+        SyncCursorSeed(String storeId, long sequence, String updatedAtUtc) {
+            this.storeId = storeId;
+            this.sequence = sequence;
+            this.updatedAtUtc = updatedAtUtc;
         }
     }
 

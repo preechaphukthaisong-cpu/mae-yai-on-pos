@@ -29,6 +29,7 @@ import com.maeyaion.pos.feature.barcode.BarcodeActivity;
 import com.maeyaion.pos.feature.sales.SalesActivity;
 import com.maeyaion.pos.feature.history.HistoryActivity;
 import com.maeyaion.pos.feature.store.StoreActivity;
+import com.maeyaion.pos.feature.store.SyncSettingsActivity;
 import com.maeyaion.pos.feature.reports.ReportsActivity;
 import com.maeyaion.pos.core.navigation.BarcodeRoute;
 import com.maeyaion.pos.core.navigation.InventoryRoute;
@@ -280,6 +281,8 @@ public final class MainActivity extends Activity {
         driveStatus.setPadding(0, 8, 0, 8);
         page.addView(driveStatus);
         addButton(page, "เลือกบัญชี Google Drive", this::launchDriveAccountPicker);
+        addButton(page, "ตั้งค่าซิงก์หลายเครื่อง", () ->
+                startActivity(new Intent(this, SyncSettingsActivity.class)));
         refreshDriveStatus();
 
         ScrollView scroll = new ScrollView(this);

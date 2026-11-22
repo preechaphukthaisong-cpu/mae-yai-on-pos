@@ -6,6 +6,8 @@ import com.maeyaion.pos.core.db.BackupJournalEntity;
 import com.maeyaion.pos.core.db.CustomerEntity;
 import com.maeyaion.pos.core.db.OpLogEntity;
 import com.maeyaion.pos.core.tx.TransactionRunner;
+import com.maeyaion.pos.core.sync.SyncOutboxWriter;
+import com.maeyaion.pos.core.sync.SyncException;
 import org.json.JSONObject;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -16,8 +18,8 @@ import java.util.UUID;
 
 /** Normalized customer identity registration for credit sales. */
 public final class CustomerService {
- private final AppDatabase db; private final TransactionRunner tx;
- public CustomerService(@NonNull AppDatabase db,@NonNull TransactionRunner tx){this.db=Objects.requireNonNull(db);this.tx=Objects.requireNonNull(tx);}
+ private final AppDatabase db; private final TransactionRunner tx; private final SyncOutboxWriter syncOutbox;
+ public CustomerService(@NonNull AppDatabase db,@NonNull TransactionRunner tx){this.db=Objects.requireNonNull(db);this.tx=Objects.requireNonNull(tx);this.syncOutbox=new SyncOutboxWriter(db);}
  public CustomerEntity register(@NonNull String name,String identity,@NonNull String atUtc){
   String display=collapse(Normalizer.normalize(name,Normalizer.Form.NFC));
   if(display.isEmpty())throw new IllegalArgumentException("กรอกชื่อลูกค้า");
@@ -33,6 +35,18 @@ public final class CustomerService {
    String op=UUID.randomUUID().toString();
    db.opLogDao().append(new OpLogEntity(UUID.randomUUID().toString(),"CUSTOMER_REGISTERED","CUSTOMER",id,payload,atUtc));
    db.backupJournalDao().append(new BackupJournalEntity(0,op,"CUSTOMER_REGISTERED",payload,sha256(payload),5,atUtc,0));
+   try {
+    JSONObject syncData = new JSONObject();
+    syncData.put("customer_id", row.id);
+    syncData.put("name", row.name);
+    syncData.put("name_key", row.name_key);
+    syncData.put("identity_key", row.identity_key);
+    syncData.put("created_at_utc", row.created_at_utc);
+    syncData.put("updated_at_utc", row.updated_at_utc);
+    syncOutbox.appendUnboundInTransaction("upsert", "customer", row.id, syncData, atUtc);
+   } catch (org.json.JSONException | SyncException error) {
+    throw new IllegalStateException("Unable to append encrypted customer sync event", error);
+   }
    return row;
   });
  }
