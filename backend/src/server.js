@@ -1,7 +1,7 @@
 import http from 'node:http';
 import crypto from 'node:crypto';
 import pg from 'pg';
-import { verifyGoogleIdentity, encryptRefreshToken, sha256Hex, canonicalJson, isUuid, sameImmutableEvent } from './security.js';
+import { verifyGoogleIdentity, encryptRefreshToken, sha256Hex, canonicalJson, isUuid, sameImmutableEvent, validateEncryptedEventPayload } from './security.js';
 import { mirrorSnapshot } from './drive-mirror.js';
 
 const { Pool } = pg;
@@ -89,6 +89,9 @@ function validateEvent(event) {
       || event.payload === undefined || event.payload === null
       || typeof event.payload !== 'object') {
     throw new HttpError(400, 'Invalid sync event envelope');
+  }
+  if (!validateEncryptedEventPayload(event.payload)) {
+    throw new HttpError(400, 'Sync payload must be a supported AES-256-GCM encrypted envelope');
   }
   const canonical = canonicalJson(event.payload);
   if (Buffer.byteLength(canonical, 'utf8') > 256 * 1024) {
