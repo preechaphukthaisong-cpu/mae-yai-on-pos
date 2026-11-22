@@ -165,6 +165,35 @@ public final class SyncDomainEventApplierTest {
         assertNotNull(db.customerDao().findById("customer-credit-1"));
     }
 
+    @Test public void storeSettingReplayAllowsOnlyWhitelistedProfileFields() throws Exception {
+        SyncDomainEventApplier applier = new SyncDomainEventApplier(db);
+        JSONObject allowed = new JSONObject();
+        allowed.put("setting_key", "store_name");
+        allowed.put("value", "ร้านแม่ใหญ่อ่อน");
+        allowed.put("updated_at_utc", "2026-11-21T00:00:00Z");
+        db.runInTransaction(() -> {
+            try { applier.apply(wrappedEvent("88888888-8888-4888-8888-888888888881",
+                    "store_setting", "store_name", allowed, 1)); }
+            catch (Exception error) { throw new IllegalStateException(error); }
+        });
+        assertEquals("ร้านแม่ใหญ่อ่อน", db.appMetaDao().findValue("store_name"));
+
+        JSONObject secret = new JSONObject();
+        secret.put("setting_key", "google_refresh_token");
+        secret.put("value", "must-not-sync");
+        secret.put("updated_at_utc", "2026-11-21T00:00:00Z");
+        try {
+            db.runInTransaction(() -> {
+                try { applier.apply(wrappedEvent("88888888-8888-4888-8888-888888888882",
+                        "store_setting", "google_refresh_token", secret, 2)); }
+                catch (Exception error) { throw new IllegalStateException(error); }
+            });
+            fail("Non-allow-listed metadata must not be replayed");
+        } catch (IllegalStateException expected) {
+            assertNull(db.appMetaDao().findValue("google_refresh_token"));
+        }
+    }
+
     @Test public void customerReplayStoresPrivateIdentityAndRejectsNormalizedCollision() throws Exception {
         SyncDomainEventApplier applier = new SyncDomainEventApplier(db);
         db.runInTransaction(() -> {
