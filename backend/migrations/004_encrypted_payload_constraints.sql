@@ -14,6 +14,7 @@ BEGIN
     AND payload->>'aadVersion' = '1'
     AND jsonb_typeof(payload->'keyEpoch') = 'number'
     AND (payload->>'keyEpoch')::numeric BETWEEN 1 AND 9007199254740991
+    AND (payload->>'keyEpoch')::numeric = trunc((payload->>'keyEpoch')::numeric)
     AND jsonb_typeof(payload->'nonce') = 'string'
     AND payload->>'nonce' ~ '^[A-Za-z0-9_-]{16}$'
     AND jsonb_typeof(payload->'ciphertext') = 'string'
@@ -36,6 +37,7 @@ BEGIN
     AND submitted_payload->>'aadVersion' = '1'
     AND jsonb_typeof(submitted_payload->'keyEpoch') = 'number'
     AND (submitted_payload->>'keyEpoch')::numeric BETWEEN 1 AND 9007199254740991
+    AND (submitted_payload->>'keyEpoch')::numeric = trunc((submitted_payload->>'keyEpoch')::numeric)
     AND jsonb_typeof(submitted_payload->'nonce') = 'string'
     AND submitted_payload->>'nonce' ~ '^[A-Za-z0-9_-]{16}$'
     AND jsonb_typeof(submitted_payload->'ciphertext') = 'string'
