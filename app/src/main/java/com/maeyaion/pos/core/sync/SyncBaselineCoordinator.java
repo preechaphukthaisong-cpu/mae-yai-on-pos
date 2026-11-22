@@ -117,6 +117,8 @@ public final class SyncBaselineCoordinator {
             @NonNull JSONObject manifestJson, char[] recoveryPassword, String recoveryKey)
             throws SyncException {
         File downloaded = null;
+        File verifiedSnapshot = null;
+        char[] passwordCopy = recoveryPassword == null ? null : recoveryPassword.clone();
         try {
             SyncBaselineManifest manifest = SyncBaselineManifest.fromJson(manifestJson);
             int currentSchema = database.getOpenHelper().getWritableDatabase().getVersion();
@@ -157,9 +159,21 @@ public final class SyncBaselineCoordinator {
                 output.getFD().sync();
             }
             BackupCrypto.validateEnvelopeFile(downloaded);
-            boolean usePassword = recoveryPassword != null && recoveryPassword.length > 0;
+            boolean usePassword = passwordCopy != null && passwordCopy.length > 0;
+            boolean useRecoveryKey = recoveryKey != null && !recoveryKey.trim().isEmpty();
+            if (usePassword == useRecoveryKey) {
+                throw new SyncException("Supply exactly one baseline recovery password or recovery key");
+            }
+            // Authenticate and hash the decrypted SQLite snapshot against the manifest before
+            // handing the encrypted file to the atomic Room restore coordinator.
+            verifiedSnapshot = new File(directory, snapshotId + ".verified.sqlite");
+            BackupCrypto.decryptFileTo(downloaded, verifiedSnapshot,
+                    usePassword ? passwordCopy : null, usePassword ? null : recoveryKey);
+            if (!manifest.snapshotSha256.equalsIgnoreCase(sha256(verifiedSnapshot))) {
+                throw new SyncException("Decrypted baseline snapshot checksum does not match its manifest");
+            }
             restorer.restoreDownloadedBackup(context, database, downloaded,
-                    usePassword ? recoveryPassword : null, usePassword ? null : recoveryKey);
+                    usePassword ? passwordCopy : null, usePassword ? null : recoveryKey);
             AppDatabase restored = AppDatabase.getInstance(context);
             SyncQueueGuard.requireQuiescent(restored, storeId);
             restored.runInTransaction(() -> restored.syncQueueDao().saveCursor(
@@ -169,7 +183,9 @@ public final class SyncBaselineCoordinator {
         } catch (JSONException | IOException | GeneralSecurityException error) {
             throw new SyncException("Unable to restore encrypted sync baseline", error);
         } finally {
+            if (passwordCopy != null) java.util.Arrays.fill(passwordCopy, '\\0');
             deleteQuietly(downloaded);
+            deleteQuietly(verifiedSnapshot);
         }
     }
 
