@@ -184,7 +184,7 @@ public final class StoreKeyEnrollmentService {
         for (int i = 0; i < devices.length(); i++) {
             JSONObject device = devices.getJSONObject(i);
             String id = device.getString("id");
-            if (id.equals(excludedDeviceId)) continue;
+            if (id.equals(excludedDeviceId) || !device.optBoolean("key_enrolled", false)) continue;
             String publicKey = device.getString("public_key");
             byte[] wrapped = deviceKeys.wrapForDevice(publicKey, key);
             JSONObject item = new JSONObject();
