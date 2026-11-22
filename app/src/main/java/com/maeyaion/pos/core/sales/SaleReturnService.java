@@ -72,7 +72,8 @@ public final class SaleReturnService {
     lineRows.add(new SaleReturnLineEntity(UUID.randomUUID().toString(),returnId,line.id,r.qtyMilli,
       value,feeDelta,r.restock?1:0,r.restock?null:r.nonRestockReason,null,null));
     if(r.restock){ProductEntity p=db.productDao().findBySku(line.sku);long after=Math.addExact(p.stockQtyMilli,r.qtyMilli);
-     db.stockLogDao().append(new StockLogEntity(UUID.randomUUID().toString(),p.sku,p.stockQtyMilli,after,r.qtyMilli,"RETURN",returnId,atUtc));}
+     db.stockLogDao().append(new StockLogEntity(UUID.randomUUID().toString(),p.sku,p.stockQtyMilli,after,r.qtyMilli,"RETURN",returnId,atUtc));
+     appendProductSyncEvent(db.productDao().findBySku(p.sku),atUtc);}
     db.productDailyDao().ensure(new ProductDailyEntity(businessDate,line.sku,0,0,0,0,0,0,0,0));
     db.productDailyDao().addReturn(businessDate,line.sku,r.qtyMilli,value);
    }
@@ -114,6 +115,19 @@ public final class SaleReturnService {
    }
    return header;
   });
+ }
+
+ private void appendProductSyncEvent(ProductEntity product,String atUtc){
+  try{
+   JSONObject data=new JSONObject();
+   data.put("sku",product.sku);data.put("barcode",product.barcode);data.put("name",product.name);
+   data.put("price_satang",product.priceSatang);data.put("cost_satang",product.costSatang);
+   data.put("unit",product.unit);
+   data.put("stock_limit_qty_milli",product.stockLimitQtyMilli==null?JSONObject.NULL:product.stockLimitQtyMilli);
+   data.put("stock_qty_milli",product.stockQtyMilli);data.put("is_active",product.isActive);
+   data.put("created_at_utc",product.createdAtUtc);data.put("updated_at_utc",product.updatedAtUtc);
+   syncOutbox.appendUnboundInTransaction("upsert","product",product.sku,data,atUtc);
+  }catch(JSONException|SyncException error){throw new IllegalStateException("Unable to append returned stock sync event",error);}
  }
  private static long roundHalfUp(long a,long b,long divisor){
   if(a<0||b<0||divisor<=0)throw new IllegalArgumentException("invalid allocation");
