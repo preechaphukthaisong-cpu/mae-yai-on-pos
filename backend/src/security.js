@@ -69,3 +69,27 @@ export function sameImmutableEvent(prior, event, digest) {
     && prior.operation === event.operation
     && BigInt(prior.base_version) === BigInt(event.baseVersion);
 }
+
+/** Enforce the opaque AES-256-GCM envelope; plaintext domain JSON is never accepted. */
+export function validateEncryptedEventPayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)
+      || payload.encryptionVersion !== 1 || payload.aadVersion !== 1
+      || payload.algorithm !== 'A256GCM'
+      || !Number.isSafeInteger(payload.keyEpoch) || payload.keyEpoch < 1
+      || typeof payload.nonce !== 'string' || typeof payload.ciphertext !== 'string') {
+    return false;
+  }
+  const base64url = /^[A-Za-z0-9_-]+$/;
+  if (!base64url.test(payload.nonce) || !base64url.test(payload.ciphertext)) return false;
+  let nonce;
+  let ciphertext;
+  try {
+    nonce = Buffer.from(payload.nonce, 'base64url');
+    ciphertext = Buffer.from(payload.ciphertext, 'base64url');
+  } catch {
+    return false;
+  }
+  return nonce.length === 12 && ciphertext.length >= 16 && ciphertext.length <= 256 * 1024 + 16
+    && nonce.toString('base64url') === payload.nonce
+    && ciphertext.toString('base64url') === payload.ciphertext;
+}
