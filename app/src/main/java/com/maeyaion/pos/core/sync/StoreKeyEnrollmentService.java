@@ -206,10 +206,35 @@ public final class StoreKeyEnrollmentService {
         long serverEpoch = currentServerEpoch();
         if (serverEpoch < 1) throw new SyncException("Store key is not initialized");
         long localEpoch = storeKeys.getCurrentEpoch(storeId);
+        long pendingEpoch = storeKeys.getPendingRotationEpoch(storeId);
+
+        if (pendingEpoch > 0 && pendingEpoch == serverEpoch) {
+            // The previous request committed but its response/confirmation may have been lost.
+            verifyCommittedEpoch(storeId, serverEpoch);
+            if (revokeDeviceId != null) {
+                if (isDeviceActive(revokeDeviceId)) {
+                    throw new SyncException("Server committed a key epoch but did not revoke the requested device");
+                }
+            }
+            storeKeys.confirmRotation(storeId, serverEpoch);
+            return serverEpoch;
+        }
+
         final long nextEpoch;
-        if (localEpoch == serverEpoch) nextEpoch = storeKeys.rotateStoreKey(storeId);
-        else if (localEpoch == serverEpoch + 1) nextEpoch = localEpoch; // Retry after an uncertain network result.
-        else throw new SyncException("Local and server key epochs diverged; recovery is required");
+        if (pendingEpoch > 0) {
+            if (pendingEpoch != serverEpoch + 1 || localEpoch != pendingEpoch) {
+                throw new SyncException("Pending store-key rotation diverged from the server epoch");
+            }
+            nextEpoch = pendingEpoch;
+        } else if (localEpoch == serverEpoch) {
+            nextEpoch = storeKeys.rotateStoreKey(storeId);
+        } else if (localEpoch == serverEpoch + 1) {
+            // Recover a process interruption after local key persistence but before its marker.
+            storeKeys.markPendingRotation(storeId, localEpoch);
+            nextEpoch = localEpoch;
+        } else {
+            throw new SyncException("Local and server key epochs diverged; recovery is required");
+        }
 
         byte[] key = storeKeys.getStoreKey(storeId, nextEpoch);
         try {
@@ -221,11 +246,52 @@ public final class StoreKeyEnrollmentService {
             } else {
                 api.revokeDeviceWithKeyRotation(revokeDeviceId, nextEpoch, wrappers, recoveryWrapper);
             }
+            verifyCommittedEpoch(storeId, nextEpoch);
+            if (revokeDeviceId != null && isDeviceActive(revokeDeviceId)) {
+                throw new SyncException("Key rotation completed but the target device remains active");
+            }
+            storeKeys.confirmRotation(storeId, nextEpoch);
             return nextEpoch;
         } catch (JSONException error) {
             throw new SyncException("Unable to prepare store key rotation", error);
         } finally {
             Arrays.fill(key, (byte) 0);
+        }
+    }
+
+    private void verifyCommittedEpoch(String storeId, long expectedEpoch) throws SyncException {
+        JSONObject wrapperResponse = api.fetchCurrentStoreKeyWrapper();
+        byte[] wrapped = null;
+        byte[] remoteKey = null;
+        byte[] localKey = null;
+        try {
+            if (exactEpoch(wrapperResponse.get("keyEpoch")) != expectedEpoch) {
+                throw new SyncException("Server current key epoch does not match the prepared rotation");
+            }
+            wrapped = Base64Url.decode(wrapperResponse.getString("wrappedKey"));
+            remoteKey = deviceKeys.unwrapForThisDevice(wrapped);
+            localKey = storeKeys.getStoreKey(storeId, expectedEpoch);
+            if (!MessageDigest.isEqual(remoteKey, localKey)) {
+                throw new SyncException("Server committed a different store key than this device prepared");
+            }
+        } catch (JSONException error) {
+            throw new SyncException("Committed store key wrapper response is malformed", error);
+        } finally {
+            if (wrapped != null) Arrays.fill(wrapped, (byte) 0);
+            if (remoteKey != null) Arrays.fill(remoteKey, (byte) 0);
+            if (localKey != null) Arrays.fill(localKey, (byte) 0);
+        }
+    }
+
+    private boolean isDeviceActive(String deviceId) throws SyncException {
+        try {
+            JSONArray devices = api.listDevices().getJSONArray("devices");
+            for (int i = 0; i < devices.length(); i++) {
+                if (deviceId.equals(devices.getJSONObject(i).getString("id"))) return true;
+            }
+            return false;
+        } catch (JSONException error) {
+            throw new SyncException("Device list response is malformed", error);
         }
     }
 
