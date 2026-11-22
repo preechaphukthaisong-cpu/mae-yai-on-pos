@@ -97,7 +97,11 @@ public final class StoreKeyManager {
             throw new SyncException("Imported store key or epoch is invalid");
         }
         long current = currentEpoch(storeId);
-        if (epoch < current) throw new SyncException("Refusing to roll back the local store-key epoch");
+        if (epoch > current && epoch - current > 1) {
+            throw new SyncException("Refusing to skip a store-key epoch during import");
+        }
+        // Missing historical epochs may be imported after the current epoch when a trusted
+        // device is being enrolled. The current pointer is never moved backwards.
         String existing = preferences.getString(entryKey(storeId, epoch), null);
         if (existing != null) {
             byte[] stored = getStoreKey(storeId, epoch);
