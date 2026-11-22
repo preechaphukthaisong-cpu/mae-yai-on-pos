@@ -210,6 +210,20 @@ public final class SyncDomainEventApplierTest {
         assertEquals(0, db.syncQueueDao().cursor(storeId) == null
                 ? 0L : db.syncQueueDao().cursor(storeId).last_applied_sequence);
         assertEquals(0, db.syncQueueDao().inboxEvent(eventId).applied);
+        db.runInTransaction(() -> {
+            assertEquals(1, db.syncQueueDao().clearReplayConflictForRetry(eventId));
+        });
+        assertNull(db.syncQueueDao().replayConflict(eventId));
+        assertEquals(0, db.syncQueueDao().inboxEvent(eventId).applied);
+        assertEquals(1, db.syncQueueDao().unappliedInboxCount(storeId));
+        try {
+            processor.applyNext(storeId, "2026-11-21T00:02:00Z", keys);
+            fail("Retry must execute the same typed replay and fail closed again");
+        } catch (SyncException expected) {
+            assertTrue(expected.getMessage().contains("No typed replay handler"));
+        }
+        assertNotNull(db.syncQueueDao().replayConflict(eventId));
+        assertEquals(0, db.syncQueueDao().inboxEvent(eventId).applied);
     }
 
     @Test public void localStoreSettingUpdateWritesOutboxInSameTransaction() throws Exception {
