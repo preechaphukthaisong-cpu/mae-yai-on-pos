@@ -22,18 +22,33 @@ import java.util.Set;
 public final class SyncPushCoordinator {
     private static final int BATCH_SIZE = 100;
     private final AppDatabase database;
-    private final SyncApiClient api;
+    private final SyncApiClient api;\n    private final EncryptedSyncEventCodec encryptedCodec;
 
+    /** Legacy constructor intentionally cannot transmit: E2E encryption is mandatory. */
     public SyncPushCoordinator(@NonNull AppDatabase database, @NonNull SyncApiClient api) {
+        this(database, api, null);
+    }
+
+    public SyncPushCoordinator(@NonNull AppDatabase database, @NonNull SyncApiClient api,
+            @NonNull StoreKeyManager keyManager) {
+        this(database, api, new EncryptedSyncEventCodec(keyManager));
+    }
+
+    private SyncPushCoordinator(AppDatabase database, SyncApiClient api,
+            EncryptedSyncEventCodec encryptedCodec) {
         if (database == null || api == null) throw new IllegalArgumentException("Database and API are required");
         this.database = database;
         this.api = api;
+        this.encryptedCodec = encryptedCodec;
     }
 
     @NonNull
     public PushResult pushPending(@NonNull String storeId) throws SyncException {
         if (storeId == null || storeId.trim().isEmpty()) {
             throw new IllegalArgumentException("Store ID is required");
+        }
+        if (encryptedCodec == null) {
+            throw new SyncException("End-to-end encryption is mandatory; refusing plaintext sync");
         }
         SyncQueueDao dao = database.syncQueueDao();
         List<SyncOutboxEntity> batch = dao.pendingOutbox(storeId, BATCH_SIZE);
@@ -54,15 +69,9 @@ public final class SyncPushCoordinator {
                 if (event.base_version > 9_007_199_254_740_991L) {
                     throw new SyncException("Aggregate version exceeds the server safe integer range");
                 }
-                JSONObject wire = new JSONObject();
-                wire.put("eventId", event.event_id);
-                wire.put("operation", event.operation);
-                wire.put("entityType", event.entity_type);
-                wire.put("entityId", event.entity_id);
-                wire.put("baseVersion", event.base_version);
-                wire.put("payload", payload);
-                wire.put("payloadSha256", event.payload_sha256);
-                wireEvents.put(wire);
+                wireEvents.put(encryptedCodec.encrypt(storeId, event.event_id,
+                        event.operation, event.entity_type, event.entity_id,
+                        event.base_version, payload));
             }
         } catch (JSONException error) {
             throw new SyncException("Unable to serialize local outbox batch", error);
