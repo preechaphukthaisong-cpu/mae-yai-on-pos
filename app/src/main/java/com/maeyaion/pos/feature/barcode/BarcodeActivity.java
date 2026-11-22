@@ -25,6 +25,7 @@ import com.maeyaion.pos.core.db.AppDatabase;
 import com.maeyaion.pos.core.db.BarcodeRegistryEntity;
 import com.maeyaion.pos.core.navigation.BarcodeRoute;
 import com.maeyaion.pos.core.tx.RoomTransactionRunner;
+import com.maeyaion.pos.core.sync.SyncOutboxWriter;
 
 import java.time.Instant;
 import java.util.List;
@@ -165,7 +166,8 @@ public final class BarcodeActivity extends Activity {
                 BarcodeAllocator allocator = new BarcodeAllocator(
                         db.barcodeRegistryDao(), db.barcodeCounterDao(), tx);
                 ProductRegistrationService service = new ProductRegistrationService(
-                        allocator, db.productDao(), db.opLogDao(), db.backupJournalDao(), tx);
+                        allocator, db.productDao(), db.opLogDao(), db.backupJournalDao(), tx,
+                        new SyncOutboxWriter(db));
                 String now = Instant.now().toString();
                 String sku = "SKU-" + UUID.randomUUID().toString().toUpperCase(Locale.ROOT);
                 String operationId = UUID.randomUUID().toString();
