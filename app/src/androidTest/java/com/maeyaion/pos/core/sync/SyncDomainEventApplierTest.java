@@ -74,6 +74,37 @@ public final class SyncDomainEventApplierTest {
         assertEquals(1250L, db.productDao().findBySku("SKU-REMOTE").priceSatang);
     }
 
+    @Test public void inventoryReplayPreservesReceiptMovementAndOperationProvenance() throws Exception {
+        SyncInboxEntity base = productEvent("SKU-STOCK", "2000099", "SYSTEM",
+                "Stock item", 2500, 900, 1500);
+        JSONObject payload = new JSONObject(base.payload_json);
+        JSONObject data = payload.getJSONObject("data");
+        data.put("stock_movement", new JSONObject()
+                .put("operation_id", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+                .put("before_qty_milli", 0)
+                .put("diff_qty_milli", 1500)
+                .put("after_qty_milli", 1500)
+                .put("reason", "RECEIVE")
+                .put("created_at_utc", "2026-11-21T00:00:00Z"));
+        SyncInboxEntity event = new SyncInboxEntity(base.event_id, base.store_id,
+                base.server_sequence, base.operation, base.entity_type, base.entity_id,
+                base.base_version, base.entity_version, payload.toString(),
+                "0".repeat(64), base.received_at_utc, 0);
+        SyncDomainEventApplier applier = new SyncDomainEventApplier(db);
+        db.runInTransaction(() -> {
+            try { applier.apply(event); }
+            catch (Exception error) { throw new IllegalStateException(error); }
+        });
+        java.util.List<com.maeyaion.pos.core.db.StockLogEntity> history =
+                db.stockLogDao().historyForSku("SKU-STOCK");
+        assertEquals(1, history.size());
+        assertEquals(0L, history.get(0).beforeQtyMilli);
+        assertEquals(1500L, history.get(0).afterQtyMilli);
+        assertEquals(1500L, history.get(0).diffQtyMilli);
+        assertEquals("RECEIVE", history.get(0).reason);
+        assertEquals("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", history.get(0).operationId);
+    }
+
     @Test public void conflictingImmutableBarcodeProvenanceRejectsReplay() throws Exception {
         db.runInTransaction(() -> db.barcodeRegistryDao().insert(new BarcodeRegistryEntity(
                 "2000001", "Original", 1000, "SYSTEM", "2026-11-21T00:00:00Z")));
