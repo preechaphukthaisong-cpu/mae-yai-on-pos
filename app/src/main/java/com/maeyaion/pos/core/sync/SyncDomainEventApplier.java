@@ -123,7 +123,6 @@ public final class SyncDomainEventApplier implements SyncInboxProcessor.DomainEv
             }
             appendAudit(event, "SYNC_REPLAY_CUSTOMER", "CUSTOMER", customerId);
         } catch (JSONException | java.time.DateTimeException | IllegalArgumentException error) {
-            if (error instanceof SyncException) throw (SyncException) error;
             throw new SyncException("Customer event payload is malformed", error);
         }
     }
