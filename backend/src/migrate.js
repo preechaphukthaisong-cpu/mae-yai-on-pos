@@ -8,7 +8,7 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 try {
   const directory = path.join(import.meta.dirname, '../migrations');
   const migrations = (await fs.readdir(directory))
-    .filter(name => /^[0-9]{3}_[a-z0-9_]+\\.sql$/.test(name))
+    .filter(name => /^[0-9]{3}_[a-z0-9_]+[.]sql$/.test(name))
     .sort();
   if (migrations.length === 0) throw new Error('No SQL migrations were found');
   for (const name of migrations) {
