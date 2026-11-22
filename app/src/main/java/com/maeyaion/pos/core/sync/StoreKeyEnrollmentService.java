@@ -44,10 +44,10 @@ public final class StoreKeyEnrollmentService {
                 JSONArray wrappers = new JSONArray();
                 JSONObject wrapper = new JSONObject();
                 wrapper.put("deviceId", identity.getOrCreateDeviceId());
-                wrapper.put("wrappedKey", deviceKeys.wrapForDevice(
-                        rows.getJSONObject(0).getString("public_key"), key)
-                        .length == 0 ? "" : Base64Url.encode(deviceKeys.wrapForDevice(
-                                rows.getJSONObject(0).getString("public_key"), key)));
+                byte[] wrapped = deviceKeys.wrapForDevice(
+                        rows.getJSONObject(0).getString("public_key"), key);
+                try { wrapper.put("wrappedKey", Base64Url.encode(wrapped)); }
+                finally { Arrays.fill(wrapped, (byte) 0); }
                 wrappers.put(wrapper);
                 String recoveryWrapper = StoreKeyRecoveryWrapper.wrap(storeId, epoch, recoveryKey, key);
                 api.submitStoreKeyEpoch(epoch, wrappers, recoveryWrapper);
@@ -100,8 +100,8 @@ public final class StoreKeyEnrollmentService {
     }
 
     /** Approves a new device after the operator compares and confirms its displayed fingerprint. */
-    public void approveDevice(@NonNull String targetDeviceId, @NonNull String confirmedFingerprint)
-            throws SyncException {
+    public void approveDevice(@NonNull String storeId, @NonNull String targetDeviceId,
+            @NonNull String confirmedFingerprint) throws SyncException {
         long epoch = currentServerEpoch();
         if (epoch < 1) throw new SyncException("Store key is not initialized");
         JSONObject response = api.listDevices();
@@ -121,7 +121,7 @@ public final class StoreKeyEnrollmentService {
                     || !fingerprint.equalsIgnoreCase(confirmedFingerprint.trim())) {
                 throw new SyncException("Target device fingerprint does not match the operator's confirmation");
             }
-            byte[] key = storeKeys.getStoreKey(identityStoreId(), epoch);
+            byte[] key = storeKeys.getStoreKey(storeId, epoch);
             try {
                 byte[] wrapped = deviceKeys.wrapForDevice(target.getString("public_key"), key);
                 api.approveDeviceKeyWrapper(targetDeviceId, epoch, Base64Url.encode(wrapped));
@@ -203,11 +203,6 @@ public final class StoreKeyEnrollmentService {
     private long currentServerEpoch() throws SyncException {
         try { return exactEpoch(api.getCurrentKeyEpoch().get("keyEpoch")); }
         catch (JSONException error) { throw new SyncException("Server key epoch response is malformed", error); }
-    }
-
-    private String identityStoreId() throws SyncException {
-        // Store ID is bound to the authenticated local Room cursor; caller cannot choose another store.
-        throw new SyncException("Use the overload that supplies the bound store ID for device approval");
     }
 
     private static long exactEpoch(Object value) throws SyncException {
