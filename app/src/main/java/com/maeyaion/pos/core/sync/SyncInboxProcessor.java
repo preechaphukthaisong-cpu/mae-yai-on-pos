@@ -115,6 +115,7 @@ public final class SyncInboxProcessor {
         }
         final boolean[] applied = {false};
         final SyncException[] failure = {null};
+        final SyncInboxEntity[] failedEvent = {null};
         try {
             database.runInTransaction(() -> {
                 try {
@@ -122,6 +123,7 @@ public final class SyncInboxProcessor {
                     List<SyncInboxEntity> batch = dao.unappliedInbox(storeId, 1);
                     if (batch.isEmpty()) return;
                     SyncInboxEntity event = batch.get(0);
+                    failedEvent[0] = event;
                     SyncCursorEntity cursor = dao.cursor(storeId);
                     long lastSequence = cursor == null ? 0 : cursor.last_applied_sequence;
 
@@ -182,7 +184,24 @@ public final class SyncInboxProcessor {
                 }
             });
         } catch (ReplayAbort ignored) {
-            throw failure[0] == null ? new SyncException("Remote event replay rolled back") : failure[0];
+            SyncInboxEntity event = failedEvent[0];
+            SyncException error = failure[0] == null
+                    ? new SyncException("Remote event replay rolled back") : failure[0];
+            if (event != null) {
+                String reason = error.getMessage() == null
+                        ? error.getClass().getSimpleName() : error.getMessage();
+                if (reason.length() > 500) reason = reason.substring(0, 500);
+                final String safeReason = reason;
+                try {
+                    database.runInTransaction(() -> database.syncQueueDao().recordReplayConflict(
+                            new com.maeyaion.pos.core.db.SyncReplayConflictEntity(
+                                    event.event_id, event.store_id, event.server_sequence,
+                                    event.entity_type, event.entity_id, safeReason, nowUtc)));
+                } catch (RuntimeException persistError) {
+                    error.addSuppressed(persistError);
+                }
+            }
+            throw error;
         }
         return applied[0];
     }
