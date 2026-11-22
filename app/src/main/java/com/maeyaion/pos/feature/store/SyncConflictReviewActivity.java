@@ -14,7 +14,6 @@ import android.widget.Toast;
 
 import com.maeyaion.pos.core.db.AppDatabase;
 import com.maeyaion.pos.core.db.SyncOutboxEntity;
-import com.maeyaion.pos.core.sync.SyncQueueDao;
 
 import java.util.List;
 import java.util.concurrent.ExecutorService;
