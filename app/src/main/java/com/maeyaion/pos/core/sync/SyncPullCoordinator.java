@@ -79,6 +79,22 @@ public final class SyncPullCoordinator {
         }
     }
 
+
+    /** Applies only authenticated/decrypted events; a failed domain event remains quarantined in inbox. */
+    public int applyPending(@NonNull String storeId, @NonNull String nowUtc,
+            @NonNull StoreKeyManager keyManager, int maxEvents) throws SyncException {
+        if (storeId == null || storeId.trim().isEmpty() || nowUtc == null
+                || nowUtc.trim().isEmpty() || keyManager == null || maxEvents < 1
+                || maxEvents > 1000) {
+            throw new IllegalArgumentException("Store, timestamp, key manager and bounded event count are required");
+        }
+        int applied = 0;
+        while (applied < maxEvents && inbox.applyNext(storeId, nowUtc, keyManager)) {
+            applied++;
+        }
+        return applied;
+    }
+
     private static long parseSequence(Object value) throws SyncException {
         try {
             if (value instanceof Number) return new java.math.BigDecimal(value.toString()).longValueExact();
