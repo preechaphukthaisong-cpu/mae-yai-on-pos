@@ -172,12 +172,9 @@ public final class SyncBaselineCoordinator {
             if (!manifest.snapshotSha256.equalsIgnoreCase(sha256(verifiedSnapshot))) {
                 throw new SyncException("Decrypted baseline snapshot checksum does not match its manifest");
             }
-            restorer.restoreDownloadedBackup(context, database, downloaded,
-                    usePassword ? passwordCopy : null, usePassword ? null : recoveryKey);
-            AppDatabase restored = AppDatabase.getInstance(context);
-            SyncQueueGuard.requireQuiescent(restored, storeId);
-            restored.runInTransaction(() -> restored.syncQueueDao().saveCursor(
-                    new SyncCursorEntity(storeId, manifest.throughSequence, Instant.now().toString())));
+            restorer.restoreDownloadedSyncBaseline(context, database, downloaded,
+                    usePassword ? passwordCopy : null, usePassword ? null : recoveryKey,
+                    storeId, manifest.throughSequence, Instant.now().toString());
         } catch (SyncException error) {
             throw error;
         } catch (JSONException | IOException | GeneralSecurityException error) {
