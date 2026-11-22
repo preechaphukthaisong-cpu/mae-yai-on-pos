@@ -29,6 +29,7 @@ import javax.crypto.spec.GCMParameterSpec;
  * require a separate authenticated protocol and must not be inferred from local storage.
  */
 public final class StoreKeyManager {
+    private static final Object GLOBAL_KEY_LOCK = new Object();
     private static final String PREFS = "maeyai_store_keys_v1";
     private static final String KEY_ALIAS_PREFIX = "maeyai_store_wrap_";
     private static final String CURRENT_PREFIX = "current_epoch_";
@@ -48,18 +49,21 @@ public final class StoreKeyManager {
     }
 
     /** Creates epoch 1 only when this installation has no key for the store. */
-    public synchronized long initializeStore(@NonNull String storeId) throws SyncException {
+    public long initializeStore(@NonNull String storeId) throws SyncException {
+        synchronized (GLOBAL_KEY_LOCK) {
         validateStoreId(storeId);
         long current = currentEpoch(storeId);
         if (current > 0) return current;
         ensureWrappingKey(storeId);
         return persistNewEpoch(storeId, 1L, false);
-    }
+    
+        }}
 
     /** Returns a defensive copy of the requested epoch's 256-bit key. */
     @NonNull
-    public synchronized byte[] getStoreKey(@NonNull String storeId, long epoch)
+    public byte[] getStoreKey(@NonNull String storeId, long epoch)
             throws SyncException {
+        synchronized (GLOBAL_KEY_LOCK) {
         validateStoreId(storeId);
         if (epoch < 1 || epoch > currentEpoch(storeId)) {
             throw new SyncException("Unknown store-key epoch");
@@ -88,11 +92,13 @@ public final class StoreKeyManager {
         } catch (Exception error) {
             throw new SyncException("Unable to unlock local store key", error);
         }
-    }
+    
+        }}
 
     /** Imports a key explicitly wrapped for this installation; never accepts plaintext from the server. */
-    public synchronized void importStoreKey(@NonNull String storeId, long epoch,
+    public void importStoreKey(@NonNull String storeId, long epoch,
             @NonNull byte[] importedKey) throws SyncException {
+        synchronized (GLOBAL_KEY_LOCK) {
         validateStoreId(storeId);
         if (epoch < 1 || importedKey == null || importedKey.length != AesGcmEventCipher.KEY_BYTES) {
             throw new SyncException("Imported store key or epoch is invalid");
@@ -138,10 +144,12 @@ public final class StoreKeyManager {
         } catch (Exception error) {
             throw new SyncException("Unable to import wrapped store key", error);
         }
-    }
+    
+        }}
 
     /** Creates a fresh epoch; prior epochs remain available for decrypting old events. */
-    public synchronized long rotateStoreKey(@NonNull String storeId) throws SyncException {
+    public long rotateStoreKey(@NonNull String storeId) throws SyncException {
+        synchronized (GLOBAL_KEY_LOCK) {
         validateStoreId(storeId);
         long current = currentEpoch(storeId);
         if (current < 1) throw new SyncException("Store keys must be initialized before rotation");
@@ -151,40 +159,49 @@ public final class StoreKeyManager {
         Arrays.fill(previousKey, (byte) 0);
         ensureWrappingKey(storeId);
         return persistNewEpoch(storeId, current + 1, true);
-    }
+    
+        }}
 
-    public synchronized long getCurrentEpoch(@NonNull String storeId) throws SyncException {
+    public long getCurrentEpoch(@NonNull String storeId) throws SyncException {
+        synchronized (GLOBAL_KEY_LOCK) {
         validateStoreId(storeId);
         long epoch = currentEpoch(storeId);
         if (epoch < 1) throw new SyncException("Store encryption key is not initialized");
         return epoch;
-    }
+    
+        }}
 
-    public synchronized long getPendingRotationEpoch(@NonNull String storeId) throws SyncException {
+    public long getPendingRotationEpoch(@NonNull String storeId) throws SyncException {
+        synchronized (GLOBAL_KEY_LOCK) {
         validateStoreId(storeId);
         return preferences.getLong(pendingRotationKey(storeId), 0L);
-    }
+    
+        }}
 
     /** Records a locally prepared epoch after recovery from a process interruption. */
-    public synchronized void markPendingRotation(@NonNull String storeId, long epoch)
+    public void markPendingRotation(@NonNull String storeId, long epoch)
             throws SyncException {
+        synchronized (GLOBAL_KEY_LOCK) {
         validateStoreId(storeId);
         if (epoch < 2 || epoch != currentEpoch(storeId)
                 || !preferences.edit().putLong(pendingRotationKey(storeId), epoch).commit()) {
             throw new SyncException("Unable to persist pending store-key rotation state");
         }
-    }
+    
+        }}
 
     /** Clears the pending marker only after the server confirms this exact epoch. */
-    public synchronized void confirmRotation(@NonNull String storeId, long epoch)
+    public void confirmRotation(@NonNull String storeId, long epoch)
             throws SyncException {
+        synchronized (GLOBAL_KEY_LOCK) {
         validateStoreId(storeId);
         long pending = getPendingRotationEpoch(storeId);
         if (pending != epoch) throw new SyncException("Store-key rotation confirmation does not match the pending epoch");
         if (!preferences.edit().remove(pendingRotationKey(storeId)).commit()) {
             throw new SyncException("Unable to persist store-key rotation confirmation");
         }
-    }
+    
+        }}
 
     private long persistNewEpoch(String storeId, long epoch, boolean pendingRotation) throws SyncException {
         byte[] storeKey = new byte[AesGcmEventCipher.KEY_BYTES];
