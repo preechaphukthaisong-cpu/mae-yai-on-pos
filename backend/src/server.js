@@ -465,6 +465,16 @@ async function handle(req, res) {
     return send(res, 200, { keyEpoch: String(result.rows[0].current_key_epoch),
       wrappedKey: result.rows[0].wrapped_key.toString('base64url') });
   }
+  if (req.method === 'GET' && url.pathname === '/v1/key-wrappers/recovery') {
+    const rawEpoch = url.searchParams.get('epoch') || '';
+    if (!/^[1-9][0-9]{0,17}$/.test(rawEpoch)) throw new HttpError(400, 'Invalid recovery key epoch');
+    const result = await pool.query(
+      'SELECT wrapped_key FROM store_recovery_wrappers WHERE store_id = $1 AND key_epoch = $2',
+      [context.store_id, rawEpoch]);
+    if (!result.rowCount) throw new HttpError(404, 'Recovery wrapper for this key epoch was not found');
+    return send(res, 200, { keyEpoch: rawEpoch,
+      wrappedKey: result.rows[0].wrapped_key.toString('base64url') });
+  }
   if (req.method === 'POST' && url.pathname === '/v1/key-wrappers') {
     const body = await readJson(req);
     if (!isUuid(body.targetDeviceId) || !Number.isSafeInteger(body.keyEpoch) || body.keyEpoch < 1) {
