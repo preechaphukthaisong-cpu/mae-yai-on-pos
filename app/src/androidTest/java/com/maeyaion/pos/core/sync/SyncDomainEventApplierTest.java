@@ -16,6 +16,7 @@ import com.maeyaion.pos.core.db.Migration2To3;
 import com.maeyaion.pos.core.db.Migration3To4;
 import com.maeyaion.pos.core.db.Migration4To5;
 import com.maeyaion.pos.core.db.Migration5To6;
+import com.maeyaion.pos.core.db.Migration6To7;
 import com.maeyaion.pos.core.db.SyncInboxEntity;
 
 import org.json.JSONObject;
@@ -35,7 +36,7 @@ public final class SyncDomainEventApplierTest {
         db = Room.databaseBuilder(context, AppDatabase.class, databaseName)
                 .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
                 .addMigrations(Migration1To2.INSTANCE, Migration2To3.INSTANCE,
-                        Migration3To4.INSTANCE, Migration4To5.INSTANCE, Migration5To6.INSTANCE)
+                        Migration3To4.INSTANCE, Migration4To5.INSTANCE, Migration5To6.INSTANCE, Migration6To7.INSTANCE)
                 .addCallback(AppDatabase.databaseCallback())
                 .allowMainThreadQueries().build();
         db.getOpenHelper().getWritableDatabase();
