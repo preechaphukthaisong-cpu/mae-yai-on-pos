@@ -35,9 +35,6 @@ public final class ProductRegistrationService {
     public ProductRegistrationService(@NonNull BarcodeAllocator barcodeAllocator,
             @NonNull ProductDao productDao, @NonNull OpLogDao opLogDao,
             @NonNull BackupJournalDao backupJournalDao, @NonNull TransactionRunner transactions) {
-        this.barcodeAllocator = Objects.requireNonNull(barcodeAllocator, "barcodeAllocator");
-        this.productDao = Objects.requireNonNull(productDao, "productDao");
-        this.opLogDao = Objects.requireNonNull(opLogDao, "opLogDao");
         this(barcodeAllocator, productDao, opLogDao, backupJournalDao, transactions, null);
     }
 
