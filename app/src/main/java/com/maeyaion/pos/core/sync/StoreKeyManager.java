@@ -95,6 +95,9 @@ public final class StoreKeyManager {
         long current = currentEpoch(storeId);
         if (current < 1) throw new SyncException("Store keys must be initialized before rotation");
         if (current == Long.MAX_VALUE) throw new SyncException("Store-key epoch exhausted");
+        // Do not silently replace a lost Keystore wrapper: that would strand all prior epochs.
+        byte[] previousKey = getStoreKey(storeId, current);
+        Arrays.fill(previousKey, (byte) 0);
         ensureWrappingKey(storeId);
         return persistNewEpoch(storeId, current + 1);
     }
