@@ -347,7 +347,38 @@ async function rotateStoreKeyEpoch(req, res, context, revokeDeviceId = null) {
     await client.query('BEGIN');
     const store = await client.query(
       'SELECT current_key_epoch FROM stores WHERE id = $1 FOR UPDATE', [context.store_id]);
-    if (!store.rowCount || Number(body.keyEpoch) !== Number(store.rows[0].current_key_epoch) + 1) {
+    if (!store.rowCount) throw new HttpError(404, 'Store not found');
+    const currentEpoch = Number(store.rows[0].current_key_epoch);
+    if (Number(body.keyEpoch) === currentEpoch && currentEpoch > 0) {
+      const priorRecovery = await client.query(
+        'SELECT wrapped_key FROM store_recovery_wrappers WHERE store_id = $1 AND key_epoch = $2',
+        [context.store_id, body.keyEpoch]);
+      if (!priorRecovery.rowCount || !priorRecovery.rows[0].wrapped_key.equals(recoveryWrapper)) {
+        throw new HttpError(409, 'Key epoch retry does not match the committed recovery wrapper');
+      }
+      for (const item of body.wrappers) {
+        if (!item || !isUuid(item.deviceId)) throw new HttpError(400, 'Invalid device key wrapper');
+        const wrapped = decodeBase64Url(item.wrappedKey, 384, 1024, 'Wrapped store key');
+        const prior = await client.query(
+          'SELECT wrapped_key FROM store_key_wrappers WHERE store_id = $1 AND device_id = $2 AND key_epoch = $3',
+          [context.store_id, item.deviceId, body.keyEpoch]);
+        if (!prior.rowCount || !prior.rows[0].wrapped_key.equals(wrapped)) {
+          throw new HttpError(409, 'Key epoch retry does not match committed device wrappers');
+        }
+      }
+      if (revokeDeviceId) {
+        const revoked = await client.query(
+          'SELECT revoked_at FROM devices WHERE store_id = $1 AND id = $2',
+          [context.store_id, revokeDeviceId]);
+        if (!revoked.rowCount || !revoked.rows[0].revoked_at) {
+          throw new HttpError(409, 'Requested device revocation was not committed with this epoch');
+        }
+      }
+      await client.query('COMMIT');
+      return send(res, 200, { keyEpoch: body.keyEpoch, revokedDeviceId: revokeDeviceId,
+        enrolledDevices: body.wrappers.length, duplicate: true });
+    }
+    if (Number(body.keyEpoch) !== currentEpoch + 1) {
       throw new HttpError(409, 'Store key epoch is stale or out of order');
     }
     if (revokeDeviceId && revokeDeviceId === context.device_id) {
