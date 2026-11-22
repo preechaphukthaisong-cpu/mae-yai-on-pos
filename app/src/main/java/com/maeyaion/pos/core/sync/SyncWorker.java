@@ -48,7 +48,13 @@ public final class SyncWorker extends Worker {
             }
 
             StoreKeyManager keys = new StoreKeyManager(context);
-            keys.getCurrentEpoch(registeredStore); // Never create a replacement key during sync.
+            try {
+                keys.getCurrentEpoch(registeredStore);
+            } catch (SyncException missingLocalKey) {
+                // A server wrapper exists only after an already trusted device explicitly approved this installation.
+                new StoreKeyEnrollmentService(context, api).installCurrentDeviceKey(registeredStore);
+                keys.getCurrentEpoch(registeredStore);
+            }
             SyncPushCoordinator push = new SyncPushCoordinator(database, api, keys);
             SyncPullCoordinator pull = new SyncPullCoordinator(database, api);
             SyncInboxProcessor inbox = new SyncInboxProcessor(database);
