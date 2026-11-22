@@ -104,7 +104,7 @@ public final class SyncBaselineCoordinator {
         } catch (JSONException | IOException | GeneralSecurityException error) {
             throw new SyncException("Unable to export encrypted sync baseline", error);
         } finally {
-            java.util.Arrays.fill(passwordCopy, Character.MIN_VALUE);
+            java.util.Arrays.fill(passwordCopy, (char) 0);
             if (localKeyWrapper != null) java.util.Arrays.fill(localKeyWrapper, (byte) 0);
             deleteQuietly(snapshot);
             deleteQuietly(encrypted);
