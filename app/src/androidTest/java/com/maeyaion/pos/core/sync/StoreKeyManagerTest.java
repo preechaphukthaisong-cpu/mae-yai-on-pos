@@ -56,6 +56,22 @@ public final class StoreKeyManagerTest {
         Arrays.fill(historical, (byte) 0);
     }
 
+    @Test public void historicalEpochCanBeRestoredWithoutRollingBackCurrentEpoch() throws Exception {
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        String storeId = "history_store_" + System.nanoTime();
+        StoreKeyManager manager = new StoreKeyManager(context);
+        manager.initializeStore(storeId);
+        byte[] epochOne = manager.getStoreKey(storeId, 1L);
+        manager.rotateStoreKey(storeId);
+        context.getSharedPreferences("maeyai_store_keys_v1", Context.MODE_PRIVATE)
+                .edit().remove("store_key_" + storeId + "_1").commit();
+
+        manager.importStoreKey(storeId, 1L, epochOne);
+        assertEquals(2L, manager.getCurrentEpoch(storeId));
+        assertArrayEquals(epochOne, manager.getStoreKey(storeId, 1L));
+        Arrays.fill(epochOne, (byte) 0);
+    }
+
     @Test public void rejectsInvalidStoreIdentifiersAndUninitializedReads() throws Exception {
         StoreKeyManager manager = new StoreKeyManager(
                 InstrumentationRegistry.getInstrumentation().getTargetContext());
