@@ -52,8 +52,10 @@ public final class DebtPaymentService {
    db.opLogDao().append(new OpLogEntity(UUID.randomUUID().toString(),"DEBT_PAID","DEBT_BATCH",operation,body,paidAtUtc));
    db.backupJournalDao().append(new BackupJournalEntity(0,operation,"DEBT_PAID",body,sha256(body),5,paidAtUtc,0));
    try {
+    JSONObject syncPayload = new JSONObject(body);
+    syncPayload.put("paid_at_utc", paidAtUtc);
     syncOutbox.appendUnboundInTransaction("upsert","debt_payment_batch",operation,
-      new JSONObject(body),paidAtUtc);
+      syncPayload,paidAtUtc);
    } catch(JSONException | SyncException error) {
     throw new IllegalStateException("Unable to append debt payment sync event",error);
    }
