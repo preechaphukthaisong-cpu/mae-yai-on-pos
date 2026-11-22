@@ -1,31 +1,55 @@
-# Android sync transport foundation
+# Android sync transport and deployment decisions
 
-This branch adds a strict HTTPS transport boundary only. It does not enable synchronization in the POS runtime.
+## Deployment decisions approved by the system owner
 
-## Current components
+- Reuse the existing Google Cloud project: `Maeyai-On-POS`.
+- Use the HTTPS service URL provisioned by Google Cloud Run; do not purchase or configure a custom domain in the initial deployment.
+- Optimize the initial deployment for low cost and small-store usage.
+- Use Cloud Run for the API and Cloud SQL PostgreSQL for the shared event store when production provisioning is approved.
+- Keep Google Drive as an encrypted backup mirror, not as the primary database.
+- Do not create billable Cloud resources until the estimated recurring and usage-based costs are presented and explicitly approved.
+- Do not place OAuth client secrets, database credentials, encryption keys, or service-account keys in source control or chat.
 
-- `DeviceIdentityStore` persists a stable installation UUID in app-private preferences. A reinstall or cleared app data is a new installation.
-- `SyncAuthTokenProvider` is the narrow boundary for obtaining a Google ID token. A Google access token or one-time server authorization code is not accepted by this contract.
-- `SyncApiClient` implements the existing v1 backend routes for store lookup/creation, device registration, event push/pull, and opaque encrypted snapshot upload/download.
-- Requests have bounded timeouts and response sizes, do not follow redirects, disable caching, and require HTTPS.
+These are deployment decisions, not evidence that Cloud Run, Cloud SQL, OAuth, or Drive server authorization have been provisioned or tested.
 
-## Not implemented yet — do not activate
+## Current Android implementation
 
-1. There is no production base URL or Google ID-token provider configured.
-2. The current Room `backup_journal` row contains an opaque `op` and `payload`; it does not provide a validated entity type, entity ID, or base entity version matching the server event contract. It cannot safely be translated into a server event by guessing.
-3. Push acknowledgements are not yet persisted as a durable per-event server cursor/ack state.
-4. Pull cursors are not persisted, and remote events are not validated and applied transactionally into Room.
-5. Financial entities require immutable, domain-specific event application and reversal semantics. Generic JSON-to-SQL writes are prohibited.
-6. Conflict review/resolution UI, durable WorkManager orchestration, Google Drive server authorization-code flow, and full snapshot restore integration remain outstanding.
-7. No deployed HTTPS backend or physical multi-device qualification exists.
+- HTTPS-only `SyncApiClient` with bounded request/response sizes, timeouts, no redirects, and no HTTP cache.
+- Google ID-token provider and sign-in configuration for ID token, server authorization code, and Drive app-data scope.
+- Device identity and idempotent store/device bootstrap. The database-aware bootstrap binds pre-cloud outbox rows to one store and refuses cross-store rebinding.
+- Room v6 durable outbox, inbox, per-store cursor, and per-entity version tables with a non-destructive 5-to-6 migration.
+- Versioned event envelopes with canonical JSON SHA-256 validation.
+- Transactional outbox writes for supported product, inventory, sale, debt-payment, return, cancellation, and sale-price operations.
+- Push/pull coordinators with durable acknowledgements, retry accounting, strict server response validation, conflict quarantine, and acknowledged-local-echo suppression.
+- Remote replay runs under `SyncReplayContext`; the outbox writer suppresses local echo events while a domain replay handler is applying remote state.
 
-## Required next implementation slices
+## CI evidence
 
-- Define a versioned domain event envelope for each supported aggregate and record it in the same Room transaction as the business write.
-- Add Room schema migration for durable outbox, inbox cursor, server entity versions, and conflict records without dropping or rebuilding existing tables.
-- Implement idempotent upload/ack and ordered pull/apply using one transaction per page, with crash-recovery tests.
-- Implement explicit conflict handling; never silently overwrite sales, payments, stock movements, returns, or cancellations.
-- Wire Google sign-in ID-token refresh, device registration/revocation, and unique WorkManager jobs.
-- Deploy the backend behind HTTPS and run two-or-more-device offline/reconnect/restore tests.
+Latest commit at the time of this document: `1b0cb0f04bc69617e5cb0af4ff47d1992a0d4a8c`.
 
-Until all slices pass, keep the feature disabled and the existing offline POS behavior unchanged.
+- Android unit tests and debug APK build: passed.
+- Android database instrumentation tests: passed.
+- Backend checks, migrations, and tests: passed.
+
+CI success does not establish physical-device, production-cloud, or multi-device correctness.
+
+## Production blockers — keep sync disabled
+
+1. Typed domain replay handlers are not yet implemented and wired for every supported aggregate. Do not use generic JSON-to-SQL mapping.
+2. Customer data and credit-sale dependencies are not synchronized. Customer identity data must not be sent until an end-to-end encrypted payload design is implemented and reviewed.
+3. Event payloads are currently sent as JSON and stored in backend PostgreSQL JSONB. End-to-end encryption, per-store key provisioning, device key wrapping, recovery, rotation, and revocation are required before real business data is transmitted.
+4. Conflict resolution workflow and user interface are incomplete. Financial and stock conflicts must never be auto-merged.
+5. Unique WorkManager push/pull orchestration, network constraints, retry/backoff, and explicit opt-in/activation gates are not wired.
+6. Production OAuth configuration, Cloud Run deployment, Cloud SQL provisioning, Secret Manager configuration, and Drive server authorization-code flow are not completed or verified.
+7. Physical qualification is still required for multiple devices, offline/reconnect, process death, interrupted upload/download, conflict recovery, backup restore, and data preservation.
+
+## Required implementation order
+
+1. Implement and test typed, idempotent domain replay handlers using the same Room transaction and business invariants as local operations.
+2. Design and implement end-to-end encryption before transmitting any real store event payload.
+3. Implement conflict inspection and explicit resolution without overwriting financial history.
+4. Add unique WorkManager orchestration with network constraints, exponential backoff, bounded retries, and a default-disabled feature gate.
+5. Prepare a costed Cloud Run/Cloud SQL deployment plan. Provision only after owner approval; keep secrets in Secret Manager.
+6. Complete physical multi-device and restore qualification before enabling live sync.
+
+The existing offline POS behavior, application ID, Room data, and release-signing identity must remain unchanged. Do not merge this draft, publish a release, provision billable cloud resources, or enable live sync without the required approvals and acceptance evidence.
