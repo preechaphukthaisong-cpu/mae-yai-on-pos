@@ -9,6 +9,7 @@ import androidx.room.PrimaryKey;
 /** Durable local events. Rows are retained after acknowledgement for echo suppression. */
 @Entity(tableName = "sync_outbox",
         indices = {@Index(value = {"delivery_state", "created_at_utc", "event_id"}),
+                @Index(value = {"store_id", "delivery_state"}),
                 @Index(value = "event_id", unique = true)})
 public final class SyncOutboxEntity {
     @PrimaryKey @NonNull @ColumnInfo(name = "event_id") public final String event_id;
