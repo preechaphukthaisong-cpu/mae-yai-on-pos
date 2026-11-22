@@ -91,9 +91,7 @@ public final class SyncInboxProcessor {
                     long lastSequence = cursor == null ? 0 : cursor.last_applied_sequence;
 
                     if (event.server_sequence <= lastSequence) {
-                        dao.markRemoteApplied(event.event_id);
-                        applied[0] = true;
-                        return;
+                        throw new SyncException("Unapplied remote event is behind the committed cursor; refusing to discard it");
                     }
                     if (event.server_sequence != lastSequence + 1) {
                         throw new SyncException("Remote event sequence gap; refusing to advance cursor");
