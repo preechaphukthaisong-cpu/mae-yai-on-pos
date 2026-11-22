@@ -79,21 +79,85 @@ public final class SyncDomainEventApplierTest {
         assertEquals("Original", db.barcodeRegistryDao().findByBarcode("2000001").displayName);
     }
 
-    @Test public void unsupportedFinancialAggregateFailsClosed() throws Exception {
-        SyncInboxEntity event = new SyncInboxEntity("11111111-1111-4111-8111-111111111111",
-                "store-1", 1, "upsert", "sale", "sale-1", 0, 1,
-                "{\"schemaVersion\":1,\"data\":{}}", "0".repeat(64),
-                "2026-11-21T00:00:00Z", 0);
+    @Test public void saleReplayCreatesSaleLinesAndAccountingProjections() throws Exception {
         SyncDomainEventApplier applier = new SyncDomainEventApplier(db);
+        SyncInboxEntity product = productEvent("SKU-SALE", "2000002", "SYSTEM",
+                "Sale product", 500, 200, 0);
+        db.runInTransaction(() -> {
+            try { applier.apply(product); }
+            catch (Exception error) { throw new IllegalStateException(error); }
+        });
+        SyncInboxEntity sale = saleEvent();
+        db.runInTransaction(() -> {
+            try { applier.apply(sale); }
+            catch (Exception error) { throw new IllegalStateException(error); }
+        });
+
+        assertNotNull(db.saleDao().findById("sale-remote-1"));
+        assertEquals(1, db.saleLineDao().forSale("sale-remote-1").size());
+        assertEquals(500L, db.dailySummaryDao().find("2026-11-21").net_sales_satang);
+        assertEquals(1000L, db.productDailyDao().topSellers("2026-11-21", "2026-11-21")
+                .get(0).net_qty_milli);
+    }
+
+    @Test public void saleReplayRejectsMismatchedFinancialTotalsAtomically() throws Exception {
+        SyncDomainEventApplier applier = new SyncDomainEventApplier(db);
+        SyncInboxEntity product = productEvent("SKU-SALE", "2000002", "SYSTEM",
+                "Sale product", 500, 200, 0);
+        db.runInTransaction(() -> {
+            try { applier.apply(product); }
+            catch (Exception error) { throw new IllegalStateException(error); }
+        });
+        SyncInboxEntity invalid = saleEventWithTotal(999);
         try {
             db.runInTransaction(() -> {
-                try { applier.apply(event); }
+                try { applier.apply(invalid); }
                 catch (Exception error) { throw new IllegalStateException(error); }
             });
-            fail("Unsupported financial events must not be applied");
+            fail("Mismatched sale totals must be rejected");
         } catch (IllegalStateException expected) {
-            assertTrue(expected.getCause().getMessage().contains("No typed replay handler"));
+            assertNull(db.saleDao().findById("sale-remote-1"));
+            assertNull(db.dailySummaryDao().find("2026-11-21"));
         }
+    }
+
+    private static SyncInboxEntity saleEvent() throws Exception {
+        return saleEventWithTotal(500);
+    }
+
+    private static SyncInboxEntity saleEventWithTotal(long total) throws Exception {
+        JSONObject data = new JSONObject();
+        data.put("sale_id", "sale-remote-1");
+        data.put("idempotency_key", "remote-idem-1");
+        data.put("type", "CASH");
+        data.put("payment_status", "PAID");
+        data.put("lifecycle_status", "COMPLETED");
+        data.put("customer_id", JSONObject.NULL);
+        data.put("customer", JSONObject.NULL);
+        data.put("subtotal_satang", 500);
+        data.put("fee_total_satang", 0);
+        data.put("total_satang", total);
+        data.put("cash_received_satang", 500);
+        data.put("change_satang", 0);
+        data.put("content_hash", "a".repeat(64));
+        data.put("created_at_utc", "2026-11-21T00:00:00Z");
+        data.put("paid_at_utc", "2026-11-21T00:00:00Z");
+        JSONObject line = new JSONObject();
+        line.put("id", "sale-line-remote-1");
+        line.put("line_no", 1);
+        line.put("sku", "SKU-SALE");
+        line.put("name_snap", "Sale product");
+        line.put("price_snap_satang", 500);
+        line.put("cost_snap_satang", 200);
+        line.put("qty_milli", 1000);
+        line.put("line_total_satang", 500);
+        data.put("lines", new org.json.JSONArray().put(line));
+        JSONObject payload = new JSONObject();
+        payload.put("schemaVersion", 1);
+        payload.put("data", data);
+        return new SyncInboxEntity("11111111-1111-4111-8111-111111111111",
+                "store-1", 2, "upsert", "sale", "sale-remote-1", 0, 1,
+                payload.toString(), "0".repeat(64), "2026-11-21T00:00:00Z", 0);
     }
 
     private static SyncInboxEntity productEvent(String sku, String barcode, String source,
