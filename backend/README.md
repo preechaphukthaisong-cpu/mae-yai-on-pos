@@ -36,7 +36,8 @@ All authenticated requests use Authorization: Bearer <Google ID token>. Device-s
 - GET /v1/devices — list active devices and their public-key fingerprints for explicit approval.
 - GET /v1/key-epochs/current — read the current store key epoch.
 - POST /v1/key-epochs — atomically publish a new epoch with one RSA-OAEP wrapper for every active device and an opaque recovery wrapper.
-- POST /v1/key-wrappers — an already trusted device explicitly approves and wraps the current epoch for a newly registered device.
+- POST /v1/key-wrappers — an already trusted device explicitly approves and wraps any historical epoch it already holds for a newly registered device.
+- GET /v1/key-wrappers — retrieve every historical epoch wrapped specifically for this device.
 - GET /v1/key-wrappers/current — retrieve this device's current epoch wrapper.
 - GET /v1/key-wrappers/recovery?epoch=N — retrieve the opaque recovery wrapper.
 - POST /v1/devices/{deviceId}/revoke — rotate the store key and revoke a device in one transaction. DELETE is rejected after key enrollment unless the key-rotation path is used.
@@ -51,7 +52,7 @@ All authenticated requests use Authorization: Bearer <Google ID token>. Device-s
 
 ## Deployment is not activation
 
-The backend requires a real PostgreSQL instance, HTTPS hosting, OAuth client configuration, and secret provisioning. This repository change does not create cloud infrastructure, does not contain credentials, and does not activate multi-device sync in the Android UI. The Android client has durable local outbox/inbox processing, an encrypted transport codec, product replay, a fail-closed WorkManager path, baseline export/restore orchestration and a conflict review screen. Typed financial/customer replay and cross-device key enrollment remain incomplete; live sync remains disabled.
+The backend requires a real PostgreSQL instance, HTTPS hosting, OAuth client configuration, and secret provisioning. This repository change does not create cloud infrastructure, does not contain credentials, and does not activate multi-device sync in the Android UI. The Android client has durable local outbox/inbox processing, encrypted transport, typed product/inventory, sale, return, cancellation, debt, customer and allow-listed store-setting replay, per-device historical key enrollment/recovery, baseline export/restore orchestration, serialized WorkManager execution and durable conflict review. The conflict UI remains review-only; live sync remains disabled.
 
 ## Security boundary before production
 
