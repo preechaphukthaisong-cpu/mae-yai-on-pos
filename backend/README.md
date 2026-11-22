@@ -52,7 +52,7 @@ All authenticated requests use Authorization: Bearer <Google ID token>. Device-s
 
 ## Deployment is not activation
 
-The backend requires a real PostgreSQL instance, HTTPS hosting, OAuth client configuration, and secret provisioning. This repository change does not create cloud infrastructure, does not contain credentials, and does not activate multi-device sync in the Android UI. The Android client has durable local outbox/inbox processing, encrypted transport, typed product/inventory, sale, return, cancellation, debt, customer and allow-listed store-setting replay, per-device historical key enrollment/recovery, baseline export/restore orchestration, serialized WorkManager execution and durable conflict review. The conflict UI remains review-only; live sync remains disabled.
+The backend requires a real PostgreSQL instance, HTTPS hosting, OAuth client configuration, and secret provisioning. This repository change does not create cloud infrastructure, does not contain credentials, and does not activate multi-device sync in the Android UI. The Android client has durable local outbox/inbox processing, encrypted transport, typed product/inventory, sale, return, cancellation, debt, customer and allow-listed store-setting replay, per-device historical key enrollment/recovery, baseline export/restore orchestration, serialized WorkManager execution and durable conflict review. The conflict UI supports inspecting inbound replay quarantine and explicitly retrying the same blocked event after the operator manually repairs local data; it never skips a server sequence or auto-merges financial records. Outbound optimistic-concurrency conflicts remain quarantined for manual investigation. Live sync remains disabled.
 
 ## Security boundary before production
 
