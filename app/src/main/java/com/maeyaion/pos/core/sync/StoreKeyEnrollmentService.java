@@ -203,9 +203,25 @@ public final class StoreKeyEnrollmentService {
 
     /** Rotation and revocation are one backend transaction; the revoked device receives no new key. */
     public long rotateAndRevokeDevice(@NonNull String storeId, @NonNull String recoveryKey,
-            @NonNull String targetDeviceId) throws SyncException {
-        if (!isUuid(targetDeviceId) || targetDeviceId.equals(identity.getOrCreateDeviceId())) {
-            throw new SyncException("A valid other device must be selected for revocation");
+            @NonNull String targetDeviceId, @NonNull String confirmedFingerprint)
+            throws SyncException {
+        if (!isUuid(targetDeviceId) || targetDeviceId.equals(identity.getOrCreateDeviceId())
+                || confirmedFingerprint == null || !confirmedFingerprint.matches("(?i)[a-f0-9]{64}")) {
+            throw new SyncException("A valid other device and verified fingerprint are required for revocation");
+        }
+        try {
+            JSONArray devices = api.listDevices().getJSONArray("devices");
+            boolean matched = false;
+            for (int i = 0; i < devices.length(); i++) {
+                JSONObject device = devices.getJSONObject(i);
+                if (targetDeviceId.equals(device.getString("id"))) {
+                    matched = confirmedFingerprint.equalsIgnoreCase(device.getString("key_fingerprint"));
+                    break;
+                }
+            }
+            if (!matched) throw new SyncException("Target device fingerprint does not match the registered device");
+        } catch (JSONException error) {
+            throw new SyncException("Unable to verify target device fingerprint", error);
         }
         return rotate(storeId, recoveryKey, targetDeviceId);
     }
