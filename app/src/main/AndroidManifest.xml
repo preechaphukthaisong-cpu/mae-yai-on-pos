@@ -57,6 +57,10 @@
             </intent-filter>
         </activity>
         <activity
+            android:name=".feature.store.SyncConflictReviewActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        <activity
             android:name=".app.MainActivity"
             android:exported="true"
             android:screenOrientation="portrait">
