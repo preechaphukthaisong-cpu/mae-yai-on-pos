@@ -31,7 +31,15 @@ public final class StoreKeyEnrollmentService {
     public void initializeFirstDevice(@NonNull String storeId, @NonNull String recoveryKey)
             throws SyncException {
         long serverEpoch = currentServerEpoch();
-        if (serverEpoch != 0) throw new SyncException("Store encryption is already initialized");
+        if (serverEpoch > 0) {
+            long localEpoch = storeKeys.getCurrentEpoch(storeId);
+            if (localEpoch == serverEpoch) {
+                // Idempotent retry after the server committed epoch 1 but the response was lost.
+                verifyCommittedEpoch(storeId, serverEpoch);
+                return;
+            }
+            throw new SyncException("Store encryption is already initialized on another enrollment state");
+        }
         JSONObject devices = api.listDevices();
         try {
             JSONArray rows = devices.getJSONArray("devices");
