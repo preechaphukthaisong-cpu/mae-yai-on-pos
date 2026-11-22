@@ -47,6 +47,18 @@ public final class SyncDomainEventApplierTest {
         InstrumentationRegistry.getInstrumentation().getTargetContext().deleteDatabase(databaseName);
     }
 
+    @Test public void legacyPushCoordinatorRefusesPlaintextBeforeNetworkOrDatabaseAccess() throws Exception {
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        SyncApiClient api = new SyncApiClient("https://sync.invalid",
+                () -> "test-id-token", new DeviceIdentityStore(context));
+        try {
+            new SyncPushCoordinator(db, api).pushPending("store-test");
+            fail("Plaintext push constructor must fail closed");
+        } catch (SyncException expected) {
+            assertTrue(expected.getMessage().contains("encryption is mandatory"));
+        }
+    }
+
     @Test public void productReplayCreatesRegistryAndProductAtomically() throws Exception {
         SyncInboxEntity event = productEvent("SKU-REMOTE", "2000001", "SYSTEM",
                 "Remote product", 1250, 500, 0);
