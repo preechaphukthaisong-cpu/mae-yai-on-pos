@@ -329,7 +329,7 @@ public final class SyncSettingsActivity extends Activity {
         String recovery = recoveryKeyInput.getText().toString().trim();
         char[] password = recoveryPasswordInput.getText().toString().toCharArray();
         if (storeId == null || recovery.isEmpty() || password.length < 12) {
-            java.util.Arrays.fill(password, '\\0');
+            java.util.Arrays.fill(password, '\0');
             showStatus("ต้องกรอก Recovery Key และ Recovery Password อย่างน้อย 12 ตัว");
             return;
         }
@@ -344,7 +344,7 @@ public final class SyncSettingsActivity extends Activity {
             } catch (Exception error) {
                 runOnUiThread(() -> showStatus("ส่งออก Baseline ไม่สำเร็จ: " + message(error)));
             } finally {
-                java.util.Arrays.fill(password, '\\0');
+                java.util.Arrays.fill(password, '\0');
             }
         });
     }
@@ -382,7 +382,7 @@ public final class SyncSettingsActivity extends Activity {
         char[] password = recoveryPasswordInput.getText().toString().toCharArray();
         boolean usePassword = password.length > 0;
         if (usePassword == !recovery.isEmpty()) {
-            java.util.Arrays.fill(password, '\\0');
+            java.util.Arrays.fill(password, '\0');
             showStatus("กรอก Recovery Password หรือ Recovery Key เพียงอย่างเดียว");
             return;
         }
@@ -397,7 +397,7 @@ public final class SyncSettingsActivity extends Activity {
             } catch (Exception error) {
                 runOnUiThread(() -> showStatus("กู้คืน Baseline ไม่สำเร็จ: " + message(error)));
             } finally {
-                java.util.Arrays.fill(password, '\\0');
+                java.util.Arrays.fill(password, '\0');
             }
         });
     }
