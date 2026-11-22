@@ -43,6 +43,10 @@ public final class SyncDomainEventApplier implements SyncInboxProcessor.DomainEv
         if (!"upsert".equals(event.operation)) {
             throw new SyncException("Unsupported remote operation for " + event.entity_type);
         }
+        if ("customer".equals(event.entity_type)) {
+            applyCustomer(event);
+            return;
+        }
         if ("product".equals(event.entity_type)) {
             applyProduct(event);
             return;
@@ -64,6 +68,64 @@ public final class SyncDomainEventApplier implements SyncInboxProcessor.DomainEv
             return;
         }
         throw new SyncException("No typed replay handler is registered for entity type: " + event.entity_type);
+    }
+
+    /** Replays customer PII only after the inbox decoder has authenticated and decrypted it. */
+    private void applyCustomer(SyncInboxEntity event) throws SyncException {
+        try {
+            JSONObject data = unwrap(event);
+            String customerId = requiredString(data, "customer_id");
+            if (!event.entity_id.equals(customerId)
+                    || !java.util.UUID.fromString(customerId).toString().equalsIgnoreCase(customerId)) {
+                throw new SyncException("Customer event identity is invalid");
+            }
+            String name = requiredString(data, "name");
+            String nameKey = requiredString(data, "name_key");
+            String identityKey = requiredString(data, "identity_key");
+            String createdAt = requiredString(data, "created_at_utc");
+            String updatedAt = requiredString(data, "updated_at_utc");
+            Instant created = Instant.parse(createdAt);
+            Instant updated = Instant.parse(updatedAt);
+            if (updated.isBefore(created)) throw new SyncException("Customer update timestamp precedes creation");
+            String normalizedName = java.text.Normalizer.normalize(name,
+                    java.text.Normalizer.Form.NFC).trim().replaceAll("\\s+", " ")
+                    .toLowerCase(java.util.Locale.ROOT);
+            if (!normalizedName.equals(nameKey) || name.length() > 200
+                    || nameKey.length() > 240 || identityKey.length() > 240) {
+                throw new SyncException("Customer normalized identity fields are inconsistent");
+            }
+            CustomerEntity collision = database.customerDao()
+                    .findByNormalizedIdentity(nameKey, identityKey);
+            if (collision != null && !collision.id.equals(customerId)) {
+                throw new SyncException("Customer normalized identity belongs to another local customer");
+            }
+            CustomerEntity existing = database.customerDao().findById(customerId);
+            CustomerEntity incoming = new CustomerEntity(customerId, name, nameKey,
+                    identityKey, createdAt, updatedAt);
+            if (existing == null) {
+                database.customerDao().insert(incoming);
+            } else {
+                if (!existing.created_at_utc.equals(createdAt)
+                        || !existing.identity_key.equals(identityKey)) {
+                    throw new SyncException("Customer immutable identity changed; manual resolution required");
+                }
+                Instant localUpdated = Instant.parse(existing.updated_at_utc);
+                if (updated.isBefore(localUpdated)) {
+                    throw new SyncException("Customer update is older than local data; manual resolution required");
+                }
+                if (updated.equals(localUpdated)) {
+                    if (!existing.name.equals(name) || !existing.name_key.equals(nameKey)) {
+                        throw new SyncException("Customer changed with the same timestamp; manual resolution required");
+                    }
+                } else if (database.customerDao().update(incoming) != 1) {
+                    throw new SyncException("Customer snapshot update failed");
+                }
+            }
+            appendAudit(event, "SYNC_REPLAY_CUSTOMER", "CUSTOMER", customerId);
+        } catch (JSONException | java.time.DateTimeException | IllegalArgumentException error) {
+            if (error instanceof SyncException) throw (SyncException) error;
+            throw new SyncException("Customer event payload is malformed", error);
+        }
     }
 
     private void applyProduct(SyncInboxEntity event) throws SyncException {
