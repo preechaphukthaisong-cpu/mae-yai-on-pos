@@ -27,7 +27,7 @@ public final class SyncPushCoordinator {
 
     /** Legacy constructor intentionally cannot transmit: E2E encryption is mandatory. */
     public SyncPushCoordinator(@NonNull AppDatabase database, @NonNull SyncApiClient api) {
-        this(database, api, null);
+        this(database, api, (EncryptedSyncEventCodec) null);
     }
 
     public SyncPushCoordinator(@NonNull AppDatabase database, @NonNull SyncApiClient api,
