@@ -126,6 +126,11 @@ public final class SyncApiClient {
         return requestJson("GET", "/v1/key-wrappers/current", null, true);
     }
 
+    /** Returns every key epoch wrapped specifically for this registered device. */
+    @NonNull public JSONObject fetchDeviceKeyWrappers() throws SyncException {
+        return requestJson("GET", "/v1/key-wrappers", null, true);
+    }
+
     @NonNull public JSONObject fetchRecoveryStoreKeyWrapper(long epoch) throws SyncException {
         if (epoch < 1) throw new SyncException("Invalid store key epoch");
         return requestJson("GET", "/v1/key-wrappers/recovery?epoch=" + epoch, null, true);
