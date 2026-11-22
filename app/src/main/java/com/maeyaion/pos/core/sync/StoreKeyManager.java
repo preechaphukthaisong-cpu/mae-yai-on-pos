@@ -33,6 +33,7 @@ public final class StoreKeyManager {
     private static final String KEY_ALIAS_PREFIX = "maeyai_store_wrap_";
     private static final String CURRENT_PREFIX = "current_epoch_";
     private static final String ENTRY_PREFIX = "store_key_";
+    private static final String PENDING_ROTATION_PREFIX = "pending_rotation_";
     private static final int NONCE_BYTES = 12;
     private static final int TAG_BITS = 128;
 
@@ -52,7 +53,7 @@ public final class StoreKeyManager {
         long current = currentEpoch(storeId);
         if (current > 0) return current;
         ensureWrappingKey(storeId);
-        return persistNewEpoch(storeId, 1L);
+        return persistNewEpoch(storeId, 1L, false);
     }
 
     /** Returns a defensive copy of the requested epoch's 256-bit key. */
@@ -149,7 +150,7 @@ public final class StoreKeyManager {
         byte[] previousKey = getStoreKey(storeId, current);
         Arrays.fill(previousKey, (byte) 0);
         ensureWrappingKey(storeId);
-        return persistNewEpoch(storeId, current + 1);
+        return persistNewEpoch(storeId, current + 1, true);
     }
 
     public synchronized long getCurrentEpoch(@NonNull String storeId) throws SyncException {
@@ -159,7 +160,33 @@ public final class StoreKeyManager {
         return epoch;
     }
 
-    private long persistNewEpoch(String storeId, long epoch) throws SyncException {
+    public synchronized long getPendingRotationEpoch(@NonNull String storeId) throws SyncException {
+        validateStoreId(storeId);
+        return preferences.getLong(pendingRotationKey(storeId), 0L);
+    }
+
+    /** Records a locally prepared epoch after recovery from a process interruption. */
+    public synchronized void markPendingRotation(@NonNull String storeId, long epoch)
+            throws SyncException {
+        validateStoreId(storeId);
+        if (epoch < 2 || epoch != currentEpoch(storeId)
+                || !preferences.edit().putLong(pendingRotationKey(storeId), epoch).commit()) {
+            throw new SyncException("Unable to persist pending store-key rotation state");
+        }
+    }
+
+    /** Clears the pending marker only after the server confirms this exact epoch. */
+    public synchronized void confirmRotation(@NonNull String storeId, long epoch)
+            throws SyncException {
+        validateStoreId(storeId);
+        long pending = getPendingRotationEpoch(storeId);
+        if (pending != epoch) throw new SyncException("Store-key rotation confirmation does not match the pending epoch");
+        if (!preferences.edit().remove(pendingRotationKey(storeId)).commit()) {
+            throw new SyncException("Unable to persist store-key rotation confirmation");
+        }
+    }
+
+    private long persistNewEpoch(String storeId, long epoch, boolean pendingRotation) throws SyncException {
         byte[] storeKey = new byte[AesGcmEventCipher.KEY_BYTES];
         random.nextBytes(storeKey);
         try {
@@ -173,10 +200,11 @@ public final class StoreKeyManager {
             ByteBuffer packed = ByteBuffer.allocate(nonce.length + ciphertext.length);
             packed.put(nonce).put(ciphertext);
             String encoded = Base64.getEncoder().encodeToString(packed.array());
-            boolean saved = preferences.edit()
+            SharedPreferences.Editor editor = preferences.edit()
                     .putString(entryKey(storeId, epoch), encoded)
-                    .putLong(currentKey(storeId), epoch)
-                    .commit();
+                    .putLong(currentKey(storeId), epoch);
+            if (pendingRotation) editor.putLong(pendingRotationKey(storeId), epoch);
+            boolean saved = editor.commit();
             if (!saved) throw new SyncException("Unable to persist store encryption key");
             return epoch;
         } catch (SyncException error) {
@@ -238,6 +266,7 @@ public final class StoreKeyManager {
     }
 
     private static String currentKey(String storeId) { return CURRENT_PREFIX + storeId; }
+    private static String pendingRotationKey(String storeId) { return PENDING_ROTATION_PREFIX + storeId; }
     private static String entryKey(String storeId, long epoch) {
         return ENTRY_PREFIX + storeId + "_" + epoch;
     }
