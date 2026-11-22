@@ -71,11 +71,9 @@ public final class SyncWorker extends Worker {
             SyncPullCoordinator pull = new SyncPullCoordinator(database, api);
             SyncInboxProcessor inbox = new SyncInboxProcessor(database);
 
-            int pushed = 0;
             for (int batch = 0; batch < 10 && !isStopped(); batch++) {
                 SyncPushCoordinator.PushResult result = push.pushPending(registeredStore);
                 if (result.sent == 0) break;
-                pushed += result.sent;
             }
             if (database.syncQueueDao().pendingOutboxCount(registeredStore) > 0) {
                 return Result.retry();
