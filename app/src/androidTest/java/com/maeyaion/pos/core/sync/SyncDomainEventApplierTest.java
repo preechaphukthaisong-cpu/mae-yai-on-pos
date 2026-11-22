@@ -48,7 +48,7 @@ public final class SyncDomainEventApplierTest {
 
     @Test public void productReplayCreatesRegistryAndProductAtomically() throws Exception {
         SyncInboxEntity event = productEvent("SKU-REMOTE", "2000001", "SYSTEM",
-                "Remote product", 1250, 500, 9000);
+                "Remote product", 1250, 500, 0);
         SyncDomainEventApplier applier = new SyncDomainEventApplier(db);
         db.runInTransaction(() -> {
             try { applier.apply(event); }
@@ -57,7 +57,7 @@ public final class SyncDomainEventApplierTest {
 
         assertNotNull(db.barcodeRegistryDao().findByBarcode("2000001"));
         assertEquals("SYSTEM", db.barcodeRegistryDao().findByBarcode("2000001").sourceType);
-        assertEquals(9000L, db.productDao().findBySku("SKU-REMOTE").stockQtyMilli);
+        assertEquals(0L, db.productDao().findBySku("SKU-REMOTE").stockQtyMilli);
         assertEquals(1250L, db.productDao().findBySku("SKU-REMOTE").priceSatang);
     }
 
