@@ -92,18 +92,20 @@ public final class SyncQueueTransactionTest {
 
     @Test public void aggregateVersionsAdvanceSequentiallyAndRemainIsolated() throws Exception {
         SyncOutboxWriter writer = new SyncOutboxWriter(db);
+        // JSONObject.put throws JSONException; construct payloads before entering Room's
+        // Runnable transaction so checked JSON errors are not hidden by the lambda.
+        JSONObject first = new JSONObject();
+        first.put("name", "First");
+        JSONObject second = new JSONObject();
+        second.put("name", "Second");
+        JSONObject other = new JSONObject();
+        other.put("name", "Other");
         db.runInTransaction(() -> {
             try {
-                JSONObject first = new JSONObject();
-                first.put("name", "First");
                 writer.appendInTransaction("store-1", "upsert", "product",
                         "SKU-1", first, "2026-11-21T00:00:00Z");
-                JSONObject second = new JSONObject();
-                second.put("name", "Second");
                 writer.appendInTransaction("store-1", "upsert", "product",
                         "SKU-1", second, "2026-11-21T00:00:01Z");
-                JSONObject other = new JSONObject();
-                other.put("name", "Other");
                 writer.appendInTransaction("store-1", "upsert", "product",
                         "SKU-2", other, "2026-11-21T00:00:02Z");
             } catch (SyncException error) {
