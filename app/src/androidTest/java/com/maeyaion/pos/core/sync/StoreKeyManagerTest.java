@@ -39,6 +39,9 @@ public final class StoreKeyManagerTest {
 
         assertEquals(2L, manager.rotateStoreKey(storeId));
         assertEquals(2L, manager.getCurrentEpoch(storeId));
+        assertEquals(2L, manager.getPendingRotationEpoch(storeId));
+        StoreKeyManager restarted = new StoreKeyManager(context);
+        assertEquals(2L, restarted.getPendingRotationEpoch(storeId));
         byte[] epochTwo = manager.getStoreKey(storeId, 2L);
         byte[] historical = manager.getStoreKey(storeId, 1L);
 
@@ -51,6 +54,8 @@ public final class StoreKeyManagerTest {
         } catch (SyncException expected) {
             assertTrue(expected.getMessage().contains("Unknown"));
         }
+        manager.confirmRotation(storeId, 2L);
+        assertEquals(0L, manager.getPendingRotationEpoch(storeId));
         Arrays.fill(epochOne, (byte) 0);
         Arrays.fill(epochTwo, (byte) 0);
         Arrays.fill(historical, (byte) 0);
