@@ -23,14 +23,14 @@ test('PostgreSQL enforces store event uniqueness and per-store ordering', {
     await pool.query(
       `INSERT INTO sync_events(store_id, seq, event_id, device_id, entity_type, entity_id,
         operation, base_version, entity_version, payload, payload_sha256)
-       VALUES($1,1,$2,$3,'product','SKU-1','upsert',0,1,'{"sku":"SKU-1"}'::jsonb,$4)`,
+       VALUES($1,1,$2,$3,'product','SKU-1','upsert',0,1,'{"algorithm":"A256GCM","encryptionVersion":1,"aadVersion":1,"keyEpoch":1,"nonce":"AAAAAAAAAAAAAAAA","ciphertext":"AAAAAAAAAAAAAAAAAAAAAA"}'::jsonb,$4)`,
       [storeId, eventId, deviceId, '0'.repeat(64)]
     );
     await assert.rejects(
       pool.query(
         `INSERT INTO sync_events(store_id, seq, event_id, device_id, entity_type, entity_id,
           operation, base_version, entity_version, payload, payload_sha256)
-         VALUES($1,2,$2,$3,'product','SKU-1','upsert',1,2,'{"sku":"SKU-1"}'::jsonb,$4)`,
+         VALUES($1,2,$2,$3,'product','SKU-1','upsert',1,2,'{"algorithm":"A256GCM","encryptionVersion":1,"aadVersion":1,"keyEpoch":1,"nonce":"AAAAAAAAAAAAAAAA","ciphertext":"AAAAAAAAAAAAAAAAAAAAAA"}'::jsonb,$4)`,
         [storeId, eventId, deviceId, '0'.repeat(64)]
       )
     );
