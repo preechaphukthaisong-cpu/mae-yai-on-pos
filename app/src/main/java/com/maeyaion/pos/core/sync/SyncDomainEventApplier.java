@@ -9,6 +9,7 @@ import com.maeyaion.pos.core.db.ProductEntity;
 import com.maeyaion.pos.core.db.CustomerEntity;
 import com.maeyaion.pos.core.db.SaleEntity;
 import com.maeyaion.pos.core.db.SaleLineEntity;
+import com.maeyaion.pos.core.db.SaleReturnLineEntity;
 import com.maeyaion.pos.core.db.DailySummaryEntity;
 import com.maeyaion.pos.core.db.ProductDailyEntity;
 import com.maeyaion.pos.core.db.StockLogEntity;
@@ -16,11 +17,13 @@ import com.maeyaion.pos.core.db.OpLogEntity;
 import com.maeyaion.pos.core.db.BackupJournalEntity;
 import com.maeyaion.pos.core.db.SyncInboxEntity;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.List;
 
 /**
  * Typed inbound domain replay. Every supported business aggregate is validated and applied
