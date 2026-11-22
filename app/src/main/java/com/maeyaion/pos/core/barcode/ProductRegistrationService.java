@@ -110,6 +110,9 @@ public final class ProductRegistrationService {
             JSONObject data = new JSONObject();
             data.put("sku", product.sku);
             data.put("barcode", product.barcode);
+            com.maeyaion.pos.core.db.BarcodeRegistryEntity registry = barcodeAllocator.findRegistered(product.barcode);
+            if (registry == null) throw new IllegalStateException("Product barcode registry row is missing");
+            data.put("barcode_source_type", registry.sourceType);
             data.put("name", product.name);
             data.put("price_satang", product.priceSatang);
             data.put("cost_satang", product.costSatang);
