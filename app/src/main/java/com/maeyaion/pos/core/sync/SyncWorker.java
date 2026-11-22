@@ -62,22 +62,57 @@ public final class SyncWorker extends Worker {
             new StoreKeyEnrollmentService(context, api)
                     .installAllApprovedDeviceKeys(registeredStore);
             keys.getCurrentEpoch(registeredStore);
+            if (!database.syncQueueDao().unresolvedReplayConflicts(registeredStore).isEmpty()) {
+                // A failed remote business mutation blocks later sequence numbers. Do not
+                // retry-loop or advance the cursor until an operator resolves the conflict.
+                return Result.failure();
+            }
             SyncPushCoordinator push = new SyncPushCoordinator(database, api, keys);
             SyncPullCoordinator pull = new SyncPullCoordinator(database, api);
             SyncInboxProcessor inbox = new SyncInboxProcessor(database);
-            push.pushPending(registeredStore);
+
+            int pushed = 0;
+            for (int batch = 0; batch < 10 && !isStopped(); batch++) {
+                SyncPushCoordinator.PushResult result = push.pushPending(registeredStore);
+                if (result.sent == 0) break;
+                pushed += result.sent;
+            }
+            if (database.syncQueueDao().pendingOutboxCount(registeredStore) > 0) {
+                return Result.retry();
+            }
 
             int replayed = 0;
-            for (int page = 0; page < MAX_PULL_PAGES && !isStopped(); page++) {
+            boolean hasMore = false;
+            int pages = 0;
+            do {
+                if (isStopped()) return Result.retry();
                 SyncPullCoordinator.PullResult result = pull.pullPage(registeredStore);
+                pages++;
                 while (replayed < MAX_REPLAY_EVENTS
                         && inbox.applyNext(registeredStore, java.time.Instant.now().toString(), keys)) {
                     replayed++;
                 }
-                if (replayed >= MAX_REPLAY_EVENTS || !result.hasMore) break;
-            }
+                hasMore = result.hasMore;
+                if (replayed >= MAX_REPLAY_EVENTS) break;
+            } while (hasMore && pages < MAX_PULL_PAGES);
+
             if (isStopped()) return Result.retry();
-            push.pushPending(registeredStore);
+            if (!database.syncQueueDao().unresolvedReplayConflicts(registeredStore).isEmpty()) {
+                return Result.failure();
+            }
+            if (hasMore || database.syncQueueDao().unappliedInboxCount(registeredStore) > 0) {
+                return Result.retry();
+            }
+
+            int finalPushBatches = 0;
+            while (finalPushBatches < 10 && !isStopped()) {
+                SyncPushCoordinator.PushResult result = push.pushPending(registeredStore);
+                if (result.sent == 0) break;
+                finalPushBatches++;
+            }
+            if (isStopped() || database.syncQueueDao().pendingOutboxCount(registeredStore) > 0) {
+                return Result.retry();
+            }
             return Result.success();
         } catch (SyncException error) {
             if (error.getHttpStatus() == 401 || error.getHttpStatus() == 403) {
