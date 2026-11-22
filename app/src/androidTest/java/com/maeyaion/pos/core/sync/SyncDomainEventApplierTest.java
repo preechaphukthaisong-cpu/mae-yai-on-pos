@@ -168,18 +168,18 @@ public final class SyncDomainEventApplierTest {
     @Test public void customerReplayStoresPrivateIdentityAndRejectsNormalizedCollision() throws Exception {
         SyncDomainEventApplier applier = new SyncDomainEventApplier(db);
         db.runInTransaction(() -> {
-            try { applier.apply(customerEvent("customer-remote-1", "Somchai", "somchai")); }
+            try { applier.apply(customerEvent("77777777-7777-4777-8777-777777777771", "Somchai", "somchai")); }
             catch (Exception error) { throw new IllegalStateException(error); }
         });
-        assertEquals("Somchai", db.customerDao().findById("customer-remote-1").name);
+        assertEquals("Somchai", db.customerDao().findById("77777777-7777-4777-8777-777777777771").name);
         try {
             db.runInTransaction(() -> {
-                try { applier.apply(customerEvent("customer-remote-2", "SOMCHAI", "somchai")); }
+                try { applier.apply(customerEvent("77777777-7777-4777-8777-777777777772", "SOMCHAI", "somchai")); }
                 catch (Exception error) { throw new IllegalStateException(error); }
             });
             fail("Normalized duplicate customer identity must be rejected");
         } catch (IllegalStateException expected) {
-            assertNull(db.customerDao().findById("customer-remote-2"));
+            assertNull(db.customerDao().findById("77777777-7777-4777-8777-777777777772"));
         }
     }
 
