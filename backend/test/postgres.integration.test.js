@@ -36,6 +36,14 @@ test('PostgreSQL enforces store event uniqueness and per-store ordering', {
     );
     await assert.rejects(
       pool.query(
+        `INSERT INTO sync_conflicts(id, store_id, device_id, event_id, entity_type, entity_id,
+          expected_version, actual_version, submitted_payload)
+         VALUES($1,$2,$3,$4,'product','SKU-PLAINTEXT',0,1,'{"sku":"must-not-persist"}'::jsonb)`,
+        [crypto.randomUUID(), storeId, deviceId, crypto.randomUUID()]
+      )
+    );
+    await assert.rejects(
+      pool.query(
         `INSERT INTO sync_events(store_id, seq, event_id, device_id, entity_type, entity_id,
           operation, base_version, entity_version, payload, payload_sha256)
          VALUES($1,2,$2,$3,'product','SKU-1','upsert',1,2,'{"algorithm":"A256GCM","encryptionVersion":1,"aadVersion":1,"keyEpoch":1,"nonce":"AAAAAAAAAAAAAAAA","ciphertext":"AAAAAAAAAAAAAAAAAAAAAA"}'::jsonb,$4)`,
