@@ -51,6 +51,8 @@ public final class SyncBaselineCoordinator {
         }
         File snapshot = null;
         File encrypted = null;
+        char[] passwordCopy = recoveryPassword.clone();
+        byte[] localKeyWrapper = null;
         try {
             SyncQueueGuard.requireQuiescent(database, storeId);
             JSONObject remoteStore = api.getStore();
@@ -66,7 +68,7 @@ public final class SyncBaselineCoordinator {
                     context.getApplicationContext(), database, directory);
             snapshot = created.file;
             encrypted = new File(directory, created.file.getName().replace(".sqlite", ".myobak"));
-            BackupCrypto.encryptFile(snapshot, encrypted, recoveryPassword.clone(),
+            localKeyWrapper = BackupCrypto.encryptFile(snapshot, encrypted, passwordCopy,
                     recoveryKey, new AndroidKeystoreKeyProtector());
             BackupCrypto.validateEnvelopeFile(encrypted);
             if (encrypted.length() <= 0 || encrypted.length() > MAX_UPLOAD_BYTES) {
@@ -88,6 +90,8 @@ public final class SyncBaselineCoordinator {
         } catch (JSONException | IOException | GeneralSecurityException error) {
             throw new SyncException("Unable to export encrypted sync baseline", error);
         } finally {
+            java.util.Arrays.fill(passwordCopy, '\\0');
+            if (localKeyWrapper != null) java.util.Arrays.fill(localKeyWrapper, (byte) 0);
             deleteQuietly(snapshot);
             deleteQuietly(encrypted);
         }
@@ -208,6 +212,8 @@ public final class SyncBaselineCoordinator {
     private static final class SyncQueueGuard {
         static void requireQuiescent(AppDatabase db, String storeId) throws SyncException {
             if (db.syncQueueDao().pendingOutboxCount(storeId) != 0
+                    || db.syncQueueDao().unboundPendingOutboxCount() != 0
+                    || !db.syncQueueDao().conflictedOutbox(storeId).isEmpty()
                     || db.syncQueueDao().unappliedInboxCount(storeId) != 0) {
                 throw new SyncException("Baseline requires all local outbox and inbox events to be fully synchronized");
             }
