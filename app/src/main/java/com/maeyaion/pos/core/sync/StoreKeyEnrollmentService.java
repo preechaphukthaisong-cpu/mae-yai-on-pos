@@ -104,24 +104,39 @@ public final class StoreKeyEnrollmentService {
         return installAllApprovedDeviceKeys(storeId);
     }
 
-    /** Recovery path for a device that has no usable device wrapper. */
-    public long recoverCurrentDeviceKey(@NonNull String storeId, @NonNull String recoveryKey)
-            throws SyncException {
-        long epoch = currentServerEpoch();
-        if (epoch < 1) throw new SyncException("Store encryption has not been initialized");
-        JSONObject response = api.fetchRecoveryStoreKeyWrapper(epoch);
-        try {
-            if (exactEpoch(response.get("keyEpoch")) != epoch) {
-                throw new SyncException("Recovery wrapper epoch does not match the store");
-            }
-            byte[] key = StoreKeyRecoveryWrapper.unwrap(storeId, epoch, recoveryKey,
-                    response.getString("wrappedKey"));
-            try { storeKeys.importStoreKey(storeId, epoch, key); }
-            finally { Arrays.fill(key, (byte) 0); }
-            return epoch;
-        } catch (JSONException error) {
-            throw new SyncException("Recovery wrapper response is malformed", error);
+    /** Recovery path for a device that has no usable device wrappers. */
+    public long recoverAllDeviceKeyEpochs(@NonNull String storeId,
+            @NonNull String recoveryKey) throws SyncException {
+        long currentEpoch = currentServerEpoch();
+        if (currentEpoch < 1 || currentEpoch > 10000) {
+            throw new SyncException("Store key history is absent or exceeds the supported recovery limit");
         }
+        // Import oldest to newest. StoreKeyManager permits a missing historical epoch
+        // without lowering the current-epoch pointer.
+        for (long epoch = 1; epoch <= currentEpoch; epoch++) {
+            JSONObject response = api.fetchRecoveryStoreKeyWrapper(epoch);
+            try {
+                if (exactEpoch(response.get("keyEpoch")) != epoch) {
+                    throw new SyncException("Recovery wrapper epoch does not match the requested history entry");
+                }
+                byte[] key = StoreKeyRecoveryWrapper.unwrap(storeId, epoch, recoveryKey,
+                        response.getString("wrappedKey"));
+                try { storeKeys.importStoreKey(storeId, epoch, key); }
+                finally { Arrays.fill(key, (byte) 0); }
+            } catch (JSONException error) {
+                throw new SyncException("Recovery wrapper response is malformed", error);
+            }
+        }
+        if (storeKeys.getCurrentEpoch(storeId) != currentEpoch) {
+            throw new SyncException("Recovered store key history does not reach the server's current epoch");
+        }
+        return currentEpoch;
+    }
+
+    /** Compatibility entry point; recovery restores every epoch required by retained events. */
+    public long recoverCurrentDeviceKey(@NonNull String storeId,
+            @NonNull String recoveryKey) throws SyncException {
+        return recoverAllDeviceKeyEpochs(storeId, recoveryKey);
     }
 
     /** Approves a new device after the operator compares and confirms its displayed fingerprint. */
