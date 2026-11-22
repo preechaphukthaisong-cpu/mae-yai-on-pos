@@ -127,7 +127,9 @@ public final class SyncInboxProcessor {
                     }
 
                     // Must call a domain service that writes through this same AppDatabase transaction.
-                    applier.apply(event);
+                    try (SyncReplayContext.Scope ignored = SyncReplayContext.enter()) {
+                        applier.apply(event);
+                    }
                     dao.saveEntityVersion(new SyncEntityVersionEntity(event.entity_type,
                             event.entity_id, event.entity_version, nowUtc));
                     if (dao.markRemoteApplied(event.event_id) != 1) {
