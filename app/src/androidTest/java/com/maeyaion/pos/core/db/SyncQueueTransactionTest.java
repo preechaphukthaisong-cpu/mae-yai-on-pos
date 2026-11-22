@@ -31,7 +31,7 @@ public final class SyncQueueTransactionTest {
         db = Room.databaseBuilder(context, AppDatabase.class, name)
                 .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
                 .addMigrations(Migration1To2.INSTANCE, Migration2To3.INSTANCE,
-                        Migration3To4.INSTANCE, Migration4To5.INSTANCE, Migration5To6.INSTANCE)
+                        Migration3To4.INSTANCE, Migration4To5.INSTANCE, Migration5To6.INSTANCE, Migration6To7.INSTANCE)
                 .addCallback(AppDatabase.databaseCallback())
                 .allowMainThreadQueries().build();
         db.getOpenHelper().getWritableDatabase();
