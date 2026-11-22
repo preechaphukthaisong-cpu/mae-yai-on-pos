@@ -78,7 +78,7 @@ jobs:
 
           schema_path = "app/schemas/com.maeyaion.pos.core.db.AppDatabase/7.json"
           schema = json.loads(Path(schema_path).read_text(encoding="utf-8"))
-          if schema.get("database", {}).get("version") != 6:
+          if schema.get("database", {}).get("version") != 7:
               raise SystemExit("::error::Generated Room schema is not version 7.")
           PY
       - name: Upload generated Room schema v7 for review
