@@ -1,6 +1,7 @@
 package com.maeyaion.pos.feature.store;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.widget.Button;
@@ -32,6 +33,7 @@ public final class StoreActivity extends Activity {
   ScrollView scroll=new ScrollView(this);scroll.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,0,1f));content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(18),dp(16),dp(18),dp(24));content.setBackgroundColor(getColor(com.maeyaion.pos.R.color.pos_background));scroll.addView(content);screenRoot.addView(scroll);setContentView(screenRoot);
   Button backButton=new Button(this);backButton.setText("ย้อนกลับ");backButton.setOnClickListener(v->finish());LinearLayout.LayoutParams backParams=new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,dp(56));backParams.setMargins(dp(16),dp(8),dp(16),dp(12));screenRoot.addView(backButton,backParams);
   TextView title=new TextView(this);title.setText("history".equals(screen)?"ประวัติราคา":"แก้ไขราคาขาย");title.setTextSize(23);title.setTextColor(getColor(com.maeyaion.pos.R.color.pos_forest));title.setTypeface(android.graphics.Typeface.DEFAULT,android.graphics.Typeface.BOLD);title.setGravity(Gravity.CENTER);title.setPadding(0,dp(12),0,dp(18));content.addView(title);
+  Button syncConflicts=new Button(this);syncConflicts.setText("ตรวจสอบรายการซิงก์ที่ขัดแย้ง");syncConflicts.setOnClickListener(v->startActivity(new Intent(this,SyncConflictReviewActivity.class)));content.addView(syncConflicts);
   skuInput=field("SKU สินค้า");priceInput=field("ราคาขายใหม่ (บาท)");
   if(!"history".equals(screen)){Button save=new Button(this);save.setText("บันทึกราคาใหม่");content.addView(save);save.setOnClickListener(v->savePrice());}
   productList=new LinearLayout(this);productList.setOrientation(LinearLayout.VERTICAL);content.addView(productList);
