@@ -57,7 +57,8 @@ public final class StoreKeyManager {
         ensureWrappingKey(storeId);
         return persistNewEpoch(storeId, 1L, false);
     
-        }}
+        }
+    }
 
     /** Returns a defensive copy of the requested epoch's 256-bit key. */
     @NonNull
@@ -93,7 +94,8 @@ public final class StoreKeyManager {
             throw new SyncException("Unable to unlock local store key", error);
         }
     
-        }}
+        }
+    }
 
     /** Imports a key explicitly wrapped for this installation; never accepts plaintext from the server. */
     public void importStoreKey(@NonNull String storeId, long epoch,
@@ -145,7 +147,8 @@ public final class StoreKeyManager {
             throw new SyncException("Unable to import wrapped store key", error);
         }
     
-        }}
+        }
+    }
 
     /** Creates a fresh epoch; prior epochs remain available for decrypting old events. */
     public long rotateStoreKey(@NonNull String storeId) throws SyncException {
@@ -160,7 +163,8 @@ public final class StoreKeyManager {
         ensureWrappingKey(storeId);
         return persistNewEpoch(storeId, current + 1, true);
     
-        }}
+        }
+    }
 
     public long getCurrentEpoch(@NonNull String storeId) throws SyncException {
         synchronized (GLOBAL_KEY_LOCK) {
@@ -169,14 +173,16 @@ public final class StoreKeyManager {
         if (epoch < 1) throw new SyncException("Store encryption key is not initialized");
         return epoch;
     
-        }}
+        }
+    }
 
     public long getPendingRotationEpoch(@NonNull String storeId) throws SyncException {
         synchronized (GLOBAL_KEY_LOCK) {
         validateStoreId(storeId);
         return preferences.getLong(pendingRotationKey(storeId), 0L);
     
-        }}
+        }
+    }
 
     /** Records a locally prepared epoch after recovery from a process interruption. */
     public void markPendingRotation(@NonNull String storeId, long epoch)
@@ -188,7 +194,8 @@ public final class StoreKeyManager {
             throw new SyncException("Unable to persist pending store-key rotation state");
         }
     
-        }}
+        }
+    }
 
     /** Clears the pending marker only after the server confirms this exact epoch. */
     public void confirmRotation(@NonNull String storeId, long epoch)
@@ -201,7 +208,8 @@ public final class StoreKeyManager {
             throw new SyncException("Unable to persist store-key rotation confirmation");
         }
     
-        }}
+        }
+    }
 
     private long persistNewEpoch(String storeId, long epoch, boolean pendingRotation) throws SyncException {
         byte[] storeKey = new byte[AesGcmEventCipher.KEY_BYTES];
