@@ -72,7 +72,11 @@ export function sameImmutableEvent(prior, event, digest) {
 
 /** Enforce the opaque AES-256-GCM envelope; plaintext domain JSON is never accepted. */
 export function validateEncryptedEventPayload(payload) {
+  const allowedFields = ['aadVersion', 'algorithm', 'ciphertext',
+    'encryptionVersion', 'keyEpoch', 'nonce'];
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)
+      || Object.keys(payload).length !== allowedFields.length
+      || Object.keys(payload).some((key) => !allowedFields.includes(key))
       || payload.encryptionVersion !== 1 || payload.aadVersion !== 1
       || payload.algorithm !== 'A256GCM'
       || !Number.isSafeInteger(payload.keyEpoch) || payload.keyEpoch < 1
