@@ -1,6 +1,7 @@
 package com.maeyaion.pos.feature.store;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
@@ -130,8 +131,45 @@ public final class SyncConflictReviewActivity extends Activity {
                 warning.setText("รายการนี้ยังไม่ถูกนำเข้าและระบบไม่ข้ามลำดับเหตุการณ์ ต้องแก้สาเหตุและตรวจสอบข้อมูลก่อนดำเนินการต่อ");
                 warning.setPadding(8, 0, 8, 12);
                 list.addView(warning);
+                Button retry = new Button(this);
+                retry.setText("ลองนำเข้าอีกครั้งหลังแก้ข้อมูลแล้ว");
+                retry.setOnClickListener(v -> confirmReplayRetry(event));
+                list.addView(retry);
             }
         }
+    }
+
+    private void confirmReplayRetry(SyncReplayConflictEntity conflict) {
+        new AlertDialog.Builder(this)
+                .setTitle("ยืนยันการลองนำเข้าอีกครั้ง")
+                .setMessage("ใช้ปุ่มนี้หลังจากแก้ไขสาเหตุในข้อมูลภายในเครื่องแล้วเท่านั้น ระบบจะไม่ข้ามเหตุการณ์นี้ หากยังขัดแย้งจะถูกกักกันอีกครั้ง")
+                .setNegativeButton("ยกเลิก", null)
+                .setPositiveButton("ลองอีกครั้ง", (dialog, which) -> worker.execute(() -> {
+                    try {
+                        AppDatabase db = AppDatabase.getInstance(getApplicationContext());
+                        db.runInTransaction(() -> {
+                            SyncReplayConflictEntity current =
+                                    db.syncQueueDao().replayConflict(conflict.event_id);
+                            com.maeyaion.pos.core.db.SyncInboxEntity pending =
+                                    db.syncQueueDao().inboxEvent(conflict.event_id);
+                            if (current == null || pending == null || pending.applied != 0
+                                    || pending.server_sequence != current.server_sequence) {
+                                throw new IllegalStateException("เหตุการณ์ไม่อยู่ในสถานะรอลองใหม่");
+                            }
+                            if (db.syncQueueDao().clearReplayConflictForRetry(conflict.event_id) != 1) {
+                                throw new IllegalStateException("ไม่สามารถปลดการกักกันเหตุการณ์ได้");
+                            }
+                        });
+                        runOnUiThread(() -> {
+                            Toast.makeText(this,
+                                    "ปลดการกักกันแล้ว ระบบจะลองนำเข้าในการซิงก์รอบถัดไป",
+                                    Toast.LENGTH_LONG).show();
+                            load();
+                        });
+                    } catch (RuntimeException error) {
+                        runOnUiThread(() -> Toast.makeText(this, message(error), Toast.LENGTH_LONG).show());
+                    }
+                })).show();
     }
 
     private static String message(Throwable error) {
