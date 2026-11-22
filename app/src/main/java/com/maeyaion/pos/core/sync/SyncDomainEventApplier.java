@@ -282,7 +282,7 @@ public final class SyncDomainEventApplier implements SyncInboxProcessor.DomainEv
             if (!event.entity_id.equals(returnId)) throw new SyncException("Return event ID does not match payload");
             SaleEntity sale = database.saleDao().findById(saleId);
             if (sale == null || "CANCELLED".equals(sale.lifecycle_status)
-                    || !database.saleCancelDao().findForSale(saleId).equals(null)) {
+                    || database.saleCancelDao().findForSale(saleId) != null) {
                 throw new SyncException("Return references a missing or cancelled sale");
             }
             String reason = requiredString(data, "reason");
@@ -297,6 +297,7 @@ public final class SyncDomainEventApplier implements SyncInboxProcessor.DomainEv
             if (rowsJson.length() < 1 || rowsJson.length() > 500) throw new SyncException("Return line count is invalid");
             List<SaleReturnLineEntity> rows = new java.util.ArrayList<>();
             long goods = 0;
+            long lineFees = 0;
             java.util.HashSet<String> ids = new java.util.HashSet<>();
             for (int i = 0; i < rowsJson.length(); i++) {
                 JSONObject item = rowsJson.getJSONObject(i);
@@ -316,15 +317,18 @@ public final class SyncDomainEventApplier implements SyncInboxProcessor.DomainEv
                 }
                 long already = database.saleReturnLineDao().returnedQty(saleLineId);
                 long cancelled = database.saleCancelLineDao().cancelledQty(saleLineId);
-                if (Math.addExact(already, qty) > source.qty_milli - cancelled) {
-                    throw new SyncException("Returned quantity exceeds the remaining sale quantity");
+                if (Math.addExact(already, qty) > source.qty_milli - cancelled
+                        || value > source.line_total_satang - database.saleReturnLineDao().returnedValue(saleLineId)
+                                - database.saleCancelLineDao().cancelledValue(saleLineId)) {
+                    throw new SyncException("Returned quantity or value exceeds the remaining sale amount");
                 }
                 goods = Math.addExact(goods, value);
+                lineFees = Math.addExact(lineFees, fee);
                 rows.add(new SaleReturnLineEntity(id, returnId, saleLineId, qty, value, fee,
                         restock, nonRestock, null, null));
             }
             long reversal = Math.addExact(goods, feeReversal);
-            if (feeReversal < 0 || cashRefund < 0 || debtReduction < 0
+            if (feeReversal < 0 || lineFees != feeReversal || cashRefund < 0 || debtReduction < 0
                     || Math.addExact(cashRefund, debtReduction) != reversal) {
                 throw new SyncException("Return financial allocation is inconsistent");
             }
@@ -394,6 +398,7 @@ public final class SyncDomainEventApplier implements SyncInboxProcessor.DomainEv
             if (rowsJson.length() < 1 || rowsJson.length() > 500) throw new SyncException("Cancellation line count is invalid");
             List<com.maeyaion.pos.core.db.SaleCancelLineEntity> rows = new java.util.ArrayList<>();
             long goods = 0;
+            long lineFees = 0;
             java.util.HashSet<String> ids = new java.util.HashSet<>();
             for (int i = 0; i < rowsJson.length(); i++) {
                 JSONObject item = rowsJson.getJSONObject(i);
@@ -409,15 +414,19 @@ public final class SyncDomainEventApplier implements SyncInboxProcessor.DomainEv
                 if (!ids.add(id) || source == null || !source.sale_id.equals(saleId)
                         || qty <= 0 || value < 0 || fee < 0 || (restock != 0 && restock != 1)
                         || (restock == 0 && nonRestock == null)
-                        || qty > source.qty_milli - database.saleReturnLineDao().returnedQty(saleLineId)) {
+                        || qty > source.qty_milli - database.saleReturnLineDao().returnedQty(saleLineId)
+                                - database.saleCancelLineDao().cancelledQty(saleLineId)
+                        || value > source.line_total_satang - database.saleReturnLineDao().returnedValue(saleLineId)
+                                - database.saleCancelLineDao().cancelledValue(saleLineId)) {
                     throw new SyncException("Cancellation line identity or values are invalid");
                 }
                 goods = Math.addExact(goods, value);
+                lineFees = Math.addExact(lineFees, fee);
                 rows.add(new com.maeyaion.pos.core.db.SaleCancelLineEntity(id, cancelId,
                         saleLineId, qty, value, fee, restock, nonRestock, null, null));
             }
             long reversal = Math.addExact(goods, feeReversal);
-            if (feeReversal < 0 || cashRefund < 0 || debtReduction < 0
+            if (feeReversal < 0 || lineFees != feeReversal || cashRefund < 0 || debtReduction < 0
                     || Math.addExact(cashRefund, debtReduction) != reversal) {
                 throw new SyncException("Cancellation financial allocation is inconsistent");
             }
@@ -470,9 +479,10 @@ public final class SyncDomainEventApplier implements SyncInboxProcessor.DomainEv
             if (payments.length() < 1 || payments.length() > 500) {
                 throw new SyncException("Debt payment batch size is invalid");
             }
+            String paidAt = requiredString(data, "paid_at_utc");
+            Instant.parse(paidAt);
             java.util.HashSet<String> saleIds = new java.util.HashSet<>();
             java.util.HashSet<String> paymentIds = new java.util.HashSet<>();
-            String paidAt = event.received_at_utc;
             for (int i = 0; i < payments.length(); i++) {
                 JSONObject item = payments.getJSONObject(i);
                 String paymentId = requiredString(item, "payment_id");
