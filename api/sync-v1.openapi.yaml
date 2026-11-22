@@ -40,10 +40,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: [deviceId, label]
+              required: [deviceId, label, publicKey]
               properties:
                 deviceId: { type: string, format: uuid }
                 label: { type: string, minLength: 1, maxLength: 80 }
+                publicKey: { type: string, description: "RSA-3072 DER SPKI encoded as canonical base64url" }
       responses:
         '201': { description: Device registered }
         '409': { description: Device ID belongs to another or revoked installation }
@@ -58,6 +59,108 @@ paths:
       responses:
         '200': { description: Device revoked }
         '404': { description: Device not found }
+  /v1/key-epochs/current:
+    get:
+      summary: Read the current store encryption key epoch
+      responses:
+        '200': { description: Current key epoch }
+  /v1/key-epochs:
+    post:
+      summary: Atomically rotate the store key and enroll all remaining trusted devices
+      parameters:
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [keyEpoch, wrappers, recoveryWrappedKey]
+              properties:
+                keyEpoch: { type: integer, minimum: 1 }
+                wrappers: { type: array, minItems: 1, items: { $ref: '#/components/schemas/DeviceKeyWrapper' } }
+                recoveryWrappedKey: { type: string }
+      responses:
+        '200': { description: Key epoch committed }
+        '409': { description: Key epoch is stale or out of order }
+  /v1/key-wrappers:
+    get:
+      summary: Retrieve every historical key epoch wrapped for the authenticated device
+      parameters:
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Per-device wrapped key history }
+    post:
+      summary: Approve a device for a key epoch already held by the approving device
+      parameters:
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [targetDeviceId, keyEpoch, wrappedKey]
+              properties:
+                targetDeviceId: { type: string, format: uuid }
+                keyEpoch: { type: integer, minimum: 1 }
+                wrappedKey: { type: string }
+      responses:
+        '201': { description: Device key wrapper created }
+        '403': { description: Approving device does not hold this epoch }
+        '409': { description: Conflicting wrapper already exists }
+  /v1/key-wrappers/current:
+    get:
+      summary: Retrieve the current store key wrapped for this device
+      responses:
+        '200': { description: Current per-device wrapped key }
+        '409': { description: Device is not approved for the current key epoch }
+  /v1/key-wrappers/recovery:
+    get:
+      summary: Retrieve a recovery-wrapped historical store key epoch
+      parameters:
+        - in: query
+          name: epoch
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200': { description: Recovery-wrapped store key; remains encrypted to the user recovery secret }
+        '404': { description: Recovery wrapper not found }
+  /v1/devices/{deviceId}/revoke:
+    post:
+      summary: Revoke another device while atomically rotating and re-wrapping the next store key
+      parameters:
+        - in: header
+          name: X-Device-ID
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: deviceId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [keyEpoch, wrappers, recoveryWrappedKey]
+              properties:
+                keyEpoch: { type: integer, minimum: 1 }
+                wrappers: { type: array, minItems: 1, items: { $ref: '#/components/schemas/DeviceKeyWrapper' } }
+                recoveryWrappedKey: { type: string }
+      responses:
+        '200': { description: Device revoked and new key epoch committed }
+        '409': { description: Revocation requires a valid next epoch and complete active-device wrappers }
   /v1/sync/push:
     post:
       summary: Submit locally committed immutable events
@@ -87,7 +190,16 @@ paths:
                       entityType: { type: string, maxLength: 64 }
                       entityId: { type: string, maxLength: 160 }
                       baseVersion: { type: integer, minimum: 0 }
-                      payload: { type: object }
+                      payload:
+                        type: object
+                        required: [encryptionVersion, keyEpoch, algorithm, nonce, ciphertext, aadVersion]
+                        properties:
+                          encryptionVersion: { type: integer, const: 1 }
+                          keyEpoch: { type: integer, minimum: 1 }
+                          algorithm: { type: string, const: A256GCM }
+                          nonce: { type: string, description: "12-byte base64url nonce" }
+                          ciphertext: { type: string, description: "AES-256-GCM ciphertext plus 128-bit tag" }
+                          aadVersion: { type: integer, const: 1 }
                       payloadSha256: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
       responses:
         '200': { description: Durable per-event acknowledgements and conflicts }
@@ -191,6 +303,13 @@ paths:
               schema: { type: string, format: binary }
         '404': { description: Snapshot not found }
 components:
+  schemas:
+    DeviceKeyWrapper:
+      type: object
+      required: [deviceId, wrappedKey]
+      properties:
+        deviceId: { type: string, format: uuid }
+        wrappedKey: { type: string, description: "RSA-OAEP wrapped 256-bit store key encoded as base64url" }
   securitySchemes:
     googleIdToken:
       type: http
