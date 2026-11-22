@@ -18,11 +18,12 @@ public final class DeviceIdentityStore {
     private static final String KEY_DEVICE_ID = "device_id";
 
     private final SharedPreferences preferences;
+    private final Context context;
 
     public DeviceIdentityStore(@NonNull Context context) {
         if (context == null) throw new IllegalArgumentException("Context is required");
-        preferences = context.getApplicationContext()
-                .getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        this.context = context.getApplicationContext();
+        preferences = this.context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
     @NonNull
@@ -34,6 +35,11 @@ public final class DeviceIdentityStore {
             throw new SyncException("Unable to persist this installation's sync identity");
         }
         return generated;
+    }
+
+    @NonNull
+    public String getPublicKeyBase64() throws SyncException {
+        return new DeviceKeyPairManager(context).getPublicKeyBase64();
     }
 
     @NonNull
