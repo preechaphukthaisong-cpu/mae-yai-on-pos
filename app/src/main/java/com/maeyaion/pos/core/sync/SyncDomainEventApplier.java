@@ -51,6 +51,18 @@ public final class SyncDomainEventApplier implements SyncInboxProcessor.DomainEv
             applySale(event);
             return;
         }
+        if ("sale_return".equals(event.entity_type)) {
+            applySaleReturn(event);
+            return;
+        }
+        if ("sale_cancel".equals(event.entity_type)) {
+            applySaleCancel(event);
+            return;
+        }
+        if ("debt_payment_batch".equals(event.entity_type)) {
+            applyDebtPaymentBatch(event);
+            return;
+        }
         throw new SyncException("No typed replay handler is registered for entity type: " + event.entity_type);
     }
 
@@ -260,6 +272,253 @@ public final class SyncDomainEventApplier implements SyncInboxProcessor.DomainEv
         } catch (IllegalStateException error) {
             throw new SyncException("Sale replay violates local database invariants", error);
         }
+    }
+
+    private void applySaleReturn(SyncInboxEntity event) throws SyncException {
+        try {
+            JSONObject data = unwrap(event);
+            String returnId = requiredString(data, "return_id");
+            String saleId = requiredString(data, "sale_id");
+            if (!event.entity_id.equals(returnId)) throw new SyncException("Return event ID does not match payload");
+            SaleEntity sale = database.saleDao().findById(saleId);
+            if (sale == null || "CANCELLED".equals(sale.lifecycle_status)
+                    || !database.saleCancelDao().findForSale(saleId).equals(null)) {
+                throw new SyncException("Return references a missing or cancelled sale");
+            }
+            String reason = requiredString(data, "reason");
+            String operator = requiredString(data, "operator_label");
+            String createdAt = requiredString(data, "created_at_utc");
+            Instant created = Instant.parse(createdAt);
+            long cashRefund = exactLong(data.get("cash_refund_satang"), "cash_refund_satang");
+            long debtReduction = exactLong(data.get("debt_reduction_satang"), "debt_reduction_satang");
+            long feeReversal = exactLong(data.get("fee_reversal_satang"), "fee_reversal_satang");
+            String recipient = data.isNull("recipient_name") ? null : requiredString(data, "recipient_name");
+            JSONArray rowsJson = data.getJSONArray("lines");
+            if (rowsJson.length() < 1 || rowsJson.length() > 500) throw new SyncException("Return line count is invalid");
+            List<SaleReturnLineEntity> rows = new java.util.ArrayList<>();
+            long goods = 0;
+            java.util.HashSet<String> ids = new java.util.HashSet<>();
+            for (int i = 0; i < rowsJson.length(); i++) {
+                JSONObject item = rowsJson.getJSONObject(i);
+                String id = requiredString(item, "id");
+                String saleLineId = requiredString(item, "sale_line_id");
+                SaleLineEntity source = database.saleLineDao().findById(saleLineId);
+                long qty = exactLong(item.get("qty_milli"), "qty_milli");
+                long value = exactLong(item.get("value_satang"), "value_satang");
+                long fee = exactLong(item.get("fee_satang"), "fee_satang");
+                int restock = exactInt(item.get("restock"), "restock");
+                String nonRestock = item.isNull("non_restock_reason") ? null
+                        : requiredString(item, "non_restock_reason");
+                if (!ids.add(id) || source == null || !source.sale_id.equals(saleId)
+                        || qty <= 0 || value < 0 || fee < 0 || (restock != 0 && restock != 1)
+                        || (restock == 0 && nonRestock == null)) {
+                    throw new SyncException("Return line identity or values are invalid");
+                }
+                long already = database.saleReturnLineDao().returnedQty(saleLineId);
+                long cancelled = database.saleCancelLineDao().cancelledQty(saleLineId);
+                if (Math.addExact(already, qty) > source.qty_milli - cancelled) {
+                    throw new SyncException("Returned quantity exceeds the remaining sale quantity");
+                }
+                goods = Math.addExact(goods, value);
+                rows.add(new SaleReturnLineEntity(id, returnId, saleLineId, qty, value, fee,
+                        restock, nonRestock, null, null));
+            }
+            long reversal = Math.addExact(goods, feeReversal);
+            if (feeReversal < 0 || cashRefund < 0 || debtReduction < 0
+                    || Math.addExact(cashRefund, debtReduction) != reversal) {
+                throw new SyncException("Return financial allocation is inconsistent");
+            }
+            boolean cashSale = "CASH".equals(sale.type);
+            if (cashSale ? (cashRefund != reversal || debtReduction != 0)
+                    : ("UNPAID".equals(sale.payment_status)
+                        ? (cashRefund != 0 || debtReduction != reversal)
+                        : (cashRefund != reversal || debtReduction != 0))) {
+                throw new SyncException("Return refund/debt allocation does not match sale payment state");
+            }
+            database.saleReturnDao().insert(new com.maeyaion.pos.core.db.SaleReturnEntity(
+                    returnId, saleId, reason, cashRefund, debtReduction, feeReversal,
+                    recipient, operator, createdAt));
+            database.saleReturnLineDao().insertAll(rows);
+            String businessDate = created.atZone(ZoneId.of("Asia/Bangkok")).toLocalDate().toString();
+            database.dailySummaryDao().ensure(new DailySummaryEntity(
+                    businessDate,0,0,0,0,0,0,0,0,0,0,0,0,createdAt));
+            if (database.dailySummaryDao().addReturn(businessDate, cashSale ? goods : 0,
+                    cashSale ? 0 : goods, cashSale ? feeReversal : 0,
+                    cashSale ? 0 : feeReversal, reversal, createdAt) != 1) {
+                throw new SyncException("Return daily summary projection failed");
+            }
+            for (SaleReturnLineEntity row : rows) {
+                SaleLineEntity source = database.saleLineDao().findById(row.sale_line_id);
+                database.productDailyDao().ensure(new ProductDailyEntity(
+                        businessDate, source.sku,0,0,0,0,0,0,0,0));
+                if (database.productDailyDao().addReturn(businessDate, source.sku,
+                        row.qty_milli, row.value_satang) != 1) {
+                    throw new SyncException("Return product daily projection failed");
+                }
+            }
+            if (debtReduction > 0 && database.saleBalanceDao().outstanding(saleId) == 0) {
+                database.saleDao().update(new SaleEntity(sale.id, sale.idem_key, sale.type,
+                        sale.payment_status, sale.lifecycle_status, sale.customer_id,
+                        sale.subtotal_satang, sale.fee_total_satang, sale.total_satang,
+                        sale.cash_received_satang, sale.change_satang, sale.content_hash,
+                        sale.created_at_utc, sale.paid_at_utc, createdAt));
+            }
+            appendAudit(event, "SYNC_REPLAY_RETURN", "SALE", saleId);
+        } catch (JSONException | java.time.DateTimeException error) {
+            throw new SyncException("Return event payload is malformed", error);
+        } catch (ArithmeticException error) {
+            throw new SyncException("Return event totals overflow", error);
+        }
+    }
+
+    private void applySaleCancel(SyncInboxEntity event) throws SyncException {
+        try {
+            JSONObject data = unwrap(event);
+            String cancelId = requiredString(data, "cancel_id");
+            String saleId = requiredString(data, "sale_id");
+            if (!event.entity_id.equals(cancelId)) throw new SyncException("Cancellation event ID does not match payload");
+            SaleEntity sale = database.saleDao().findById(saleId);
+            if (sale == null || "CANCELLED".equals(sale.lifecycle_status)
+                    || database.saleCancelDao().findForSale(saleId) != null) {
+                throw new SyncException("Cancellation references a missing or already cancelled sale");
+            }
+            String reason = requiredString(data, "reason");
+            String operator = requiredString(data, "operator_label");
+            String createdAt = requiredString(data, "created_at_utc");
+            Instant created = Instant.parse(createdAt);
+            long cashRefund = exactLong(data.get("cash_refund_satang"), "cash_refund_satang");
+            long debtReduction = exactLong(data.get("debt_reduction_satang"), "debt_reduction_satang");
+            long feeReversal = exactLong(data.get("fee_reversal_satang"), "fee_reversal_satang");
+            String recipient = data.isNull("recipient_name") ? null : requiredString(data, "recipient_name");
+            JSONArray rowsJson = data.getJSONArray("lines");
+            if (rowsJson.length() < 1 || rowsJson.length() > 500) throw new SyncException("Cancellation line count is invalid");
+            List<com.maeyaion.pos.core.db.SaleCancelLineEntity> rows = new java.util.ArrayList<>();
+            long goods = 0;
+            java.util.HashSet<String> ids = new java.util.HashSet<>();
+            for (int i = 0; i < rowsJson.length(); i++) {
+                JSONObject item = rowsJson.getJSONObject(i);
+                String id = requiredString(item, "id");
+                String saleLineId = requiredString(item, "sale_line_id");
+                SaleLineEntity source = database.saleLineDao().findById(saleLineId);
+                long qty = exactLong(item.get("qty_milli"), "qty_milli");
+                long value = exactLong(item.get("value_satang"), "value_satang");
+                long fee = exactLong(item.get("fee_satang"), "fee_satang");
+                int restock = exactInt(item.get("restock"), "restock");
+                String nonRestock = item.isNull("non_restock_reason") ? null
+                        : requiredString(item, "non_restock_reason");
+                if (!ids.add(id) || source == null || !source.sale_id.equals(saleId)
+                        || qty <= 0 || value < 0 || fee < 0 || (restock != 0 && restock != 1)
+                        || (restock == 0 && nonRestock == null)
+                        || qty > source.qty_milli - database.saleReturnLineDao().returnedQty(saleLineId)) {
+                    throw new SyncException("Cancellation line identity or values are invalid");
+                }
+                goods = Math.addExact(goods, value);
+                rows.add(new com.maeyaion.pos.core.db.SaleCancelLineEntity(id, cancelId,
+                        saleLineId, qty, value, fee, restock, nonRestock, null, null));
+            }
+            long reversal = Math.addExact(goods, feeReversal);
+            if (feeReversal < 0 || cashRefund < 0 || debtReduction < 0
+                    || Math.addExact(cashRefund, debtReduction) != reversal) {
+                throw new SyncException("Cancellation financial allocation is inconsistent");
+            }
+            boolean unpaidCredit = "CREDIT".equals(sale.type) && "UNPAID".equals(sale.payment_status);
+            if (unpaidCredit ? (cashRefund != 0 || debtReduction != reversal)
+                    : (cashRefund != reversal || debtReduction != 0)) {
+                throw new SyncException("Cancellation refund/debt allocation does not match sale payment state");
+            }
+            database.saleCancelDao().insert(new com.maeyaion.pos.core.db.SaleCancelEntity(
+                    cancelId, saleId, reason, cashRefund, debtReduction, feeReversal,
+                    recipient, operator, createdAt));
+            database.saleCancelLineDao().insertAll(rows);
+            String businessDate = created.atZone(ZoneId.of("Asia/Bangkok")).toLocalDate().toString();
+            database.dailySummaryDao().ensure(new DailySummaryEntity(
+                    businessDate,0,0,0,0,0,0,0,0,0,0,0,0,createdAt));
+            boolean cashSale = "CASH".equals(sale.type);
+            if (database.dailySummaryDao().addCancel(businessDate, cashSale ? goods : 0,
+                    cashSale ? 0 : goods, cashSale ? feeReversal : 0,
+                    cashSale ? 0 : feeReversal, reversal, createdAt) != 1) {
+                throw new SyncException("Cancellation daily summary projection failed");
+            }
+            for (com.maeyaion.pos.core.db.SaleCancelLineEntity row : rows) {
+                SaleLineEntity source = database.saleLineDao().findById(row.sale_line_id);
+                database.productDailyDao().ensure(new ProductDailyEntity(
+                        businessDate, source.sku,0,0,0,0,0,0,0,0));
+                if (database.productDailyDao().addCancel(businessDate, source.sku,
+                        row.qty_milli, row.value_satang) != 1) {
+                    throw new SyncException("Cancellation product daily projection failed");
+                }
+            }
+            String settledAt = sale.settled_by_reversal_at_utc;
+            if (unpaidCredit && database.saleBalanceDao().outstanding(saleId) == 0) settledAt = createdAt;
+            database.saleDao().update(new SaleEntity(sale.id, sale.idem_key, sale.type,
+                    sale.payment_status, "CANCELLED", sale.customer_id, sale.subtotal_satang,
+                    sale.fee_total_satang, sale.total_satang, sale.cash_received_satang,
+                    sale.change_satang, sale.content_hash, sale.created_at_utc,
+                    sale.paid_at_utc, settledAt));
+            appendAudit(event, "SYNC_REPLAY_CANCEL", "SALE", saleId);
+        } catch (JSONException | java.time.DateTimeException error) {
+            throw new SyncException("Cancellation event payload is malformed", error);
+        } catch (ArithmeticException error) {
+            throw new SyncException("Cancellation event totals overflow", error);
+        }
+    }
+
+    private void applyDebtPaymentBatch(SyncInboxEntity event) throws SyncException {
+        try {
+            JSONObject data = unwrap(event);
+            JSONArray payments = data.getJSONArray("payments");
+            if (payments.length() < 1 || payments.length() > 500) {
+                throw new SyncException("Debt payment batch size is invalid");
+            }
+            java.util.HashSet<String> saleIds = new java.util.HashSet<>();
+            java.util.HashSet<String> paymentIds = new java.util.HashSet<>();
+            String paidAt = event.received_at_utc;
+            for (int i = 0; i < payments.length(); i++) {
+                JSONObject item = payments.getJSONObject(i);
+                String paymentId = requiredString(item, "payment_id");
+                String saleId = requiredString(item, "sale_id");
+                long amount = exactLong(item.get("amount_satang"), "amount_satang");
+                SaleEntity sale = database.saleDao().findById(saleId);
+                if (!paymentIds.add(paymentId) || !saleIds.add(saleId) || sale == null
+                        || !"CREDIT".equals(sale.type) || !"UNPAID".equals(sale.payment_status)
+                        || amount <= 0 || amount != database.saleBalanceDao().outstanding(saleId)
+                        || database.debtPaymentDao().findForSale(saleId) != null) {
+                    throw new SyncException("Debt payment does not match the outstanding credit balance");
+                }
+                database.debtPaymentDao().insert(new com.maeyaion.pos.core.db.DebtPaymentEntity(
+                        paymentId, saleId, amount, paidAt));
+                if (database.saleDao().update(new SaleEntity(sale.id, sale.idem_key, sale.type,
+                        "PAID", sale.lifecycle_status, sale.customer_id, sale.subtotal_satang,
+                        sale.fee_total_satang, sale.total_satang, null, null, sale.content_hash,
+                        sale.created_at_utc, paidAt, sale.settled_by_reversal_at_utc)) != 1) {
+                    throw new SyncException("Debt payment sale status update failed");
+                }
+            }
+            appendAudit(event, "SYNC_REPLAY_DEBT_PAYMENT", "DEBT_BATCH", event.entity_id);
+        } catch (JSONException error) {
+            throw new SyncException("Debt payment batch payload is malformed", error);
+        } catch (ArithmeticException error) {
+            throw new SyncException("Debt payment amount overflow", error);
+        }
+    }
+
+    private JSONObject unwrap(SyncInboxEntity event) throws JSONException, SyncException {
+        JSONObject envelope = new JSONObject(event.payload_json);
+        if (exactInt(envelope.get("schemaVersion"), "schemaVersion")
+                != SyncEventEnvelope.CURRENT_SCHEMA_VERSION) {
+            throw new SyncException("Unsupported sync event schema version");
+        }
+        return envelope.getJSONObject("data");
+    }
+
+    private void appendAudit(SyncInboxEntity event, String operation, String entityType,
+            String entityId) throws SyncException {
+        String payload = event.payload_json;
+        database.opLogDao().append(new OpLogEntity(java.util.UUID.randomUUID().toString(),
+                operation, entityType, entityId, payload, event.received_at_utc));
+        database.backupJournalDao().append(new BackupJournalEntity(0L, event.event_id,
+                operation, payload, sha256Hex(payload), SyncEventEnvelope.CURRENT_SCHEMA_VERSION,
+                event.received_at_utc, 0));
     }
 
     private static Long nullableLong(JSONObject object, String key) throws JSONException, SyncException {
