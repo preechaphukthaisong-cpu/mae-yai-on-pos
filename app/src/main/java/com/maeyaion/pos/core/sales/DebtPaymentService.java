@@ -36,14 +36,17 @@ public final class DebtPaymentService {
      throw new IllegalStateException("บิลไม่อยู่ในสถานะค้างชำระ: "+id);
     long balance=db.saleBalanceDao().outstanding(id);
     if(balance<=0)throw new IllegalStateException("ยอดค้างชำระไม่ถูกต้อง: "+id);
-    db.debtPaymentDao().insert(new DebtPaymentEntity(UUID.randomUUID().toString(),id,balance,paidAtUtc));
+    String paymentId=UUID.randomUUID().toString();
+    db.debtPaymentDao().insert(new DebtPaymentEntity(paymentId,id,balance,paidAtUtc));
     SaleEntity paid=new SaleEntity(sale.id,sale.idem_key,sale.type,"PAID",sale.lifecycle_status,
      sale.customer_id,sale.subtotal_satang,sale.fee_total_satang,sale.total_satang,
      null,null,sale.content_hash,sale.created_at_utc,paidAtUtc,sale.settled_by_reversal_at_utc);
     if(db.saleDao().update(paid)!=1)throw new IllegalStateException("อัปเดตสถานะชำระเงินไม่สำเร็จ");
     totalPaid=Math.addExact(totalPaid,balance);
     if(index++>0)payload.append(',');
-    payload.append("{\"sale_id\":").append(JSONObject.quote(id)).append(",\"amount_satang\":").append(balance).append('}');
+    payload.append("{\"payment_id\":").append(JSONObject.quote(paymentId))
+     .append(",\"sale_id\":").append(JSONObject.quote(id))
+     .append(",\"amount_satang\":").append(balance).append('}');
    }
    payload.append("]}");String body=payload.toString();String operation=UUID.randomUUID().toString();
    db.opLogDao().append(new OpLogEntity(UUID.randomUUID().toString(),"DEBT_PAID","DEBT_BATCH",operation,body,paidAtUtc));
