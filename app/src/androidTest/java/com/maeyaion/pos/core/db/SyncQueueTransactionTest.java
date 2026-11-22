@@ -183,6 +183,29 @@ public final class SyncQueueTransactionTest {
         assertEquals(1L, db.syncQueueDao().cursor("__UNBOUND__").last_applied_sequence);
     }
 
+    @Test public void inboxRefusesSequenceGapsWithoutApplyingOrAdvancingCursor() throws Exception {
+        JSONObject data = new JSONObject();
+        data.put("sku", "SKU-GAP");
+        SyncEventEnvelope envelope = SyncEventEnvelope.create(
+                "upsert", "product", "SKU-GAP", 0, data);
+        SyncInboxEntity event = new SyncInboxEntity(envelope.eventId, "store-gap", 2,
+                "upsert", "product", "SKU-GAP", 0, 1,
+                envelope.payload.toString(), envelope.payloadSha256,
+                "2026-11-21T00:00:00Z", 0);
+        SyncInboxProcessor processor = new SyncInboxProcessor(db);
+        assertTrue(processor.receive(event));
+        final int[] applyCalls = {0};
+        try {
+            processor.applyNext("store-gap", "2026-11-21T00:00:01Z", remote -> applyCalls[0]++);
+            fail("Sequence gap must stop replay");
+        } catch (SyncException expected) {
+            assertTrue(expected.getMessage().contains("sequence gap"));
+        }
+        assertEquals(0, applyCalls[0]);
+        assertNull(db.syncQueueDao().cursor("store-gap"));
+        assertEquals(1L, db.syncQueueDao().unappliedInboxCount("store-gap"));
+    }
+
     @Test public void reusedRemoteEventIdWithDifferentPayloadIsRejected() throws Exception {
         JSONObject original = new JSONObject();
         original.put("sku", "SKU-ORIGINAL");
