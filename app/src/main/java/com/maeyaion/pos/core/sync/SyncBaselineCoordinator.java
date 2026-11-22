@@ -91,6 +91,10 @@ public final class SyncBaselineCoordinator {
             byte[] bytes = readBounded(encrypted, MAX_UPLOAD_BYTES);
             JSONObject uploaded = api.uploadEncryptedBaseline(bytes, throughSequence,
                     encryptedSha, manifest.toJson());
+            SyncQueueGuard.requireQuiescent(database, storeId);
+            if (exactSequence(api.getStore().get("lastSequence")) != throughSequence) {
+                throw new SyncException("Server sequence changed before baseline cursor commit");
+            }
             database.runInTransaction(() -> database.syncQueueDao().saveCursor(
                     new SyncCursorEntity(storeId, throughSequence, Instant.now().toString())));
             return new BaselineResult(uploaded.optString("snapshotId", ""),
