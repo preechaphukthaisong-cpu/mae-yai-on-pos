@@ -129,14 +129,23 @@ async function handlePush(req, res, context) {
     for (const event of body.events) {
       const digest = validateEvent(event);
       const duplicate = await client.query(
-        'SELECT seq, payload_sha256 FROM sync_events WHERE store_id = $1 AND event_id = $2',
+        `SELECT seq, payload_sha256, entity_type, entity_id, operation, base_version
+           FROM sync_events WHERE store_id = $1 AND event_id = $2`,
         [context.store_id, event.eventId]
       );
       if (duplicate.rowCount) {
-        if (duplicate.rows[0].payload_sha256 !== digest) {
-          throw new HttpError(409, 'An event ID was reused with different content', { eventId: event.eventId });
+        const prior = duplicate.rows[0];
+        const sameImmutableEvent = prior.payload_sha256 === digest
+          && prior.entity_type === event.entityType
+          && prior.entity_id === event.entityId
+          && prior.operation === event.operation
+          && BigInt(prior.base_version) === BigInt(event.baseVersion);
+        if (!sameImmutableEvent) {
+          throw new HttpError(409, 'An event ID was reused with different immutable content', {
+            eventId: event.eventId
+          });
         }
-        acknowledgements.push({ eventId: event.eventId, seq: String(duplicate.rows[0].seq), duplicate: true });
+        acknowledgements.push({ eventId: event.eventId, seq: String(prior.seq), duplicate: true });
         continue;
       }
       const versionResult = await client.query(
