@@ -4,6 +4,7 @@ import androidx.room.Dao;
 import androidx.room.Insert;
 import androidx.room.OnConflictStrategy;
 import androidx.room.Query;
+import androidx.room.Update;
 
 @Dao
 public interface CustomerDao {
@@ -18,4 +19,6 @@ public interface CustomerDao {
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     void insert(CustomerEntity customer);
+
+    @Update int update(CustomerEntity customer);
 }
