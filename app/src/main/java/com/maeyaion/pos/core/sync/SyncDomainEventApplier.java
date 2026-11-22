@@ -138,6 +138,7 @@ public final class SyncDomainEventApplier implements SyncInboxProcessor.DomainEv
                         beforeStock, stock, Math.subtractExact(stock, beforeStock),
                         "SYNC_REPLAY", event.event_id, updated));
             }
+            appendAudit(event, "SYNC_REPLAY_PRODUCT", "PRODUCT", sku);
         } catch (JSONException | NumberFormatException | java.time.DateTimeException error) {
             throw new SyncException("Product event payload is malformed", error);
         } catch (IllegalStateException error) {
@@ -264,7 +265,7 @@ public final class SyncDomainEventApplier implements SyncInboxProcessor.DomainEv
                     "SYNC_REPLAY_SALE", "SALE", saleId, auditPayload, event.received_at_utc));
             database.backupJournalDao().append(new BackupJournalEntity(0L, event.event_id,
                     "SYNC_REPLAY_SALE", auditPayload, sha256Hex(auditPayload),
-                    SyncEventEnvelope.CURRENT_SCHEMA_VERSION, event.received_at_utc, 0));
+                    5, event.received_at_utc, 0));
         } catch (JSONException | NumberFormatException | java.time.DateTimeException error) {
             throw new SyncException("Sale event payload is malformed", error);
         } catch (ArithmeticException error) {
