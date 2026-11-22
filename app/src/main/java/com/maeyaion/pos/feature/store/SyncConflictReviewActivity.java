@@ -118,11 +118,11 @@ public final class SyncConflictReviewActivity extends Activity {
             for (SyncReplayConflictEntity event : replayConflicts) {
                 TextView detail = new TextView(this);
                 detail.setText("ประเภท: " + event.entity_type
-                        + "\\nรหัสข้อมูล: " + event.entity_id
-                        + "\\nเหตุการณ์: " + event.event_id
-                        + "\\nลำดับเซิร์ฟเวอร์: " + event.server_sequence
-                        + "\\nสาเหตุ: " + event.reason
-                        + "\\nเวลาตรวจพบ: " + event.created_at_utc);
+                        + "\nรหัสข้อมูล: " + event.entity_id
+                        + "\nเหตุการณ์: " + event.event_id
+                        + "\nลำดับเซิร์ฟเวอร์: " + event.server_sequence
+                        + "\nสาเหตุ: " + event.reason
+                        + "\nเวลาตรวจพบ: " + event.created_at_utc);
                 detail.setTextIsSelectable(true);
                 detail.setPadding(8, 12, 8, 8);
                 list.addView(detail);
