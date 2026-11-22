@@ -46,6 +46,9 @@ public final class StoreService {
     com.maeyaion.pos.core.db.BarcodeRegistryEntity registry=db.barcodeRegistryDao().findByBarcode(changed.barcode);
     if(registry==null)throw new IllegalStateException("Product barcode registry row is missing");
     snapshot.put("barcode_source_type",registry.sourceType);
+    snapshot.put("barcode_registry_display_name",registry.displayName);
+    snapshot.put("barcode_registry_price_satang",registry.priceSatang);
+    snapshot.put("barcode_registry_created_at_utc",registry.createdAtUtc);
     snapshot.put("name",changed.name); snapshot.put("price_satang",changed.priceSatang);
     snapshot.put("cost_satang",changed.costSatang); snapshot.put("unit",changed.unit);
     snapshot.put("stock_limit_qty_milli",changed.stockLimitQtyMilli==null?JSONObject.NULL:changed.stockLimitQtyMilli);
