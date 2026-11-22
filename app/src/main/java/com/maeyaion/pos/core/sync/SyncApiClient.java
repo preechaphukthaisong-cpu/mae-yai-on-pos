@@ -124,6 +124,18 @@ public final class SyncApiClient {
 
     @NonNull public JSONObject uploadEncryptedBackup(byte[] encryptedBackup,
             long throughSequence, @NonNull String sha256) throws SyncException {
+        return uploadEncryptedBackupInternal(encryptedBackup, throughSequence, sha256, null);
+    }
+
+    @NonNull public JSONObject uploadEncryptedBaseline(byte[] encryptedBackup,
+            long throughSequence, @NonNull String sha256, @NonNull JSONObject manifest)
+            throws SyncException {
+        if (manifest == null) throw new SyncException("Baseline manifest is required");
+        return uploadEncryptedBackupInternal(encryptedBackup, throughSequence, sha256, manifest);
+    }
+
+    private JSONObject uploadEncryptedBackupInternal(byte[] encryptedBackup, long throughSequence,
+            String sha256, JSONObject manifest) throws SyncException {
         if (encryptedBackup == null || encryptedBackup.length == 0
                 || encryptedBackup.length > MAX_BACKUP_BYTES || throughSequence < 0
                 || sha256 == null || !sha256.matches("(?i)[0-9a-f]{64}")) {
@@ -133,7 +145,7 @@ public final class SyncApiClient {
             throw new SyncException("Encrypted backup checksum does not match its content");
         }
         return requestBytes("POST", "/v1/backups", encryptedBackup, true,
-                throughSequence, sha256);
+                throughSequence, sha256, manifest);
     }
 
     @NonNull public byte[] downloadEncryptedBackup(@NonNull String snapshotId)
@@ -159,8 +171,21 @@ public final class SyncApiClient {
 
     private JSONObject requestBytes(String method, String path, byte[] body,
             boolean deviceScoped, long throughSequence, String sha256) throws SyncException {
+        return requestBytes(method, path, body, deviceScoped, throughSequence, sha256, null);
+    }
+
+    private JSONObject requestBytes(String method, String path, byte[] body,
+            boolean deviceScoped, long throughSequence, String sha256, JSONObject manifest)
+            throws SyncException {
+        String encodedManifest = null;
+        if (manifest != null) {
+            encodedManifest = java.util.Base64.getUrlEncoder().withoutPadding()
+                    .encodeToString(manifest.toString().getBytes(StandardCharsets.UTF_8));
+            if (encodedManifest.length() > 8192) throw new SyncException("Baseline manifest is too large");
+        }
         byte[] response = execute(method, path, body, "application/octet-stream",
-                deviceScoped, throughSequence, sha256, MAX_JSON_RESPONSE_BYTES, false);
+                deviceScoped, throughSequence, sha256, MAX_JSON_RESPONSE_BYTES, false,
+                encodedManifest);
         try { return new JSONObject(new String(response, StandardCharsets.UTF_8)); }
         catch (JSONException error) { throw new SyncException("Sync server returned invalid JSON", error); }
     }
@@ -174,6 +199,13 @@ public final class SyncApiClient {
     private byte[] execute(String method, String path, byte[] body, String contentType,
             boolean deviceScoped, Long throughSequence, String backupSha, int responseLimit,
             boolean binaryResponse) throws SyncException {
+        return execute(method, path, body, contentType, deviceScoped, throughSequence,
+                backupSha, responseLimit, binaryResponse, null);
+    }
+
+    private byte[] execute(String method, String path, byte[] body, String contentType,
+            boolean deviceScoped, Long throughSequence, String backupSha, int responseLimit,
+            boolean binaryResponse, String baselineManifest) throws SyncException {
         HttpURLConnection connection = null;
         try {
             URL url = new URL(baseUrl + path);
@@ -197,6 +229,9 @@ public final class SyncApiClient {
             if (throughSequence != null) {
                 connection.setRequestProperty("X-Through-Seq", String.valueOf(throughSequence));
                 connection.setRequestProperty("X-Backup-SHA256", backupSha);
+            }
+            if (baselineManifest != null) {
+                connection.setRequestProperty("X-Baseline-Manifest", baselineManifest);
             }
             if (body != null) {
                 connection.setDoOutput(true);
