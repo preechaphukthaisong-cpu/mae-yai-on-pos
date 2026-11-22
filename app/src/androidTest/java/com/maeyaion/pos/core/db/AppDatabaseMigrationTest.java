@@ -58,13 +58,13 @@ public final class AppDatabaseMigrationTest {
 
         database = Room.databaseBuilder(context, AppDatabase.class, databaseName)
                 .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
-                .addMigrations(Migration1To2.INSTANCE, Migration2To3.INSTANCE, Migration3To4.INSTANCE, Migration4To5.INSTANCE, Migration5To6.INSTANCE)
+                .addMigrations(Migration1To2.INSTANCE, Migration2To3.INSTANCE, Migration3To4.INSTANCE, Migration4To5.INSTANCE, Migration5To6.INSTANCE, Migration6To7.INSTANCE)
                 .addCallback(AppDatabase.databaseCallback())
                 .allowMainThreadQueries()
                 .build();
 
         SupportSQLiteDatabase sql = database.getOpenHelper().getWritableDatabase();
-        assertEquals(6, sql.getVersion());
+        assertEquals(7, sql.getVersion());
         assertEquals("preserved_value", database.appMetaDao().findValue("legacy_key"));
         assertNotNull(database.barcodeCounterDao().get());
         assertEquals(2_000_001L, database.barcodeCounterDao().get().nextValue);
@@ -79,6 +79,7 @@ public final class AppDatabaseMigrationTest {
         assertTableExists(sql, "sync_inbox");
         assertTableExists(sql, "sync_cursor");
         assertTableExists(sql, "sync_entity_version");
+        assertTableExists(sql, "sync_replay_conflict");
         assertCoreGuardsExist(sql);
         assertTriggerExists(sql, "backup_journal_insert_guard");
         assertTriggerExists(sql, "backup_journal_update_guard");
