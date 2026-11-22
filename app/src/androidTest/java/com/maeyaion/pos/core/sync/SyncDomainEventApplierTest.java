@@ -165,6 +165,41 @@ public final class SyncDomainEventApplierTest {
         assertNotNull(db.customerDao().findById("customer-credit-1"));
     }
 
+    @Test public void failedEncryptedReplayIsQuarantinedWithoutAdvancingCursor() throws Exception {
+        String storeId = "store-1";
+        StoreKeyManager keys = new StoreKeyManager(
+                InstrumentationRegistry.getInstrumentation().getTargetContext());
+        keys.initializeStore(storeId);
+        EncryptedSyncEventCodec codec = new EncryptedSyncEventCodec(keys);
+        String eventId = "99999999-9999-4999-8999-999999999991";
+        JSONObject plain = new JSONObject();
+        plain.put("schemaVersion", 1);
+        plain.put("data", new JSONObject());
+        JSONObject wire = codec.encrypt(storeId, eventId, "upsert",
+                "unsupported_aggregate", "entity-1", 0, plain);
+        JSONObject encrypted = wire.getJSONObject("payload");
+        String canonical = SyncEventEnvelope.canonicalJson(encrypted);
+        byte[] digest = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(canonical.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        StringBuilder hash = new StringBuilder(64);
+        for (byte b : digest) hash.append(String.format(java.util.Locale.ROOT, "%02x", b & 255));
+        SyncInboxEntity inboxEvent = new SyncInboxEntity(eventId, storeId, 1,
+                "upsert", "unsupported_aggregate", "entity-1", 0, 1,
+                encrypted.toString(), hash.toString(), "2026-11-21T00:00:00Z", 0);
+        SyncInboxProcessor processor = new SyncInboxProcessor(db);
+        db.runInTransaction(() -> processor.receive(inboxEvent));
+        try {
+            processor.applyNext(storeId, "2026-11-21T00:01:00Z", keys);
+            fail("Unsupported aggregate must fail closed");
+        } catch (SyncException expected) {
+            assertTrue(expected.getMessage().contains("No typed replay handler"));
+        }
+        assertNotNull(db.syncQueueDao().replayConflict(eventId));
+        assertEquals(0, db.syncQueueDao().cursor(storeId) == null
+                ? 0L : db.syncQueueDao().cursor(storeId).last_applied_sequence);
+        assertEquals(0, db.syncQueueDao().inboxEvent(eventId).applied);
+    }
+
     @Test public void localStoreSettingUpdateWritesOutboxInSameTransaction() throws Exception {
         com.maeyaion.pos.core.store.StoreSettingsSyncService service =
                 new com.maeyaion.pos.core.store.StoreSettingsSyncService(
