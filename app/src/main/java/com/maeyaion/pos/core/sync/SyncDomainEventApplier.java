@@ -249,7 +249,30 @@ public final class SyncDomainEventApplier implements SyncInboxProcessor.DomainEv
                     throw new SyncException("Product snapshot update failed");
                 }
             }
-            if (beforeStock != stock) {
+            if (!data.isNull("stock_movement")) {
+                JSONObject movement = data.getJSONObject("stock_movement");
+                String operationId = requiredString(movement, "operation_id");
+                if (!java.util.UUID.fromString(operationId).toString().equalsIgnoreCase(operationId)) {
+                    throw new SyncException("Inventory movement operation ID is invalid");
+                }
+                long movementBefore = exactLong(movement.get("before_qty_milli"), "before_qty_milli");
+                long movementDiff = exactLong(movement.get("diff_qty_milli"), "diff_qty_milli");
+                long movementAfter = exactLong(movement.get("after_qty_milli"), "after_qty_milli");
+                String reason = requiredString(movement, "reason");
+                String movementAt = requiredString(movement, "created_at_utc");
+                Instant.parse(movementAt);
+                if (movementBefore != beforeStock || movementAfter != stock
+                        || Math.addExact(movementBefore, movementDiff) != movementAfter
+                        || (!"RECEIVE".equals(reason) && !"COUNT_REPLACE".equals(reason))
+                        || ("RECEIVE".equals(reason) && movementDiff <= 0)) {
+                    throw new SyncException("Inventory movement does not match the product stock transition");
+                }
+                database.stockLogDao().append(new StockLogEntity(
+                        java.util.UUID.randomUUID().toString(), sku, movementBefore,
+                        movementAfter, movementDiff, reason, operationId, movementAt));
+            } else if (beforeStock != stock) {
+                // Sale, return and cancellation events carry stock snapshots but have their own
+                // aggregate event. Preserve an explicit reconciliation movement for the projection.
                 database.stockLogDao().append(new StockLogEntity(event.event_id, sku,
                         beforeStock, stock, Math.subtractExact(stock, beforeStock),
                         "SYNC_REPLAY", event.event_id, updated));
@@ -257,6 +280,8 @@ public final class SyncDomainEventApplier implements SyncInboxProcessor.DomainEv
             appendAudit(event, "SYNC_REPLAY_PRODUCT", "PRODUCT", sku);
         } catch (JSONException | NumberFormatException | java.time.DateTimeException error) {
             throw new SyncException("Product event payload is malformed", error);
+        } catch (ArithmeticException error) {
+            throw new SyncException("Product stock transition overflow", error);
         } catch (IllegalStateException error) {
             throw new SyncException("Product event violates local database invariants", error);
         }
