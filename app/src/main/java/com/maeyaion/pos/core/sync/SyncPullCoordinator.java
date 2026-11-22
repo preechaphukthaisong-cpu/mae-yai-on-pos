@@ -41,17 +41,28 @@ public final class SyncPullCoordinator {
             JSONArray events = response.getJSONArray("events");
             int inserted = 0;
             int duplicates = 0;
+            long expectedSequence = after;
             String receivedAt = Instant.now().toString();
             for (int i = 0; i < events.length(); i++) {
                 JSONObject raw = events.getJSONObject(i);
                 SyncInboxEntity mapped = SyncInboxEventMapper.fromServer(storeId, raw, receivedAt);
+                if (expectedSequence == Long.MAX_VALUE
+                        || mapped.server_sequence != expectedSequence + 1) {
+                    throw new SyncException("Server pull page contains a sequence gap or reordering");
+                }
+                expectedSequence = mapped.server_sequence;
                 if (inbox.receive(mapped)) inserted++;
                 else duplicates++;
             }
-            long nextCursor = parseSequence(response.opt("nextCursor"));
-            if (nextCursor < after) throw new SyncException("Server pull cursor moved backwards");
-            return new PullResult(inserted, duplicates, nextCursor,
-                    response.optBoolean("hasMore", false));
+            long nextCursor = parseSequence(response.get("nextCursor"));
+            if (nextCursor != expectedSequence) {
+                throw new SyncException("Server pull cursor does not match the final event sequence");
+            }
+            Object hasMoreValue = response.get("hasMore");
+            if (!(hasMoreValue instanceof Boolean)) {
+                throw new SyncException("Server pull hasMore flag is missing or invalid");
+            }
+            return new PullResult(inserted, duplicates, nextCursor, (Boolean) hasMoreValue);
         } catch (JSONException error) {
             throw new SyncException("Sync server returned a malformed pull page", error);
         }
