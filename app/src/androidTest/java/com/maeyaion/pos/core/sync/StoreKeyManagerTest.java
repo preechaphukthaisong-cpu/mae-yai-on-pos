@@ -30,6 +30,42 @@ public final class StoreKeyManagerTest {
         Arrays.fill(restored, (byte) 0);
     }
 
+    @Test public void concurrentManagerInitializationCannotCreateDivergentEpochOneKeys() throws Exception {
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        String storeId = "concurrent_store_" + System.nanoTime();
+        StoreKeyManager first = new StoreKeyManager(context);
+        StoreKeyManager second = new StoreKeyManager(context);
+        java.util.concurrent.CountDownLatch ready = new java.util.concurrent.CountDownLatch(2);
+        java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            java.util.concurrent.Future<byte[]> left = pool.submit(() -> {
+                ready.countDown();
+                start.await();
+                assertEquals(1L, first.initializeStore(storeId));
+                return first.getStoreKey(storeId, 1L);
+            });
+            java.util.concurrent.Future<byte[]> right = pool.submit(() -> {
+                ready.countDown();
+                start.await();
+                assertEquals(1L, second.initializeStore(storeId));
+                return second.getStoreKey(storeId, 1L);
+            });
+            assertTrue(ready.await(5, java.util.concurrent.TimeUnit.SECONDS));
+            start.countDown();
+            byte[] a = left.get(10, java.util.concurrent.TimeUnit.SECONDS);
+            byte[] b = right.get(10, java.util.concurrent.TimeUnit.SECONDS);
+            try { assertArrayEquals(a, b); }
+            finally {
+                Arrays.fill(a, (byte) 0);
+                Arrays.fill(b, (byte) 0);
+            }
+        } finally {
+            start.countDown();
+            pool.shutdownNow();
+        }
+    }
+
     @Test public void rotationAdvancesEpochAndRetainsHistoricalKeys() throws Exception {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         String storeId = "rotation_store_" + System.nanoTime();
