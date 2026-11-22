@@ -6,6 +6,9 @@ import com.maeyaion.pos.core.db.DebtPaymentEntity;
 import com.maeyaion.pos.core.db.OpLogEntity;
 import com.maeyaion.pos.core.db.SaleEntity;
 import com.maeyaion.pos.core.tx.TransactionRunner;
+import com.maeyaion.pos.core.sync.SyncOutboxWriter;
+import com.maeyaion.pos.core.sync.SyncException;
+import org.json.JSONException;
 import org.json.JSONObject;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -18,8 +21,8 @@ import java.util.UUID;
 
 /** Full-bill debt settlement; selected bills commit or roll back as one operation. */
 public final class DebtPaymentService {
- private final AppDatabase db; private final TransactionRunner tx;
- public DebtPaymentService(@NonNull AppDatabase db,@NonNull TransactionRunner tx){this.db=Objects.requireNonNull(db);this.tx=Objects.requireNonNull(tx);}
+ private final AppDatabase db; private final TransactionRunner tx; private final SyncOutboxWriter syncOutbox;
+ public DebtPaymentService(@NonNull AppDatabase db,@NonNull TransactionRunner tx){this.db=Objects.requireNonNull(db);this.tx=Objects.requireNonNull(tx);this.syncOutbox=new SyncOutboxWriter(db);}
  public long payBills(@NonNull List<String> saleIds,@NonNull String paidAtUtc){
   if(saleIds.isEmpty())throw new IllegalArgumentException("กรุณาเลือกบิลค้างชำระ");
   Set<String> unique=new HashSet<>(saleIds);
@@ -45,6 +48,12 @@ public final class DebtPaymentService {
    payload.append("]}");String body=payload.toString();String operation=UUID.randomUUID().toString();
    db.opLogDao().append(new OpLogEntity(UUID.randomUUID().toString(),"DEBT_PAID","DEBT_BATCH",operation,body,paidAtUtc));
    db.backupJournalDao().append(new BackupJournalEntity(0,operation,"DEBT_PAID",body,sha256(body),5,paidAtUtc,0));
+   try {
+    syncOutbox.appendUnboundInTransaction("upsert","debt_payment_batch",operation,
+      new JSONObject(body),paidAtUtc);
+   } catch(JSONException | SyncException error) {
+    throw new IllegalStateException("Unable to append debt payment sync event",error);
+   }
    return totalPaid;
   });
  }
