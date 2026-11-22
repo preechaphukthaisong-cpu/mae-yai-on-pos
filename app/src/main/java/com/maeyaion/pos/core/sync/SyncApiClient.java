@@ -114,6 +114,72 @@ public final class SyncApiClient {
         return requestJson("GET", "/v1/conflicts", null, true);
     }
 
+    @NonNull public JSONObject listDevices() throws SyncException {
+        return requestJson("GET", "/v1/devices", null, true);
+    }
+
+    @NonNull public JSONObject fetchCurrentStoreKeyWrapper() throws SyncException {
+        return requestJson("GET", "/v1/key-wrappers/current", null, true);
+    }
+
+    @NonNull public JSONObject fetchRecoveryStoreKeyWrapper(long epoch) throws SyncException {
+        if (epoch < 1) throw new SyncException("Invalid store key epoch");
+        return requestJson("GET", "/v1/key-wrappers/recovery?epoch=" + epoch, null, true);
+    }
+
+    @NonNull public JSONObject approveDeviceKeyWrapper(String targetDeviceId, long epoch,
+            String wrappedKey) throws SyncException {
+        if (!isUuid(targetDeviceId) || epoch < 1 || wrappedKey == null
+                || !wrappedKey.matches("[A-Za-z0-9_-]{512,1400}")) {
+            throw new SyncException("Target device key wrapper metadata is invalid");
+        }
+        JSONObject body = new JSONObject();
+        try {
+            body.put("targetDeviceId", targetDeviceId);
+            body.put("keyEpoch", epoch);
+            body.put("wrappedKey", wrappedKey);
+        } catch (JSONException error) {
+            throw new SyncException("Unable to prepare device key enrollment", error);
+        }
+        return requestJson("POST", "/v1/key-wrappers", body, true);
+    }
+
+    @NonNull public JSONObject submitStoreKeyEpoch(long epoch, JSONArray wrappers,
+            String recoveryWrappedKey) throws SyncException {
+        if (epoch < 1 || wrappers == null || wrappers.length() < 1
+                || wrappers.length() > 100 || recoveryWrappedKey == null
+                || !recoveryWrappedKey.matches("[A-Za-z0-9_-]{80,400}")) {
+            throw new SyncException("Store key epoch enrollment data is invalid");
+        }
+        JSONObject body = new JSONObject();
+        try {
+            body.put("keyEpoch", epoch);
+            body.put("wrappers", wrappers);
+            body.put("recoveryWrappedKey", recoveryWrappedKey);
+        } catch (JSONException error) {
+            throw new SyncException("Unable to prepare store key epoch enrollment", error);
+        }
+        return requestJson("POST", "/v1/key-epochs", body, true);
+    }
+
+    @NonNull public JSONObject revokeDeviceWithKeyRotation(String deviceId, long epoch,
+            JSONArray remainingDeviceWrappers, String recoveryWrappedKey) throws SyncException {
+        if (!isUuid(deviceId) || epoch < 1 || remainingDeviceWrappers == null
+                || remainingDeviceWrappers.length() < 1 || remainingDeviceWrappers.length() > 100
+                || recoveryWrappedKey == null || !recoveryWrappedKey.matches("[A-Za-z0-9_-]{80,400}")) {
+            throw new SyncException("Device revocation key rotation data is invalid");
+        }
+        JSONObject body = new JSONObject();
+        try {
+            body.put("keyEpoch", epoch);
+            body.put("wrappers", remainingDeviceWrappers);
+            body.put("recoveryWrappedKey", recoveryWrappedKey);
+        } catch (JSONException error) {
+            throw new SyncException("Unable to prepare device revocation", error);
+        }
+        return requestJson("POST", "/v1/devices/" + deviceId + "/revoke", body, true);
+    }
+
     public void revokeDevice(@NonNull String deviceId) throws SyncException {
         if (!isUuid(deviceId)) throw new SyncException("Invalid device ID");
         requestJson("DELETE", "/v1/devices/" + deviceId, null, true);
