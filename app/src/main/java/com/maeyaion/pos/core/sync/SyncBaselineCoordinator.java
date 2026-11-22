@@ -180,7 +180,7 @@ public final class SyncBaselineCoordinator {
         } catch (JSONException | IOException | GeneralSecurityException error) {
             throw new SyncException("Unable to restore encrypted sync baseline", error);
         } finally {
-            if (passwordCopy != null) java.util.Arrays.fill(passwordCopy, '\\0');
+            if (passwordCopy != null) java.util.Arrays.fill(passwordCopy, (char) 0);
             deleteQuietly(downloaded);
             deleteQuietly(verifiedSnapshot);
         }
