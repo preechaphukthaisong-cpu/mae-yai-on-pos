@@ -60,9 +60,10 @@ public final class AesGcmEventCipherTest {
                 "sensitive".getBytes(StandardCharsets.UTF_8), aad);
         byte[] changed = encrypted.ciphertextBytes();
         changed[0] ^= 1;
-        EncryptedSyncPayload tampered = new EncryptedSyncPayload(1, 1,
-                encrypted.algorithm, encrypted.nonce,
-                java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(changed), 1);
+        JSONObject tamperedJson = encrypted.toJsonObject();
+        tamperedJson.put("ciphertext",
+                java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(changed));
+        EncryptedSyncPayload tampered = EncryptedSyncPayload.fromJsonObject(tamperedJson);
         try {
             cipher.decrypt(key, tampered, aad);
             fail("Modified ciphertext must be rejected");
