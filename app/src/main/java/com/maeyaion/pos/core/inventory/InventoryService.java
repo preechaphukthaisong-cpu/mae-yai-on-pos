@@ -80,7 +80,7 @@ public final class InventoryService {
                             + "\",\"stock_limit_qty_milli\":" + (stockLimitQtyMilli == null ? "null" : stockLimitQtyMilli) + "}", nowUtc);
             appendStock(UUID.randomUUID().toString(), product, receivedQtyMilli, "RECEIVE", nowUtc);
             ProductEntity result = products.findBySku(sku);
-            appendProductSyncEvent(result, nowUtc);
+            appendProductSyncEvent(result, nowUtc, operationId, 0L, receivedQtyMilli, "RECEIVE");
             return result;
         });
     }
@@ -118,7 +118,7 @@ public final class InventoryService {
             appendOperation(operationId, "INVENTORY_PRODUCT_CREATE", "PRODUCT", sku, payload, nowUtc);
             appendStock(UUID.randomUUID().toString(), product, receivedQtyMilli, "RECEIVE", nowUtc);
             ProductEntity result = products.findBySku(sku);
-            appendProductSyncEvent(result, nowUtc);
+            appendProductSyncEvent(result, nowUtc, operationId, 0L, receivedQtyMilli, "RECEIVE");
             return result;
         });
     }
@@ -139,7 +139,7 @@ public final class InventoryService {
             long after = Math.addExact(product.stockQtyMilli, quantityMilli);
             appendStock(operationId, product, quantityMilli, "RECEIVE", nowUtc);
             ProductEntity result = products.findBySku(product.sku);
-            appendProductSyncEvent(result, nowUtc);
+            appendProductSyncEvent(result, nowUtc, operationId, product.stockQtyMilli, quantityMilli, "RECEIVE");
             return result;
         });
     }
@@ -160,7 +160,7 @@ public final class InventoryService {
             long diff = Math.subtractExact(countedQtyMilli, product.stockQtyMilli);
             appendStock(operationId, product, diff, "COUNT_REPLACE", nowUtc);
             ProductEntity result = products.findBySku(product.sku);
-            appendProductSyncEvent(result, nowUtc);
+            appendProductSyncEvent(result, nowUtc, operationId, product.stockQtyMilli, diff, "COUNT_REPLACE");
             return result;
         });
     }
@@ -198,8 +198,13 @@ public final class InventoryService {
     }
 
 
-    /** Appends a complete product aggregate snapshot in the same Room transaction. */
+    /** Appends a complete product aggregate snapshot and optional inventory ledger movement. */
     private void appendProductSyncEvent(ProductEntity product, String nowUtc) {
+        appendProductSyncEvent(product, nowUtc, null, 0L, 0L, null);
+    }
+
+    private void appendProductSyncEvent(ProductEntity product, String nowUtc,
+            String operationId, long beforeQty, long diffQty, String movementReason) {
         if (syncOutbox == null) return;
         try {
             JSONObject data = new JSONObject();
@@ -221,6 +226,16 @@ public final class InventoryService {
             data.put("is_active", product.isActive);
             data.put("created_at_utc", product.createdAtUtc);
             data.put("updated_at_utc", product.updatedAtUtc);
+            if (operationId != null) {
+                JSONObject movement = new JSONObject();
+                movement.put("operation_id", operationId);
+                movement.put("before_qty_milli", beforeQty);
+                movement.put("diff_qty_milli", diffQty);
+                movement.put("after_qty_milli", Math.addExact(beforeQty, diffQty));
+                movement.put("reason", movementReason);
+                movement.put("created_at_utc", nowUtc);
+                data.put("stock_movement", movement);
+            }
             syncOutbox.appendUnboundInTransaction("upsert", "product", product.sku, data, nowUtc);
         } catch (JSONException | SyncException error) {
             throw new IllegalStateException("Unable to append inventory sync event", error);
