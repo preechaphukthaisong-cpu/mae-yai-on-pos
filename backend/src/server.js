@@ -349,6 +349,12 @@ async function rotateStoreKeyEpoch(req, res, context, revokeDeviceId = null) {
       'SELECT current_key_epoch FROM stores WHERE id = $1 FOR UPDATE', [context.store_id]);
     if (!store.rowCount) throw new HttpError(404, 'Store not found');
     const currentEpoch = Number(store.rows[0].current_key_epoch);
+    if (currentEpoch > 0) {
+      const trusted = await client.query(
+        'SELECT 1 FROM store_key_wrappers WHERE store_id = $1 AND device_id = $2 AND key_epoch = $3',
+        [context.store_id, context.device_id, currentEpoch]);
+      if (!trusted.rowCount) throw new HttpError(403, 'Only a device with the current store key may rotate or revoke devices');
+    }
     if (Number(body.keyEpoch) === currentEpoch && currentEpoch > 0) {
       const priorRecovery = await client.query(
         'SELECT wrapped_key FROM store_recovery_wrappers WHERE store_id = $1 AND key_epoch = $2',
@@ -383,6 +389,14 @@ async function rotateStoreKeyEpoch(req, res, context, revokeDeviceId = null) {
     }
     if (revokeDeviceId && revokeDeviceId === context.device_id) {
       throw new HttpError(409, 'A device cannot revoke itself while rotating store keys');
+    }
+    if (revokeDeviceId) {
+      const target = await client.query(
+        'SELECT revoked_at FROM devices WHERE store_id = $1 AND id = $2',
+        [context.store_id, revokeDeviceId]);
+      if (!target.rowCount || target.rows[0].revoked_at) {
+        throw new HttpError(404, 'Target device is not active in this store');
+      }
     }
     const active = await client.query(
       `SELECT id FROM devices WHERE store_id = $1 AND revoked_at IS NULL
