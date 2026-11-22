@@ -444,6 +444,10 @@ async function handle(req, res) {
   }
 
   const context = await requireDevice(req);
+  if (req.method === 'GET' && url.pathname === '/v1/key-epochs/current') {
+    const result = await pool.query('SELECT current_key_epoch FROM stores WHERE id = $1', [context.store_id]);
+    return send(res, 200, { keyEpoch: String(result.rows[0].current_key_epoch) });
+  }
   if (req.method === 'GET' && url.pathname === '/v1/devices') {
     const devices = await pool.query(
       `SELECT id, label, public_key, key_fingerprint, registered_at, last_seen_at
