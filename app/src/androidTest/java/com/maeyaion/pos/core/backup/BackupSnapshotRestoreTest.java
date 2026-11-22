@@ -70,7 +70,7 @@ public final class BackupSnapshotRestoreTest {
                 .create(context, database, backupDirectory);
         assertTrue(snapshot.file.isFile());
         assertTrue(snapshot.sizeBytes > 0);
-        assertEquals(6, snapshot.schemaVersion);
+        assertEquals(7, snapshot.schemaVersion);
         assertEquals(64, snapshot.sha256.length());
 
         byte[] rawSnapshot = Files.readAllBytes(snapshot.file.toPath());
@@ -81,7 +81,7 @@ public final class BackupSnapshotRestoreTest {
         assertTrue(encrypted.length() > 0);
 
         File restored = store.restoreToStaging(stagingDirectory, encrypted, PASSWORD, null,
-                new SQLiteStagedRestoreValidator(6));
+                new SQLiteStagedRestoreValidator(7));
         assertTrue(restored.isFile());
         SQLiteDatabase restoredDb = SQLiteDatabase.openDatabase(
                 restored.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
