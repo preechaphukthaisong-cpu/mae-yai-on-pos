@@ -204,11 +204,20 @@ public final class SyncDomainEventApplier implements SyncInboxProcessor.DomainEv
                 throw new SyncException("Sale financial totals or payment state are inconsistent");
             }
             String contentHash = requiredString(data, "content_hash");
+            if (!contentHash.matches("(?i)[a-f0-9]{64}")) throw new SyncException("Sale content hash is invalid");
             String createdAt = requiredString(data, "created_at_utc");
             String paidAt = data.isNull("paid_at_utc") ? null : requiredString(data, "paid_at_utc");
             Instant createdInstant = Instant.parse(createdAt);
-            if ("CASH".equals(type) && paidAt == null) throw new SyncException("Cash sale must have a paid timestamp");
-            if ("CREDIT".equals(type) && paidAt != null) throw new SyncException("Credit sale cannot have a paid timestamp");
+            if ("CASH".equals(type)) {
+                if (paidAt == null || cashReceived == null || change == null
+                        || cashReceived < total || change != cashReceived - total) {
+                    throw new SyncException("Cash sale payment and change values are inconsistent");
+                }
+                Instant.parse(paidAt);
+            }
+            if ("CREDIT".equals(type) && (paidAt != null || cashReceived != null || change != null)) {
+                throw new SyncException("Credit sale cannot contain cash payment values");
+            }
 
             JSONArray linesJson = data.getJSONArray("lines");
             if (linesJson.length() < 1 || linesJson.length() > 500) throw new SyncException("Sale line count is invalid");
@@ -313,7 +322,8 @@ public final class SyncDomainEventApplier implements SyncInboxProcessor.DomainEv
                         : requiredString(item, "non_restock_reason");
                 if (!ids.add(id) || source == null || !source.sale_id.equals(saleId)
                         || qty <= 0 || value < 0 || fee < 0 || (restock != 0 && restock != 1)
-                        || (restock == 0 && nonRestock == null)) {
+                        || (restock == 0 && nonRestock == null)
+                        || (restock == 1 && nonRestock != null)) {
                     throw new SyncException("Return line identity or values are invalid");
                 }
                 long already = database.saleReturnLineDao().returnedQty(saleLineId);
@@ -415,6 +425,7 @@ public final class SyncDomainEventApplier implements SyncInboxProcessor.DomainEv
                 if (!ids.add(id) || source == null || !source.sale_id.equals(saleId)
                         || qty <= 0 || value < 0 || fee < 0 || (restock != 0 && restock != 1)
                         || (restock == 0 && nonRestock == null)
+                        || (restock == 1 && nonRestock != null)
                         || qty > source.qty_milli - database.saleReturnLineDao().returnedQty(saleLineId)
                                 - database.saleCancelLineDao().cancelledQty(saleLineId)
                         || value > source.line_total_satang - database.saleReturnLineDao().returnedValue(saleLineId)
@@ -440,6 +451,12 @@ public final class SyncDomainEventApplier implements SyncInboxProcessor.DomainEv
                     cancelId, saleId, reason, cashRefund, debtReduction, feeReversal,
                     recipient, operator, createdAt));
             database.saleCancelLineDao().insertAll(rows);
+            for (SaleLineEntity source : database.saleLineDao().forSale(saleId)) {
+                long remaining = source.qty_milli
+                        - database.saleReturnLineDao().returnedQty(source.id)
+                        - database.saleCancelLineDao().cancelledQty(source.id);
+                if (remaining != 0) throw new SyncException("Cancellation did not close every remaining sale line");
+            }
             String businessDate = created.atZone(ZoneId.of("Asia/Bangkok")).toLocalDate().toString();
             database.dailySummaryDao().ensure(new DailySummaryEntity(
                     businessDate,0,0,0,0,0,0,0,0,0,0,0,0,createdAt));
