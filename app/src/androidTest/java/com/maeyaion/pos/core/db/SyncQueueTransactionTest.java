@@ -206,6 +206,29 @@ public final class SyncQueueTransactionTest {
         assertEquals(1L, db.syncQueueDao().unappliedInboxCount("store-gap"));
     }
 
+    @Test public void inboxRefusesUnappliedEventBehindCommittedCursor() throws Exception {
+        db.syncQueueDao().saveCursor(new SyncCursorEntity(
+                "store-behind", 5L, "2026-11-21T00:00:00Z"));
+        JSONObject data = new JSONObject();
+        data.put("sku", "SKU-BEHIND");
+        SyncEventEnvelope envelope = SyncEventEnvelope.create(
+                "upsert", "product", "SKU-BEHIND", 0, data);
+        SyncInboxEntity event = new SyncInboxEntity(envelope.eventId, "store-behind", 5,
+                "upsert", "product", "SKU-BEHIND", 0, 1,
+                envelope.payload.toString(), envelope.payloadSha256,
+                "2026-11-21T00:00:01Z", 0);
+        SyncInboxProcessor processor = new SyncInboxProcessor(db);
+        assertTrue(processor.receive(event));
+        try {
+            processor.applyNext("store-behind", "2026-11-21T00:00:02Z", remote -> fail("Must not apply stale event"));
+            fail("Unapplied event behind cursor must be rejected");
+        } catch (SyncException expected) {
+            assertTrue(expected.getMessage().contains("behind the committed cursor"));
+        }
+        assertEquals(5L, db.syncQueueDao().cursor("store-behind").last_applied_sequence);
+        assertEquals(1L, db.syncQueueDao().unappliedInboxCount("store-behind"));
+    }
+
     @Test public void reusedRemoteEventIdWithDifferentPayloadIsRejected() throws Exception {
         JSONObject original = new JSONObject();
         original.put("sku", "SKU-ORIGINAL");
