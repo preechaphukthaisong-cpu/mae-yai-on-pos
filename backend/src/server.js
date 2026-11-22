@@ -540,10 +540,12 @@ async function handle(req, res) {
   if (req.method === 'POST' && url.pathname === '/v1/key-epochs') {
     return rotateStoreKeyEpoch(req, res, context);
   }
-  const revokeMatch = url.pathname.match(/^\\/v1\\/devices\\/([0-9a-f-]{36})\\/revoke$/i);
-  if (req.method === 'POST' && revokeMatch) {
-    if (!isUuid(revokeMatch[1])) throw new HttpError(400, 'Invalid device ID');
-    return rotateStoreKeyEpoch(req, res, context, revokeMatch[1]);
+  const revokeParts = url.pathname.split('/');
+  if (req.method === 'POST' && revokeParts.length === 5
+      && revokeParts[1] === 'v1' && revokeParts[2] === 'devices'
+      && revokeParts[4] === 'revoke') {
+    if (!isUuid(revokeParts[3])) throw new HttpError(400, 'Invalid device ID');
+    return rotateStoreKeyEpoch(req, res, context, revokeParts[3]);
   }
   if (req.method === 'GET' && url.pathname === '/v1/sync/pull') return handlePull(req, res, context, url);
   if (req.method === 'POST' && url.pathname === '/v1/backups') return handleBackupUpload(req, res, context);
