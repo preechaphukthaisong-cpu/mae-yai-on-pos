@@ -22,7 +22,8 @@ import java.util.Set;
 public final class SyncPushCoordinator {
     private static final int BATCH_SIZE = 100;
     private final AppDatabase database;
-    private final SyncApiClient api;\n    private final EncryptedSyncEventCodec encryptedCodec;
+    private final SyncApiClient api;
+    private final EncryptedSyncEventCodec encryptedCodec;
 
     /** Legacy constructor intentionally cannot transmit: E2E encryption is mandatory. */
     public SyncPushCoordinator(@NonNull AppDatabase database, @NonNull SyncApiClient api) {
