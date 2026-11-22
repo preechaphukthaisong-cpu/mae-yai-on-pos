@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import {
-  canonicalJson, sha256Hex, encryptRefreshToken, decryptRefreshToken, isUuid
+  canonicalJson, sha256Hex, encryptRefreshToken, decryptRefreshToken, isUuid, sameImmutableEvent
 } from '../src/security.js';
 
 test('canonical JSON sorts object keys recursively and preserves arrays', () => {
@@ -36,4 +36,26 @@ test('Drive refresh token is encrypted and round-trips with AES-256-GCM', () => 
 test('UUID validator rejects malformed identifiers', () => {
   assert.equal(isUuid('b7f9f3a1-5a6a-4f4d-9c2e-7b6f1b5d8e31'), true);
   assert.equal(isUuid('../stores/1'), false);
+});
+
+
+test('event idempotency accepts only byte-identical immutable event metadata', () => {
+  const prior = {
+    payload_sha256: 'a'.repeat(64),
+    entity_type: 'product',
+    entity_id: 'SKU-1',
+    operation: 'upsert',
+    base_version: '4'
+  };
+  const event = {
+    entityType: 'product',
+    entityId: 'SKU-1',
+    operation: 'upsert',
+    baseVersion: 4
+  };
+  assert.equal(sameImmutableEvent(prior, event, 'a'.repeat(64)), true);
+  assert.equal(sameImmutableEvent(prior, { ...event, entityId: 'SKU-2' }, 'a'.repeat(64)), false);
+  assert.equal(sameImmutableEvent(prior, { ...event, operation: 'delete' }, 'a'.repeat(64)), false);
+  assert.equal(sameImmutableEvent(prior, { ...event, baseVersion: 3 }, 'a'.repeat(64)), false);
+  assert.equal(sameImmutableEvent(prior, event, 'b'.repeat(64)), false);
 });
