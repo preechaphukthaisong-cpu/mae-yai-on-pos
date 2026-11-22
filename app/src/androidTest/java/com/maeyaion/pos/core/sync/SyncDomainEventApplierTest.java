@@ -165,6 +165,37 @@ public final class SyncDomainEventApplierTest {
         assertNotNull(db.customerDao().findById("customer-credit-1"));
     }
 
+    @Test public void customerReplayStoresPrivateIdentityAndRejectsNormalizedCollision() throws Exception {
+        SyncDomainEventApplier applier = new SyncDomainEventApplier(db);
+        db.runInTransaction(() -> {
+            try { applier.apply(customerEvent("customer-remote-1", "Somchai", "somchai")); }
+            catch (Exception error) { throw new IllegalStateException(error); }
+        });
+        assertEquals("Somchai", db.customerDao().findById("customer-remote-1").name);
+        try {
+            db.runInTransaction(() -> {
+                try { applier.apply(customerEvent("customer-remote-2", "SOMCHAI", "somchai")); }
+                catch (Exception error) { throw new IllegalStateException(error); }
+            });
+            fail("Normalized duplicate customer identity must be rejected");
+        } catch (IllegalStateException expected) {
+            assertNull(db.customerDao().findById("customer-remote-2"));
+        }
+    }
+
+    private static SyncInboxEntity customerEvent(String id, String name, String nameKey)
+            throws Exception {
+        JSONObject data = new JSONObject();
+        data.put("customer_id", id);
+        data.put("name", name);
+        data.put("name_key", nameKey);
+        data.put("identity_key", "identity-remote-1");
+        data.put("created_at_utc", "2026-11-21T00:00:00Z");
+        data.put("updated_at_utc", "2026-11-21T00:00:00Z");
+        return wrappedEvent("77777777-7777-4777-8777-777777777777",
+                "customer", id, data, 1);
+    }
+
     private static SyncInboxEntity returnEvent() throws Exception {
         JSONObject data = new JSONObject();
         data.put("return_id", "return-remote-1");
