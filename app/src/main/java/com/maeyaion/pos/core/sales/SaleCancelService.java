@@ -119,7 +119,11 @@ public final class SaleCancelService {
    data.put("sku",product.sku);data.put("barcode",product.barcode);
    BarcodeRegistryEntity registry=db.barcodeRegistryDao().findByBarcode(product.barcode);
    if(registry==null)throw new IllegalStateException("Product barcode registry row is missing");
-   data.put("barcode_source_type",registry.sourceType);data.put("name",product.name);
+   data.put("barcode_source_type",registry.sourceType);
+   data.put("barcode_registry_display_name",registry.displayName);
+   data.put("barcode_registry_price_satang",registry.priceSatang);
+   data.put("barcode_registry_created_at_utc",registry.createdAtUtc);
+   data.put("name",product.name);
    data.put("price_satang",product.priceSatang);data.put("cost_satang",product.costSatang);
    data.put("unit",product.unit);
    data.put("stock_limit_qty_milli",product.stockLimitQtyMilli==null?JSONObject.NULL:product.stockLimitQtyMilli);
