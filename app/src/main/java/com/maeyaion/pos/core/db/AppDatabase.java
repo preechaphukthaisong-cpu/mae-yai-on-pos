@@ -34,8 +34,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase;
         SyncOutboxEntity.class,
         SyncInboxEntity.class,
         SyncCursorEntity.class,
-        SyncEntityVersionEntity.class
-}, version = 6, exportSchema = true)
+        SyncEntityVersionEntity.class,
+        SyncReplayConflictEntity.class
+}, version = 7, exportSchema = true)
 public abstract class AppDatabase extends RoomDatabase {
     private static volatile AppDatabase INSTANCE;
 
@@ -118,7 +119,7 @@ public abstract class AppDatabase extends RoomDatabase {
                                     AppDatabase.class,
                                     "maeyaion_pos.db")
                             .setJournalMode(JournalMode.TRUNCATE)
-                            .addMigrations(Migration1To2.INSTANCE, Migration2To3.INSTANCE, Migration3To4.INSTANCE, Migration4To5.INSTANCE, Migration5To6.INSTANCE)
+                            .addMigrations(Migration1To2.INSTANCE, Migration2To3.INSTANCE, Migration3To4.INSTANCE, Migration4To5.INSTANCE, Migration5To6.INSTANCE, Migration6To7.INSTANCE)
                             .addCallback(databaseCallback())
                             .build();
                     INSTANCE = local;
