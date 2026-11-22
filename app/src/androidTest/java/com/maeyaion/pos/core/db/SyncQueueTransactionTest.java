@@ -115,9 +115,15 @@ public final class SyncQueueTransactionTest {
                 ? 0L : db.syncQueueDao().cursor("store-1").last_applied_sequence);
         assertEquals(1L, db.syncQueueDao().unappliedInboxCount("store-1"));
 
+        JSONObject replayData = new JSONObject();
+        replayData.put("sku", "SKU-REMOTE");
+        SyncOutboxWriter replayWriter = new SyncOutboxWriter(db);
         assertTrue(processor.applyNext("store-1", "2026-11-21T00:00:02Z", remote -> {
-            // Test handler stands in for a domain service using the same Room transaction.
+            // Existing domain services may be reused, but must not emit a new local echo.
+            replayWriter.appendUnboundInTransaction("upsert", "product",
+                    "SKU-REMOTE", replayData, "2026-11-21T00:00:02Z");
         }));
+        assertEquals(0L, db.syncQueueDao().pendingOutboxCount("store-1"));
         assertEquals(1L, db.syncQueueDao().cursor("store-1").last_applied_sequence);
         assertEquals(0L, db.syncQueueDao().unappliedInboxCount("store-1"));
         assertEquals(1L, db.syncQueueDao().entityVersion("product", "SKU-REMOTE").version);
