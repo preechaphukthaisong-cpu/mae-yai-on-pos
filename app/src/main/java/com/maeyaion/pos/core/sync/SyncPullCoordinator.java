@@ -39,8 +39,7 @@ public final class SyncPullCoordinator {
         JSONObject response = api.pullEvents(after, PAGE_SIZE);
         try {
             JSONArray events = response.getJSONArray("events");
-            int inserted = 0;
-            int duplicates = 0;
+            java.util.List<SyncInboxEntity> mappedEvents = new java.util.ArrayList<>();
             long expectedSequence = after;
             String receivedAt = Instant.now().toString();
             for (int i = 0; i < events.length(); i++) {
@@ -51,8 +50,7 @@ public final class SyncPullCoordinator {
                     throw new SyncException("Server pull page contains a sequence gap or reordering");
                 }
                 expectedSequence = mapped.server_sequence;
-                if (inbox.receive(mapped)) inserted++;
-                else duplicates++;
+                mappedEvents.add(mapped);
             }
             long nextCursor = parseSequence(response.get("nextCursor"));
             if (nextCursor != expectedSequence) {
@@ -62,9 +60,22 @@ public final class SyncPullCoordinator {
             if (!(hasMoreValue instanceof Boolean)) {
                 throw new SyncException("Server pull hasMore flag is missing or invalid");
             }
-            return new PullResult(inserted, duplicates, nextCursor, (Boolean) hasMoreValue);
+            final int[] counts = {0, 0};
+            database.runInTransaction(() -> {
+                for (SyncInboxEntity mapped : mappedEvents) {
+                    try {
+                        if (inbox.receive(mapped)) counts[0]++;
+                        else counts[1]++;
+                    } catch (IllegalArgumentException invalidEvent) {
+                        throw new IllegalStateException("Pull page contains a conflicting duplicate event", invalidEvent);
+                    }
+                }
+            });
+            return new PullResult(counts[0], counts[1], nextCursor, (Boolean) hasMoreValue);
         } catch (JSONException error) {
             throw new SyncException("Sync server returned a malformed pull page", error);
+        } catch (IllegalStateException error) {
+            throw new SyncException("Unable to persist the complete sync pull page", error);
         }
     }
 
