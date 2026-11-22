@@ -61,22 +61,47 @@ public final class StoreKeyEnrollmentService {
         }
     }
 
-    /** Installs the current store key only when the backend has a wrapper for this installation. */
-    public long installCurrentDeviceKey(@NonNull String storeId) throws SyncException {
-        JSONObject response = api.fetchCurrentStoreKeyWrapper();
-        try {
-            long epoch = exactEpoch(response.get("keyEpoch"));
-            byte[] wrapped = Base64Url.decode(response.getString("wrappedKey"));
-            byte[] key = deviceKeys.unwrapForThisDevice(wrapped);
-            try { storeKeys.importStoreKey(storeId, epoch, key); }
-            finally {
-                Arrays.fill(key, (byte) 0);
-                Arrays.fill(wrapped, (byte) 0);
-            }
-            return epoch;
-        } catch (JSONException error) {
-            throw new SyncException("Current store key wrapper response is malformed", error);
+    /**
+     * Installs every historical key epoch approved for this device. Historical epochs are
+     * required to decrypt retained event-log entries created before the latest rotation.
+     */
+    public long installAllApprovedDeviceKeys(@NonNull String storeId) throws SyncException {
+        long currentEpoch = currentServerEpoch();
+        if (currentEpoch < 1 || currentEpoch > 10000) {
+            throw new SyncException("Server key epoch is absent or exceeds the supported history limit");
         }
+        JSONObject response = api.fetchDeviceKeyWrappers();
+        try {
+            JSONArray wrappers = response.getJSONArray("wrappers");
+            if (wrappers.length() != currentEpoch) {
+                throw new SyncException("This device is missing one or more historical key approvals");
+            }
+            for (int i = 0; i < wrappers.length(); i++) {
+                JSONObject item = wrappers.getJSONObject(i);
+                long epoch = exactEpoch(item.get("keyEpoch"));
+                if (epoch != i + 1L) {
+                    throw new SyncException("Device key wrapper history is incomplete or out of order");
+                }
+                byte[] wrapped = Base64Url.decode(item.getString("wrappedKey"));
+                byte[] key = deviceKeys.unwrapForThisDevice(wrapped);
+                try { storeKeys.importStoreKey(storeId, epoch, key); }
+                finally {
+                    Arrays.fill(key, (byte) 0);
+                    Arrays.fill(wrapped, (byte) 0);
+                }
+            }
+            if (storeKeys.getCurrentEpoch(storeId) != currentEpoch) {
+                throw new SyncException("Installed store key history does not reach the server's current epoch");
+            }
+            return currentEpoch;
+        } catch (JSONException error) {
+            throw new SyncException("Device key wrapper history response is malformed", error);
+        }
+    }
+
+    /** Compatibility entry point; installs the full approved key history, not only the latest key. */
+    public long installCurrentDeviceKey(@NonNull String storeId) throws SyncException {
+        return installAllApprovedDeviceKeys(storeId);
     }
 
     /** Recovery path for a device that has no usable device wrapper. */
@@ -121,13 +146,25 @@ public final class StoreKeyEnrollmentService {
                     || !fingerprint.equalsIgnoreCase(confirmedFingerprint.trim())) {
                 throw new SyncException("Target device fingerprint does not match the operator's confirmation");
             }
-            byte[] key = storeKeys.getStoreKey(storeId, epoch);
+            if (epoch > 10000) throw new SyncException("Store key history exceeds the supported device enrollment limit");
+            java.util.List<byte[]> historicalKeys = new java.util.ArrayList<>();
             try {
-                byte[] wrapped = deviceKeys.wrapForDevice(target.getString("public_key"), key);
-                api.approveDeviceKeyWrapper(targetDeviceId, epoch, Base64Url.encode(wrapped));
-                Arrays.fill(wrapped, (byte) 0);
+                // Preflight every epoch before making the first server-side approval.
+                for (long keyEpoch = 1; keyEpoch <= epoch; keyEpoch++) {
+                    historicalKeys.add(storeKeys.getStoreKey(storeId, keyEpoch));
+                }
+                String publicKey = target.getString("public_key");
+                for (int i = 0; i < historicalKeys.size(); i++) {
+                    long keyEpoch = i + 1L;
+                    byte[] wrapped = deviceKeys.wrapForDevice(publicKey, historicalKeys.get(i));
+                    try {
+                        api.approveDeviceKeyWrapper(targetDeviceId, keyEpoch, Base64Url.encode(wrapped));
+                    } finally {
+                        Arrays.fill(wrapped, (byte) 0);
+                    }
+                }
             } finally {
-                Arrays.fill(key, (byte) 0);
+                for (byte[] key : historicalKeys) Arrays.fill(key, (byte) 0);
             }
         } catch (JSONException error) {
             throw new SyncException("Device list response is malformed", error);
