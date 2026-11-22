@@ -90,6 +90,35 @@ public final class SyncQueueTransactionTest {
         assertEquals(0, db.syncQueueDao().acknowledgeOutbox(eventId[0]));
     }
 
+    @Test public void aggregateVersionsAdvanceSequentiallyAndRemainIsolated() throws Exception {
+        SyncOutboxWriter writer = new SyncOutboxWriter(db);
+        db.runInTransaction(() -> {
+            try {
+                JSONObject first = new JSONObject();
+                first.put("name", "First");
+                writer.appendInTransaction("store-1", "upsert", "product",
+                        "SKU-1", first, "2026-11-21T00:00:00Z");
+                JSONObject second = new JSONObject();
+                second.put("name", "Second");
+                writer.appendInTransaction("store-1", "upsert", "product",
+                        "SKU-1", second, "2026-11-21T00:00:01Z");
+                JSONObject other = new JSONObject();
+                other.put("name", "Other");
+                writer.appendInTransaction("store-1", "upsert", "product",
+                        "SKU-2", other, "2026-11-21T00:00:02Z");
+            } catch (SyncException error) {
+                throw new IllegalStateException(error);
+            }
+        });
+        java.util.List<SyncOutboxEntity> rows = db.syncQueueDao().pendingOutbox("store-1", 10);
+        assertEquals(3, rows.size());
+        assertEquals(0L, rows.get(0).base_version);
+        assertEquals(1L, rows.get(1).base_version);
+        assertEquals(0L, rows.get(2).base_version);
+        assertEquals(2L, db.syncQueueDao().entityVersion("product", "SKU-1").version);
+        assertEquals(1L, db.syncQueueDao().entityVersion("product", "SKU-2").version);
+    }
+
     @Test public void duplicateRemoteEventIsIgnoredAndCursorMovesOnlyAfterReplayCommit() throws Exception {
         JSONObject data = new JSONObject();
         data.put("sku", "SKU-REMOTE");
