@@ -43,6 +43,9 @@ public final class StoreService {
    try {
     JSONObject snapshot=new JSONObject();
     snapshot.put("sku",changed.sku); snapshot.put("barcode",changed.barcode);
+    com.maeyaion.pos.core.db.BarcodeRegistryEntity registry=db.barcodeRegistryDao().findByBarcode(changed.barcode);
+    if(registry==null)throw new IllegalStateException("Product barcode registry row is missing");
+    snapshot.put("barcode_source_type",registry.sourceType);
     snapshot.put("name",changed.name); snapshot.put("price_satang",changed.priceSatang);
     snapshot.put("cost_satang",changed.costSatang); snapshot.put("unit",changed.unit);
     snapshot.put("stock_limit_qty_milli",changed.stockLimitQtyMilli==null?JSONObject.NULL:changed.stockLimitQtyMilli);
